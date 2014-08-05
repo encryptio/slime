@@ -258,9 +258,21 @@ func (m *Multi) scrubFile(path string) {
 		m.incrementScrubErrors(err == nil)
 	}
 
+	rebuild := false
 	if len(chunks) < int(bestInfo.DataChunks + bestInfo.ParityChunks) {
 		log.Printf("[scrub] %v is missing a chunk, rebuilding", path)
+		rebuild = true
+	}
 
+	m.mu.Lock()
+	cfg := m.config
+	m.mu.Unlock()
+	if int(bestInfo.DataChunks) != cfg.ChunksNeed || int(bestInfo.ParityChunks+bestInfo.DataChunks) != cfg.ChunksTotal {
+		log.Printf("[scrub] %v has incorrect redundancy values (is %v+%v, want %v+%v)", path, bestInfo.DataChunks, bestInfo.ParityChunks, cfg.ChunksNeed, cfg.ChunksTotal - cfg.ChunksNeed)
+		rebuild = true
+	}
+
+	if rebuild {
 		data, err := m.Get(path)
 		if err != nil {
 			log.Printf("[scrub] couldn't get %v during rebuild: %v", path, err)
