@@ -85,6 +85,7 @@ func store(key, file string) {
 		log.Printf("Couldn't PUT to %v: %v", req.URL, err)
 		return
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		log.Printf("Couldn't PUT to %v: %v", req.URL, resp.Status)
@@ -110,6 +111,7 @@ func retrieve(key, file string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		log.Printf("Couldn't GET %v: %v", resp.Request.URL, resp.Status)
@@ -153,6 +155,7 @@ func checkPresent(key string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 {
 		out.WriteString("CHECKPRESENT-SUCCESS ")
@@ -176,6 +179,7 @@ func remove(key string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode == 200 || resp.StatusCode == 404 {
 		out.WriteString("REMOVE-SUCCESS ")
