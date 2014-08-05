@@ -22,7 +22,7 @@ type Config struct {
 var DefaultConfig = Config{
 	Version:            1,
 	ScrubFilesPerMinute: 10,
-	ScrubTargetDuration: 7 * 24 * time.Hours,
+	ScrubTargetDuration: 7 * 24 * time.Hour,
 	ConfigSaveInterval: 30 * time.Minute,
 	ChunksNeed:         2,
 	ChunksTotal:        3,
