@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -64,8 +65,25 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("content-type", "application/octet-stream")
+		w.Header().Set("content-length", strconv.FormatInt(int64(len(data)), 10))
 		w.WriteHeader(200)
 		w.Write(data)
+
+	case "HEAD":
+		stat, err := h.m.Stat(r.URL.Path)
+		if err != nil {
+			w.Header().Set("content-type", "text/plain; charset=utf-8")
+			if err == multi.ErrNotFound {
+				w.WriteHeader(404)
+			} else {
+				w.WriteHeader(500)
+			}
+			return
+		}
+
+		w.Header().Set("content-type", "application/octet-stream")
+		w.Header().Set("content-length", strconv.FormatInt(stat.Length, 10))
+		w.WriteHeader(200)
 
 	case "PUT":
 		rdr := &io.LimitedReader{r.Body, MaxBodySize + 1}
@@ -117,7 +135,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 
 	default:
-		w.Header().Set("allow", "GET, PUT, DELETE")
+		w.Header().Set("allow", "GET, HEAD, PUT, DELETE")
 		w.Header().Set("content-type", "text/plain; charset=utf-8")
 		w.WriteHeader(405)
 		w.Write([]byte("Bad Method"))

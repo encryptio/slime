@@ -18,6 +18,11 @@ var (
 	ErrNotFound        = errors.New("no such value")
 )
 
+type Stat struct {
+	Length int64
+	SHA256 [32]byte
+}
+
 func splitVector(data []uint32, count int) [][]uint32 {
 	perVector := (len(data) + count - 1) / count
 
@@ -427,4 +432,45 @@ func (m *Multi) List(prefix string) ([]store.FileInfo, error) {
 	}
 
 	return ret, nil
+}
+
+func (m *Multi) Stat(path string) (Stat, error) {
+	var s Stat
+
+	var foundChunk *chunk.Chunk
+	prefix := path + ".v1d"
+	for _, tgt := range m.targets {
+		fis, err := tgt.Search(prefix)
+		if err != nil {
+			return s, err
+		}
+
+		for _, fi := range fis {
+			if !fi.IsDir && trimChunkID(fi.Name) == path {
+				data, err := tgt.Get(fi.Name)
+				if err != nil {
+					log.Printf("Couldn't Get %v from %v: %v", fi.Name, tgt.Name(), err)
+					continue
+				}
+
+				loadedChunk := new(chunk.Chunk)
+				err = loadedChunk.UnmarshalBinary(data)
+				if err != nil {
+					log.Printf("Couldn't read chunk %v from %v: %v", fi.Name, tgt.Name(), err)
+					continue
+				}
+
+				foundChunk = loadedChunk
+			}
+		}
+	}
+
+	if foundChunk == nil {
+		return s, ErrNotFound
+	}
+
+	copy(s.SHA256[:], foundChunk.SHA256[:])
+	s.Length = int64(foundChunk.FullLength)
+
+	return s, nil
 }
