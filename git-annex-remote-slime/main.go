@@ -159,7 +159,13 @@ func retrieve(key, file string) {
 }
 
 func checkPresent(key string) {
-	resp, err := http.Get(baseURL + addPrefix(key))
+	req, err := http.NewRequest("HEAD", baseURL+addPrefix(key), nil)
+	if err != nil {
+		log.Printf("Couldn't create request for %s: %v", baseURL+addPrefix(key), err)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Fatal(err)
 	}
