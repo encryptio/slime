@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -82,11 +83,26 @@ func store(key, file string) {
 	}
 	defer fh.Close()
 
+	hash := sha256.New()
+	_, err = io.Copy(hash, fh)
+	if err != nil {
+		log.Printf("Couldn't read from %s: %v", file, err)
+		return
+	}
+	sha := hash.Sum(nil)
+
+	_, err = fh.Seek(0, 0)
+	if err != nil {
+		log.Printf("Couldn't seek in %s: %v", file, err)
+		return
+	}
+
 	req, err := http.NewRequest("PUT", baseURL+addPrefix(key), fh)
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v", baseURL+addPrefix(key), err)
 		return
 	}
+	req.Header.Set("X-Content-SHA256", hex.EncodeToString(sha))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -132,9 +148,12 @@ func retrieve(key, file string) {
 		return
 	}
 
+	sha := sha256.New()
+	reader := io.TeeReader(resp.Body, sha)
+
 	total := int64(0)
 	for {
-		n, err := io.CopyN(fh, resp.Body, 131072)
+		n, err := io.CopyN(fh, reader, 131072)
 		total += n
 		if err != nil {
 			if err == io.EOF {
@@ -153,6 +172,15 @@ func retrieve(key, file string) {
 	if err != nil {
 		log.Printf("Couldn't close %v after writing: %v", file, err)
 		return
+	}
+
+	if resp.Header.Get("X-Content-SHA256") != "" {
+		have := sha.Sum(nil)
+		want, _ := hex.DecodeString(resp.Header.Get("X-Content-SHA256"))
+		if !bytes.Equal(have, want) {
+			log.Printf("Bad checksum of response")
+			return
+		}
 	}
 
 	ok = true
