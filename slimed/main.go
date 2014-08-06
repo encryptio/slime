@@ -13,7 +13,7 @@ import (
 )
 
 var args = struct {
-	Listen string `help:"Address to listen on" default:":8080"`
+	Listen string `help:"Address to listen on" default:":17942"`
 }{}
 
 func main() {
