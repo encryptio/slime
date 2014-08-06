@@ -16,6 +16,7 @@ import (
 var (
 	ErrNotEnoughChunks = errors.New("not enough chunks available to reconstruct data")
 	ErrNotFound        = errors.New("no such value")
+	ErrBadChecksum     = errors.New("bad checksum")
 )
 
 type Result struct {
@@ -366,6 +367,10 @@ func (m *Multi) Get(path string) (Result, error) {
 	r.Data = data[:chunks[0].FullLength]
 	r.Length = int64(chunks[0].FullLength)
 	copy(r.SHA256[:], chunks[0].SHA256[:])
+
+	if r.SHA256 != sha256.Sum256(r.Data) {
+		return r, ErrBadChecksum
+	}
 
 	return r, nil
 }
