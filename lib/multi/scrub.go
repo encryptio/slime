@@ -144,6 +144,12 @@ func (m *Multi) incrementScrubErrors(fixed bool) {
 	m.mu.Unlock()
 }
 
+func (m *Multi) incrementOkay() {
+	m.mu.Lock()
+	m.scrubStats.Okay++
+	m.mu.Unlock()
+}
+
 func (m *Multi) scrubFile(path string) {
 	type failure struct {
 		name string
@@ -288,5 +294,7 @@ func (m *Multi) scrubFile(path string) {
 		}
 
 		m.incrementScrubErrors(true)
+	} else {
+		m.incrementOkay()
 	}
 }
