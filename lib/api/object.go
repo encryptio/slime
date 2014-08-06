@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"git.encryptio.com/slime/lib/multi"
 	"io"
 	"io/ioutil"
@@ -51,8 +52,14 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case "GET":
-		res, err := h.m.Get(r.URL.Path)
+	case "GET", "HEAD":
+		var res multi.Result
+		var err error
+		if r.Method == "GET" {
+			res, err = h.m.Get(r.URL.Path)
+		} else {
+			res, err = h.m.Stat(r.URL.Path)
+		}
 		if err != nil {
 			w.Header().Set("content-type", "text/plain; charset=utf-8")
 			if err == multi.ErrNotFound {
@@ -66,24 +73,11 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("content-type", "application/octet-stream")
 		w.Header().Set("content-length", strconv.FormatInt(res.Length, 10))
+		w.Header().Set("x-content-sha256", hex.EncodeToString(res.SHA256[:]))
 		w.WriteHeader(200)
-		w.Write(res.Data)
-
-	case "HEAD":
-		res, err := h.m.Stat(r.URL.Path)
-		if err != nil {
-			w.Header().Set("content-type", "text/plain; charset=utf-8")
-			if err == multi.ErrNotFound {
-				w.WriteHeader(404)
-			} else {
-				w.WriteHeader(500)
-			}
-			return
+		if r.Method == "GET" {
+			w.Write(res.Data)
 		}
-
-		w.Header().Set("content-type", "application/octet-stream")
-		w.Header().Set("content-length", strconv.FormatInt(res.Length, 10))
-		w.WriteHeader(200)
 
 	case "PUT":
 		rdr := &io.LimitedReader{r.Body, MaxBodySize + 1}
