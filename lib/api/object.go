@@ -1,60 +1,74 @@
 package api
 
 import (
-	"net/http"
 	"git.encryptio.com/slime/lib/multi"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"strings"
 )
 
-const MaxBodySize = 1024*1024*64
+const MaxBodySize = 1024 * 1024 * 64
 
 func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/") {
+		h.serveDirectory(w, r)
+	} else {
+		h.serveFile(w, r)
+	}
+}
+
+func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		if strings.HasSuffix(r.URL.Path, "/") {
-			// listing get
-			w.Header().Set("content-type", "text/plain; charset=utf-8")
-			list, err := h.m.List(r.URL.Path)
-			if err != nil {
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
-				return
-			}
-
-			w.WriteHeader(200)
-			for _, fi := range list {
-				if fi.IsDir {
-					w.Write([]byte("d "))
-				} else {
-					w.Write([]byte("f "))
-				}
-				w.Write([]byte(fi.Name))
-				w.Write([]byte("\n"))
-			}
-
-		} else {
-			// file get
-			data, err := h.m.Get(r.URL.Path)
-			if err != nil {
-				w.Header().Set("content-type", "text/plain; charset=utf-8")
-				if err == multi.ErrNotFound {
-					w.WriteHeader(404)
-				} else {
-					w.WriteHeader(500)
-				}
-				w.Write([]byte(err.Error()))
-				return
-			}
-
-			w.Header().Set("content-type", "application/octet-stream")
-			w.WriteHeader(200)
-			w.Write(data)
+		w.Header().Set("content-type", "text/plain; charset=utf-8")
+		list, err := h.m.List(r.URL.Path)
+		if err != nil {
+			w.WriteHeader(500)
+			w.Write([]byte(err.Error()))
+			return
 		}
 
+		w.WriteHeader(200)
+		for _, fi := range list {
+			if fi.IsDir {
+				w.Write([]byte("d "))
+			} else {
+				w.Write([]byte("f "))
+			}
+			w.Write([]byte(fi.Name))
+			w.Write([]byte("\n"))
+		}
+
+	default:
+		w.Header().Set("allow", "GET")
+		w.Header().Set("content-type", "text/plain; charset=utf-8")
+		w.WriteHeader(405)
+		w.Write([]byte("Bad Method"))
+	}
+}
+
+func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		data, err := h.m.Get(r.URL.Path)
+		if err != nil {
+			w.Header().Set("content-type", "text/plain; charset=utf-8")
+			if err == multi.ErrNotFound {
+				w.WriteHeader(404)
+			} else {
+				w.WriteHeader(500)
+			}
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		w.Header().Set("content-type", "application/octet-stream")
+		w.WriteHeader(200)
+		w.Write(data)
+
 	case "PUT":
-		rdr := &io.LimitedReader{r.Body, MaxBodySize+1}
+		rdr := &io.LimitedReader{r.Body, MaxBodySize + 1}
 		data, err := ioutil.ReadAll(rdr)
 		if err != nil {
 			w.Header().Set("content-type", "text/plain; charset=utf-8")
