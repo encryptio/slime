@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"git.encryptio.com/slime/lib/multi"
 	"io"
@@ -80,38 +82,45 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "PUT":
+		w.Header().Set("content-type", "text/plain; charset=utf-8")
+
 		rdr := &io.LimitedReader{r.Body, MaxBodySize + 1}
 		data, err := ioutil.ReadAll(rdr)
 		if err != nil {
-			w.Header().Set("content-type", "text/plain; charset=utf-8")
 			w.WriteHeader(500)
 			w.Write([]byte(err.Error()))
 			return
 		}
 
 		if int64(len(data)) > MaxBodySize {
-			w.Header().Set("content-type", "text/plain; charset=utf-8")
 			w.WriteHeader(400)
 			w.Write([]byte("object too large"))
 			return
 		}
 
 		if len(data) == 0 {
-			w.Header().Set("content-type", "text/plain; charset=utf-8")
 			w.WriteHeader(400)
 			w.Write([]byte("cannot create zero length object"))
 			return
 		}
 
+		if r.Header.Get("x-content-sha256") != "" {
+			want, _ := hex.DecodeString(r.Header.Get("x-content-sha256"))
+			have := sha256.Sum256(data)
+			if !bytes.Equal(want, have[:]) {
+				w.WriteHeader(400)
+				w.Write([]byte("content does not match x-content-sha256"))
+				return
+			}
+		}
+
 		err = h.m.Set(r.URL.Path, data)
 		if err != nil {
-			w.Header().Set("content-type", "text/plain; charset=utf-8")
 			w.WriteHeader(500)
 			w.Write([]byte(err.Error()))
 			return
 		}
 
-		w.Header().Set("content-type", "text/plain; charset=utf-8")
 		w.WriteHeader(200)
 		w.Write([]byte("ok"))
 
