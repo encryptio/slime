@@ -52,7 +52,7 @@ func (h *Handler) serveDirectory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		data, err := h.m.Get(r.URL.Path)
+		res, err := h.m.Get(r.URL.Path)
 		if err != nil {
 			w.Header().Set("content-type", "text/plain; charset=utf-8")
 			if err == multi.ErrNotFound {
@@ -65,12 +65,12 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("content-type", "application/octet-stream")
-		w.Header().Set("content-length", strconv.FormatInt(int64(len(data)), 10))
+		w.Header().Set("content-length", strconv.FormatInt(res.Length, 10))
 		w.WriteHeader(200)
-		w.Write(data)
+		w.Write(res.Data)
 
 	case "HEAD":
-		stat, err := h.m.Stat(r.URL.Path)
+		res, err := h.m.Stat(r.URL.Path)
 		if err != nil {
 			w.Header().Set("content-type", "text/plain; charset=utf-8")
 			if err == multi.ErrNotFound {
@@ -82,7 +82,7 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.Header().Set("content-type", "application/octet-stream")
-		w.Header().Set("content-length", strconv.FormatInt(stat.Length, 10))
+		w.Header().Set("content-length", strconv.FormatInt(res.Length, 10))
 		w.WriteHeader(200)
 
 	case "PUT":

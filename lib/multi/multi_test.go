@@ -11,11 +11,11 @@ import (
 )
 
 func shouldGet(t *testing.T, m *Multi, path string, want []byte) {
-	data, err := m.Get(path)
+	res, err := m.Get(path)
 	if err != nil {
 		t.Fatalf("Get(%v) returned unexpected error %v", path, err)
-	} else if !bytes.Equal(data, want) {
-		t.Errorf("Get(%v) = %v, wanted %v", path, data, want)
+	} else if !bytes.Equal(res.Data, want) {
+		t.Errorf("Get(%v) = %v, wanted %v", path, res.Data, want)
 	}
 }
 

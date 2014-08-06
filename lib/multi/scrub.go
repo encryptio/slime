@@ -279,14 +279,14 @@ func (m *Multi) scrubFile(path string) {
 	}
 
 	if rebuild {
-		data, err := m.Get(path)
+		res, err := m.Get(path)
 		if err != nil {
 			log.Printf("[scrub] couldn't get %v during rebuild: %v", path, err)
 			m.incrementScrubErrors(false)
 			return
 		}
 
-		err = m.Set(path, data)
+		err = m.Set(path, res.Data)
 		if err != nil {
 			log.Printf("[scrub] couldn't set %v during rebuild: %v", path, err)
 			m.incrementScrubErrors(false)

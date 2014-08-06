@@ -18,7 +18,8 @@ var (
 	ErrNotFound        = errors.New("no such value")
 )
 
-type Stat struct {
+type Result struct {
+	Data   []byte
 	Length int64
 	SHA256 [32]byte
 }
@@ -240,7 +241,8 @@ func (m *Multi) Delete(path string) error {
 	return nil
 }
 
-func (m *Multi) Get(path string) ([]byte, error) {
+func (m *Multi) Get(path string) (Result, error) {
+	var r Result
 	var wg sync.WaitGroup
 
 	// search for chunks on all our targets
@@ -270,7 +272,7 @@ func (m *Multi) Get(path string) ([]byte, error) {
 	}
 
 	if chunkCount == 0 {
-		return nil, ErrNotFound
+		return r, ErrNotFound
 	}
 
 	// load all the chunks we found
@@ -320,7 +322,7 @@ func (m *Multi) Get(path string) ([]byte, error) {
 	}
 
 	if len(chunks) == 0 {
-		return nil, ErrNotEnoughChunks
+		return r, ErrNotEnoughChunks
 	}
 
 	// verify that the chunks we got are actually for the same file
@@ -336,7 +338,7 @@ func (m *Multi) Get(path string) ([]byte, error) {
 	}
 
 	if len(chunks) < int(chunks[0].DataChunks) {
-		return nil, ErrNotEnoughChunks
+		return r, ErrNotEnoughChunks
 	}
 
 	// build the rs vectors
@@ -361,9 +363,11 @@ func (m *Multi) Get(path string) ([]byte, error) {
 		data = append(data, gf.MapFromGF(chunks[0].MappingValue, vec)...)
 	}
 
-	data = data[:chunks[0].FullLength]
+	r.Data = data[:chunks[0].FullLength]
+	r.Length = int64(chunks[0].FullLength)
+	copy(r.SHA256[:], chunks[0].SHA256[:])
 
-	return data, nil
+	return r, nil
 }
 
 func trimChunkID(name string) string {
@@ -434,15 +438,15 @@ func (m *Multi) List(prefix string) ([]store.FileInfo, error) {
 	return ret, nil
 }
 
-func (m *Multi) Stat(path string) (Stat, error) {
-	var s Stat
+func (m *Multi) Stat(path string) (Result, error) {
+	var r Result
 
 	var foundChunk *chunk.Chunk
 	prefix := path + ".v1d"
 	for _, tgt := range m.targets {
 		fis, err := tgt.Search(prefix)
 		if err != nil {
-			return s, err
+			return r, err
 		}
 
 		for _, fi := range fis {
@@ -466,11 +470,11 @@ func (m *Multi) Stat(path string) (Stat, error) {
 	}
 
 	if foundChunk == nil {
-		return s, ErrNotFound
+		return r, ErrNotFound
 	}
 
-	copy(s.SHA256[:], foundChunk.SHA256[:])
-	s.Length = int64(foundChunk.FullLength)
+	copy(r.SHA256[:], foundChunk.SHA256[:])
+	r.Length = int64(foundChunk.FullLength)
 
-	return s, nil
+	return r, nil
 }
