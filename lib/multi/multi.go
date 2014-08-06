@@ -1,9 +1,9 @@
 package multi
 
 import (
+	"errors"
 	"git.encryptio.com/slime/lib/store"
 	"sync"
-	"errors"
 )
 
 var ErrNoTargets = errors.New("no targets defined")
@@ -13,8 +13,8 @@ type Multi struct {
 	targets []store.Target
 
 	// mutable, protected by mutex
-	mu      sync.Mutex
-	config  Config
+	mu         sync.Mutex
+	config     Config
 	scrubStats ScrubStats
 
 	stop chan struct{}

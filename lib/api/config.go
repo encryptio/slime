@@ -1,11 +1,11 @@
 package api
 
 import (
-	"net/http"
 	"encoding/json"
-	"log"
-	"io"
 	"git.encryptio.com/slime/lib/multi"
+	"io"
+	"log"
+	"net/http"
 )
 
 func (h *Handler) serveConfig(w http.ResponseWriter, r *http.Request) {
@@ -21,7 +21,7 @@ func (h *Handler) serveConfig(w http.ResponseWriter, r *http.Request) {
 	case "PUT":
 		w.Header().Set("content-type", "text/plain; charset=utf-8")
 
-		rdr := &io.LimitedReader{r.Body, MaxBodySize+1}
+		rdr := &io.LimitedReader{r.Body, MaxBodySize + 1}
 
 		var config multi.Config
 		err := json.NewDecoder(rdr).Decode(&config)

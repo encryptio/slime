@@ -2,8 +2,8 @@ package api
 
 import (
 	"git.encryptio.com/slime/lib/multi"
-	"strings"
 	"net/http"
+	"strings"
 )
 
 type Handler struct {

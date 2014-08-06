@@ -1,9 +1,9 @@
 package api
 
 import (
-	"net/http"
 	"encoding/json"
 	"log"
+	"net/http"
 )
 
 func (h *Handler) serveScrub(w http.ResponseWriter, r *http.Request) {

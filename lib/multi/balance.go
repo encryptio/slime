@@ -9,7 +9,7 @@ import (
 
 var ErrNotEnoughTargets = errors.New("Not enough targets for redundancy level")
 
-const RandomSpace = 1024*1024*1024 // 1GiB
+const RandomSpace = 1024 * 1024 * 1024 // 1GiB
 
 type targetFree struct {
 	t store.Target

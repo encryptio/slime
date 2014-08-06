@@ -10,23 +10,23 @@ import (
 )
 
 type Config struct {
-	Version            int64         `json:"version"`
+	Version             int64         `json:"version"`
 	ScrubFilesPerMinute int64         `json:"scrub_files_per_minute"`
 	ScrubTargetDuration time.Duration `json:"scrub_target_duration"`
-	ConfigSaveInterval time.Duration `json:"config_save_interval"`
-	ChunksNeed         int           `json:"chunks_need"`
-	ChunksTotal        int           `json:"chunks_total"`
-	AllowOverProvision bool          `json:"allow_over_provision"`
+	ConfigSaveInterval  time.Duration `json:"config_save_interval"`
+	ChunksNeed          int           `json:"chunks_need"`
+	ChunksTotal         int           `json:"chunks_total"`
+	AllowOverProvision  bool          `json:"allow_over_provision"`
 }
 
 var DefaultConfig = Config{
-	Version:            1,
+	Version:             1,
 	ScrubFilesPerMinute: 10,
 	ScrubTargetDuration: 7 * 24 * time.Hour,
-	ConfigSaveInterval: 30 * time.Minute,
-	ChunksNeed:         2,
-	ChunksTotal:        3,
-	AllowOverProvision: false,
+	ConfigSaveInterval:  30 * time.Minute,
+	ChunksNeed:          2,
+	ChunksTotal:         3,
+	AllowOverProvision:  false,
 }
 
 func (m *Multi) SetConfig(c Config) error {

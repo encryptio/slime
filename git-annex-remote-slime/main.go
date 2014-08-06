@@ -1,18 +1,18 @@
 package main
 
 import (
-	"net/http"
-	"fmt"
 	"bufio"
-	"os"
-	"log"
+	"fmt"
 	"io"
+	"log"
+	"net/http"
+	"os"
 	"strings"
 )
 
 var (
-	in = bufio.NewReader(os.Stdin)
-	out = bufio.NewWriter(os.Stdout)
+	in      = bufio.NewReader(os.Stdin)
+	out     = bufio.NewWriter(os.Stdout)
 	baseURL string
 )
 
@@ -57,7 +57,7 @@ func prepare() {
 
 func store(key, file string) {
 	ok := false
-	defer func(){
+	defer func() {
 		if ok {
 			out.WriteString("TRANSFER-SUCCESS STORE ")
 		} else {
@@ -97,7 +97,7 @@ func store(key, file string) {
 
 func retrieve(key, file string) {
 	ok := false
-	defer func(){
+	defer func() {
 		if ok {
 			out.WriteString("TRANSFER-SUCCESS RETRIEVE ")
 		} else {
@@ -107,7 +107,7 @@ func retrieve(key, file string) {
 		out.WriteString("\n")
 	}()
 
-	resp, err := http.Get(baseURL+key)
+	resp, err := http.Get(baseURL + key)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func retrieve(key, file string) {
 }
 
 func checkPresent(key string) {
-	resp, err := http.Get(baseURL+key)
+	resp, err := http.Get(baseURL + key)
 	if err != nil {
 		log.Fatal(err)
 	}

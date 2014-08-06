@@ -1,25 +1,25 @@
 package multi
 
 import (
-	"time"
-	"math/rand"
-	"log"
-	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/chunk"
+	"git.encryptio.com/slime/lib/store"
+	"log"
+	"math/rand"
+	"time"
 )
 
 type ScrubStats struct {
-	Running bool `json:"running"`
-	LastDuration time.Duration `json:"last_duration"`
-	LastFixedErrors int64 `json:"last_fixed_errors"`
-	LastUnfixedErrors int64 `json:"last_unfixed_errors"`
-	LastOkay int64 `json:"last_okay"`
-	LastStartedAt time.Time `json:"last_started_at"`
+	Running           bool          `json:"running"`
+	LastDuration      time.Duration `json:"last_duration"`
+	LastFixedErrors   int64         `json:"last_fixed_errors"`
+	LastUnfixedErrors int64         `json:"last_unfixed_errors"`
+	LastOkay          int64         `json:"last_okay"`
+	LastStartedAt     time.Time     `json:"last_started_at"`
 
-	StartedAt time.Time `json:"started_at,omitempty"`
-	FixedErrors int64 `json:"fixed_errors"`
-	UnfixedErrors int64 `json:"unfixed_errors"`
-	Okay int64 `json:"okay"`
+	StartedAt     time.Time `json:"started_at,omitempty"`
+	FixedErrors   int64     `json:"fixed_errors"`
+	UnfixedErrors int64     `json:"unfixed_errors"`
+	Okay          int64     `json:"okay"`
 }
 
 func (m *Multi) GetScrubStats() ScrubStats {
@@ -37,7 +37,7 @@ func (m *Multi) scrubLoop() {
 		duration := end.Sub(start)
 		m.rotateScrubStats(duration)
 		m.updateScrubRate(duration)
-		m.scrubSleep(func(){})
+		m.scrubSleep(func() {})
 	}
 }
 
@@ -45,12 +45,12 @@ func (m *Multi) updateScrubRate(d time.Duration) {
 	m.mu.Lock()
 
 	shouldSave := false
-	if d > m.config.ScrubTargetDuration + m.config.ScrubTargetDuration/4 && m.config.ScrubFilesPerMinute < 1000 {
+	if d > m.config.ScrubTargetDuration+m.config.ScrubTargetDuration/4 && m.config.ScrubFilesPerMinute < 1000 {
 		log.Printf("Last scrub duration was too long (%v, want %v), increasing scrub files per minute", d, m.config.ScrubTargetDuration)
 		m.config.ScrubFilesPerMinute += m.config.ScrubFilesPerMinute >> 3
 		m.config.Version++
 		shouldSave = true
-	} else if d < m.config.ScrubTargetDuration - m.config.ScrubTargetDuration/4 && m.config.ScrubFilesPerMinute > 10 {
+	} else if d < m.config.ScrubTargetDuration-m.config.ScrubTargetDuration/4 && m.config.ScrubFilesPerMinute > 10 {
 		log.Printf("Last scrub duration was too short (%v, want %v), decreasing scrub files per minute", d, m.config.ScrubTargetDuration)
 		m.config.ScrubFilesPerMinute -= m.config.ScrubFilesPerMinute >> 3
 		m.config.Version++
@@ -68,7 +68,7 @@ func (m *Multi) scrub() {
 	m.setScrubRunning(true)
 	defer m.setScrubRunning(false)
 	m.scrubRec("/")
-	m.scrubSleep(func(){})
+	m.scrubSleep(func() {})
 }
 
 func (m *Multi) scrubRec(path string) {
@@ -80,15 +80,15 @@ func (m *Multi) scrubRec(path string) {
 	}
 
 	// Fischer-Yates shuffle
-	for i := len(l)-1; i > 0; i-- {
-		j := rand.Intn(i+1)
+	for i := len(l) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
 		l[i], l[j] = l[j], l[i]
 	}
 
 	for _, fi := range l {
-		m.scrubSleep(func(){
+		m.scrubSleep(func() {
 			if fi.IsDir {
-				m.scrubRec(fi.Name+"/")
+				m.scrubRec(fi.Name + "/")
 			} else {
 				m.scrubFile(fi.Name)
 			}
@@ -147,17 +147,17 @@ func (m *Multi) incrementScrubErrors(fixed bool) {
 func (m *Multi) scrubFile(path string) {
 	type failure struct {
 		name string
-		tgt store.Target
-		err error
+		tgt  store.Target
+		err  error
 	}
 
 	type tgtChunk struct {
 		*chunk.Chunk
 		name string
-		tgt store.Target
+		tgt  store.Target
 	}
 
-	prefix := path+".v1d"
+	prefix := path + ".v1d"
 
 	// read all chunks for this prefix, keeping track of chunks
 	// that failed to read
@@ -253,13 +253,13 @@ func (m *Multi) scrubFile(path string) {
 	for _, other := range otherChunks {
 		err := other.tgt.Set(other.name, nil)
 		if err != nil {
-			log.Printf("[scrub] Couldn't remove extraneous chunk %v from %v: %v", )
+			log.Printf("[scrub] Couldn't remove extraneous chunk %v from %v: %v")
 		}
 		m.incrementScrubErrors(err == nil)
 	}
 
 	rebuild := false
-	if len(chunks) < int(bestInfo.DataChunks + bestInfo.ParityChunks) {
+	if len(chunks) < int(bestInfo.DataChunks+bestInfo.ParityChunks) {
 		log.Printf("[scrub] %v is missing a chunk, rebuilding", path)
 		rebuild = true
 	}
@@ -268,7 +268,7 @@ func (m *Multi) scrubFile(path string) {
 	cfg := m.config
 	m.mu.Unlock()
 	if int(bestInfo.DataChunks) != cfg.ChunksNeed || int(bestInfo.ParityChunks+bestInfo.DataChunks) != cfg.ChunksTotal {
-		log.Printf("[scrub] %v has incorrect redundancy values (is %v+%v, want %v+%v)", path, bestInfo.DataChunks, bestInfo.ParityChunks, cfg.ChunksNeed, cfg.ChunksTotal - cfg.ChunksNeed)
+		log.Printf("[scrub] %v has incorrect redundancy values (is %v+%v, want %v+%v)", path, bestInfo.DataChunks, bestInfo.ParityChunks, cfg.ChunksNeed, cfg.ChunksTotal-cfg.ChunksNeed)
 		rebuild = true
 	}
 
