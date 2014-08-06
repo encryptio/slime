@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +17,12 @@ var (
 	out     = bufio.NewWriter(os.Stdout)
 	baseURL string
 )
+
+func addPrefix(key string) string {
+	sha := sha256.Sum256([]byte(strings.ToLower(key)))
+	hexed := hex.EncodeToString(sha[0:3])
+	return hexed[0:3] + "/" + hexed[3:6] + "/" + key
+}
 
 func getConfig(name string) string {
 	out.WriteString("GETCONFIG ")
@@ -74,9 +82,9 @@ func store(key, file string) {
 	}
 	defer fh.Close()
 
-	req, err := http.NewRequest("PUT", baseURL+key, fh)
+	req, err := http.NewRequest("PUT", baseURL+addPrefix(key), fh)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v", baseURL+key, err)
+		log.Printf("Couldn't create request for %s: %v", baseURL+addPrefix(key), err)
 		return
 	}
 
@@ -107,7 +115,7 @@ func retrieve(key, file string) {
 		out.WriteString("\n")
 	}()
 
-	resp, err := http.Get(baseURL + key)
+	resp, err := http.Get(baseURL + addPrefix(key))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -151,7 +159,7 @@ func retrieve(key, file string) {
 }
 
 func checkPresent(key string) {
-	resp, err := http.Get(baseURL + key)
+	resp, err := http.Get(baseURL + addPrefix(key))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -169,9 +177,9 @@ func checkPresent(key string) {
 }
 
 func remove(key string) {
-	req, err := http.NewRequest("DELETE", baseURL+key, nil)
+	req, err := http.NewRequest("DELETE", baseURL+addPrefix(key), nil)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v", baseURL+key, err)
+		log.Printf("Couldn't create request for %s: %v", baseURL+addPrefix(key), err)
 		return
 	}
 
