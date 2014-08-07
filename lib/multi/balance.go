@@ -9,7 +9,10 @@ import (
 
 var ErrNotEnoughTargets = errors.New("Not enough targets for redundancy level")
 
-const RandomSpace = 1024 * 1024 * 1024 // 1GiB
+const (
+	RandomSpace        = 1024 * 1024 * 1024     // 1GiB
+	RebalanceThreshold = 2 * 1024 * 1024 * 1024 // 2GiB
+)
 
 type targetFree struct {
 	t store.Target
@@ -23,21 +26,7 @@ func (t targetFreeList) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t targetFreeList) Less(i, j int) bool { return t[i].f > t[j].f } // NB: >, not <
 
 func (m *Multi) findPreferred(count int) ([]store.Target, error) {
-	withFree := targetFreeList(make([]targetFree, 0, len(m.targets)))
-	var extra []store.Target
-	for _, tgt := range m.targets {
-		free, err := tgt.FreeSpace()
-		if err != nil {
-			extra = append(extra, tgt)
-			continue
-		}
-
-		free += rand.Int63n(RandomSpace)
-
-		withFree = append(withFree, targetFree{tgt, free})
-	}
-
-	sort.Sort(withFree)
+	withFree, extra := m.targetsWithFree(RandomSpace)
 
 	out := make([]store.Target, 0, count)
 	for len(out) < count {
@@ -66,4 +55,40 @@ func (m *Multi) findPreferred(count int) ([]store.Target, error) {
 	}
 
 	return out, nil
+}
+
+func (m *Multi) findRebalanceTargets() (store.Target, store.Target) {
+	withFree, _ := m.targetsWithFree(0)
+	if len(withFree) < 2 {
+		return nil, nil
+	}
+
+	diff := withFree[0].f - withFree[len(withFree)-1].f
+	if diff < RebalanceThreshold {
+		return nil, nil
+	}
+
+	return withFree[0].t, withFree[1].t
+}
+
+func (m *Multi) targetsWithFree(randomSpace int64) (targetFreeList, []store.Target) {
+	withFree := targetFreeList(make([]targetFree, 0, len(m.targets)))
+	var extra []store.Target
+	for _, tgt := range m.targets {
+		free, err := tgt.FreeSpace()
+		if err != nil {
+			extra = append(extra, tgt)
+			continue
+		}
+
+		if randomSpace > 0 {
+			free += rand.Int63n(randomSpace)
+		}
+
+		withFree = append(withFree, targetFree{tgt, free})
+	}
+
+	sort.Sort(withFree)
+
+	return withFree, extra
 }

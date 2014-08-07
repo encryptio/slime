@@ -16,6 +16,7 @@ type Multi struct {
 	mu         sync.Mutex
 	config     Config
 	scrubStats ScrubStats
+	rebal      rebalanceInfo
 
 	stop chan struct{}
 	done chan struct{}

@@ -29,6 +29,30 @@ type ScrubStats struct {
 	} `json:"current,omitempty"`
 }
 
+type rebalanceInfo struct {
+	updated time.Time
+	from    store.Target
+	to      store.Target
+}
+
+var rebalanceRecheckInterval = 15 * time.Second
+
+func (m *Multi) updateRebalanceInfo() {
+	m.mu.Lock()
+	if time.Now().Sub(m.rebal.updated) <= rebalanceRecheckInterval {
+		m.mu.Unlock()
+		return
+	}
+	m.mu.Unlock()
+
+	from, to := m.findRebalanceTargets()
+	m.mu.Lock()
+	m.rebal.updated = time.Now()
+	m.rebal.from = from
+	m.rebal.to = to
+	m.mu.Unlock()
+}
+
 func (m *Multi) GetScrubStats() ScrubStats {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -309,6 +333,38 @@ func (m *Multi) scrubFile(path string) {
 	if int(bestInfo.DataChunks) != cfg.ChunksNeed || int(bestInfo.ParityChunks+bestInfo.DataChunks) != cfg.ChunksTotal {
 		log.Printf("[scrub] %v has incorrect redundancy values (is %v+%v, want %v+%v)", path, bestInfo.DataChunks, bestInfo.ParityChunks, cfg.ChunksNeed, cfg.ChunksTotal-cfg.ChunksNeed)
 		rebuild = true
+	}
+
+	m.updateRebalanceInfo()
+	m.mu.Lock()
+	balanceFrom, balanceTo := m.rebal.from, m.rebal.to
+	m.mu.Unlock()
+	if !rebuild && balanceFrom != nil {
+		found := false
+		for _, chunk := range chunks {
+			if chunk.tgt == balanceFrom {
+				found = true
+				break
+			}
+		}
+
+		if found {
+			log.Printf("[scrub] %v - rebuilding to balance away from %v", path, balanceFrom.Name())
+			rebuild = true
+		}
+	}
+	if !rebuild && balanceTo != nil {
+		found := false
+		for _, chunk := range chunks {
+			if chunk.tgt == balanceTo {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			log.Printf("[scrub] %v - rebuilding to balance towards %v", path, balanceTo.Name())
+		}
 	}
 
 	if rebuild {
