@@ -9,17 +9,24 @@ import (
 )
 
 type ScrubStats struct {
-	Running           bool          `json:"running"`
-	LastDuration      time.Duration `json:"last_duration"`
-	LastFixedErrors   int64         `json:"last_fixed_errors"`
-	LastUnfixedErrors int64         `json:"last_unfixed_errors"`
-	LastOkay          int64         `json:"last_okay"`
-	LastStartedAt     time.Time     `json:"last_started_at"`
+	Last struct {
+		Duration time.Duration `json:"duration,omitempty"`
+		Fixed    int64         `json:"fixed,omitempty"`
+		Unfixed  int64         `json:"unfixed,omitempty"`
+		Okay     int64         `json:"okay,omitempty"`
+		Started  time.Time     `json:"started,omitempty"`
+		Duty     float64       `json:"duty,omitempty"`
+	} `json:"last"`
 
-	StartedAt     time.Time `json:"started_at,omitempty"`
-	FixedErrors   int64     `json:"fixed_errors"`
-	UnfixedErrors int64     `json:"unfixed_errors"`
-	Okay          int64     `json:"okay"`
+	Current struct {
+		Running bool      `json:"running"`
+		Started time.Time `json:"started,omitempty"`
+		Fixed   int64     `json:"fixed,omitempty"`
+		Unfixed int64     `json:"unfixed,omitempty"`
+		Okay    int64     `json:"okay,omitempty"`
+		DutyNum int64     `json:"duty_num,omitempty"`
+		DutyDen int64     `json:"duty_den,omitempty"`
+	} `json:"current,omitempty"`
 }
 
 func (m *Multi) GetScrubStats() ScrubStats {
@@ -86,13 +93,13 @@ func (m *Multi) scrubRec(path string) {
 	}
 
 	for _, fi := range l {
-		m.scrubSleep(func() {
-			if fi.IsDir {
-				m.scrubRec(fi.Name + "/")
-			} else {
+		if fi.IsDir {
+			m.scrubRec(fi.Name + "/")
+		} else {
+			m.scrubSleep(func() {
 				m.scrubFile(fi.Name)
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -101,52 +108,71 @@ func (m *Multi) scrubSleep(inner func()) {
 	fpm := m.config.ScrubFilesPerMinute
 	m.mu.Unlock()
 
-	until := time.Now().Add(time.Minute / time.Duration(fpm))
+	start := time.Now()
+	until := start.Add(time.Minute / time.Duration(fpm))
 
 	inner()
 
-	d := until.Sub(time.Now())
+	end := time.Now()
+
+	d := until.Sub(end)
 	if d > 0 {
 		time.Sleep(d)
 	}
+
+	after := time.Now()
+
+	m.mu.Lock()
+	m.scrubStats.Current.DutyNum += int64(end.Sub(start))
+	m.scrubStats.Current.DutyDen += int64(after.Sub(start))
+	m.mu.Unlock()
 }
 
 func (m *Multi) setScrubRunning(v bool) {
 	m.mu.Lock()
-	m.scrubStats.Running = v
+	m.scrubStats.Current.Running = v
 	if v {
-		m.scrubStats.StartedAt = time.Now()
+		m.scrubStats.Current.Started = time.Now()
 	}
 	m.mu.Unlock()
 }
 
 func (m *Multi) rotateScrubStats(d time.Duration) {
 	m.mu.Lock()
-	m.scrubStats.LastDuration = d
-	m.scrubStats.LastFixedErrors = m.scrubStats.FixedErrors
-	m.scrubStats.LastUnfixedErrors = m.scrubStats.UnfixedErrors
-	m.scrubStats.LastOkay = m.scrubStats.Okay
-	m.scrubStats.LastStartedAt = m.scrubStats.StartedAt
-	m.scrubStats.FixedErrors = 0
-	m.scrubStats.UnfixedErrors = 0
-	m.scrubStats.Okay = 0
-	m.scrubStats.StartedAt = time.Time{}
+
+	l := &m.scrubStats.Last
+	c := &m.scrubStats.Current
+
+	l.Duration = d
+	l.Fixed = c.Fixed
+	l.Unfixed = c.Unfixed
+	l.Okay = c.Okay
+	l.Started = c.Started
+	l.Duty = float64(c.DutyNum) / float64(c.DutyDen+1)
+
+	c.Started = time.Time{}
+	c.Fixed = 0
+	c.Unfixed = 0
+	c.Okay = 0
+	c.DutyNum = 0
+	c.DutyDen = 0
+
 	m.mu.Unlock()
 }
 
 func (m *Multi) incrementScrubErrors(fixed bool) {
 	m.mu.Lock()
 	if fixed {
-		m.scrubStats.FixedErrors++
+		m.scrubStats.Current.Fixed++
 	} else {
-		m.scrubStats.UnfixedErrors++
+		m.scrubStats.Current.Unfixed++
 	}
 	m.mu.Unlock()
 }
 
 func (m *Multi) incrementOkay() {
 	m.mu.Lock()
-	m.scrubStats.Okay++
+	m.scrubStats.Current.Okay++
 	m.mu.Unlock()
 }
 
