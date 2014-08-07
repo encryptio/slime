@@ -46,7 +46,16 @@ func New(targets []store.Target) (*Multi, error) {
 
 func (m *Multi) Stop() {
 	close(m.stop)
-	for i := 0; i < 0; i++ {
+	for i := 0; i < 1; i++ {
 		<-m.done
+	}
+}
+
+func (m *Multi) isStopping() bool {
+	select {
+	case <-m.stop:
+		return true
+	default:
+		return false
 	}
 }

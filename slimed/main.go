@@ -9,6 +9,9 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -38,7 +41,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer m.Stop()
 
 	http.Handle("/", api.NewHandler(m))
-	log.Fatal(http.ListenAndServe(args.Listen, nil))
+	go func() {
+		log.Fatal(http.ListenAndServe(args.Listen, nil))
+	}()
+
+	stopSignal := make(chan os.Signal)
+	signal.Notify(stopSignal, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	sig := <-stopSignal
+	log.Printf("Stopping on signal %v", sig)
 }

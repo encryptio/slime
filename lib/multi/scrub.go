@@ -36,7 +36,10 @@ func (m *Multi) GetScrubStats() ScrubStats {
 }
 
 func (m *Multi) scrubLoop() {
-	for {
+	defer func() {
+		m.done <- struct{}{}
+	}()
+	for !m.isStopping() {
 		start := time.Now()
 		m.scrub()
 		end := time.Now()
@@ -99,6 +102,10 @@ func (m *Multi) scrubRec(path string) {
 			m.scrubSleep(func() {
 				m.scrubFile(fi.Name)
 			})
+		}
+
+		if m.isStopping() {
+			return
 		}
 	}
 }
