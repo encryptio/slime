@@ -68,7 +68,7 @@ func (m *Multi) findRebalanceTargets() (store.Target, store.Target) {
 		return nil, nil
 	}
 
-	return withFree[0].t, withFree[1].t
+	return withFree[len(withFree)-1].t, withFree[0].t
 }
 
 func (m *Multi) targetsWithFree(randomSpace int64) (targetFreeList, []store.Target) {
