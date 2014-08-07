@@ -2,11 +2,16 @@ package multi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"git.encryptio.com/slime/lib/store"
 	"log"
 	"reflect"
 	"time"
+)
+
+var (
+	ErrBadChunkCounts = errors.New("bad chunk counts")
 )
 
 type Config struct {
@@ -30,6 +35,10 @@ var DefaultConfig = Config{
 }
 
 func (m *Multi) SetConfig(c Config) error {
+	if c.ChunksNeed > c.ChunksTotal || c.ChunksNeed < 1 || c.ChunksTotal > 100 {
+		return ErrBadChunkCounts
+	}
+
 	m.config = c
 	return m.saveConfig()
 }
