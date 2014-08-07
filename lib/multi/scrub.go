@@ -339,31 +339,21 @@ func (m *Multi) scrubFile(path string) {
 	m.mu.Lock()
 	balanceFrom, balanceTo := m.rebal.from, m.rebal.to
 	m.mu.Unlock()
-	if !rebuild && balanceFrom != nil {
-		found := false
+	if !rebuild && balanceFrom != nil && balanceTo != nil {
+		foundFrom := false
+		foundTo := false
 		for _, chunk := range chunks {
 			if chunk.tgt == balanceFrom {
-				found = true
-				break
+				foundFrom = true
 			}
-		}
-
-		if found {
-			log.Printf("[scrub] %v - rebuilding to balance away from %v", path, balanceFrom.Name())
-			rebuild = true
-		}
-	}
-	if !rebuild && balanceTo != nil {
-		found := false
-		for _, chunk := range chunks {
 			if chunk.tgt == balanceTo {
-				found = true
-				break
+				foundTo = true
 			}
 		}
 
-		if !found {
-			log.Printf("[scrub] %v - rebuilding to balance towards %v", path, balanceTo.Name())
+		if foundFrom && !foundTo {
+			log.Printf("[scrub] %v - rebuilding for balance", path)
+			rebuild = true
 		}
 	}
 
