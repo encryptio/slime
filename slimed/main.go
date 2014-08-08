@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,7 +17,8 @@ import (
 )
 
 var args = struct {
-	Listen string `help:"Address to listen on" default:":17942"`
+	Listen string `help:"Address to listen on"   default:":17942"`
+	Debug  bool   `help:"Allow remote debugging" default:"false"`
 }{}
 
 func main() {
@@ -43,9 +45,17 @@ func main() {
 	}
 	defer m.Stop()
 
-	http.Handle("/", api.NewHandler(m))
+	mux := http.NewServeMux()
+	if args.Debug {
+		mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+		mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+		mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+		mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+	}
+	mux.Handle("/", api.NewHandler(m))
+
 	go func() {
-		log.Fatal(http.ListenAndServe(args.Listen, nil))
+		log.Fatal(http.ListenAndServe(args.Listen, mux))
 	}()
 
 	stopSignal := make(chan os.Signal)
