@@ -55,7 +55,7 @@ func main() {
 	mux.Handle("/", api.NewHandler(m))
 
 	go func() {
-		log.Fatal(http.ListenAndServe(args.Listen, mux))
+		log.Fatal(http.ListenAndServe(args.Listen, LogHttpRequests(mux)))
 	}()
 
 	stopSignal := make(chan os.Signal)
