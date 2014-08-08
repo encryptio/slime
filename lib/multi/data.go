@@ -342,6 +342,8 @@ func (m *Multi) Get(path string) (Result, error) {
 		return r, ErrNotEnoughChunks
 	}
 
+	// TODO: if we have the data chunks, use them directly, skipping ecc recovery
+
 	// build the rs vectors
 	vecs := make([][]uint32, 0, chunks[0].DataChunks)
 	indices := make([]int, 0, chunks[0].DataChunks)
