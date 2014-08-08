@@ -68,6 +68,10 @@ func (m *Multi) scrubLoop() {
 		m.scrub()
 		end := time.Now()
 
+		if m.isStopping() {
+			break
+		}
+
 		duration := end.Sub(start)
 		m.rotateScrubStats(duration)
 		m.updateScrubRate(duration)
@@ -148,7 +152,10 @@ func (m *Multi) scrubSleep(inner func()) {
 
 	d := until.Sub(end)
 	if d > 0 {
-		time.Sleep(d)
+		select {
+		case <-time.After(d):
+		case <-m.stop:
+		}
 	}
 
 	after := time.Now()
