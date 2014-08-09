@@ -8,6 +8,7 @@ import (
 	"git.encryptio.com/slime/lib/store"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
@@ -54,9 +55,25 @@ func main() {
 	}
 	mux.Handle("/", api.NewHandler(m))
 
-	go func() {
-		log.Fatal(http.ListenAndServe(args.Listen, LogHttpRequests(mux)))
-	}()
+	logger := LogHttpRequests(mux)
+
+	lsock, err := net.Listen("tcp", args.Listen)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	counter := CountHTTPRequests(logger)
+	defer counter.Wait()
+
+	defer lsock.Close()
+
+	server := http.Server{
+		Handler:      counter,
+		ReadTimeout:  time.Hour,
+		WriteTimeout: time.Hour,
+	}
+
+	go server.Serve(lsock)
 
 	stopSignal := make(chan os.Signal)
 	signal.Notify(stopSignal, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
