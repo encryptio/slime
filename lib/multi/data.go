@@ -342,28 +342,51 @@ func (m *Multi) Get(path string) (Result, error) {
 		return r, ErrNotEnoughChunks
 	}
 
-	// TODO: if we have the data chunks, use them directly, skipping ecc recovery
+	rawDataFound := true
+	for i := 0; i < int(chunks[0].DataChunks); i++ {
+		found := false
+		for _, chunk := range chunks {
+			if int(chunk.ChunkIndex) == i {
+				found = true
+				break
+			}
+		}
 
-	// build the rs vectors
-	vecs := make([][]uint32, 0, chunks[0].DataChunks)
-	indices := make([]int, 0, chunks[0].DataChunks)
-	for _, chunk := range chunks {
-		mapping := chunks[0].MappingValue
-
-		vecs = append(vecs, gf.MapToGFWith(chunk.Data, mapping))
-		indices = append(indices, int(chunk.ChunkIndex))
-
-		if len(vecs) == int(chunks[0].DataChunks) {
+		if !found {
+			rawDataFound = false
 			break
 		}
 	}
 
-	// TODO: skip this if we have the data already
-	dataVecs := rs.RecoverData(vecs, indices)
-
 	data := make([]byte, 0, chunks[0].FullLength+chunks[0].DataChunks*4)
-	for _, vec := range dataVecs {
-		data = append(data, gf.MapFromGF(chunks[0].MappingValue, vec)...)
+	if rawDataFound {
+		for i := 0; i < int(chunks[0].DataChunks); i++ {
+			for _, chunk := range chunks {
+				if int(chunk.ChunkIndex) == i {
+					data = append(data, chunk.Data...)
+					break
+				}
+			}
+		}
+	} else {
+		// not all data chunks are found, run GF recovery
+		vecs := make([][]uint32, 0, chunks[0].DataChunks)
+		indices := make([]int, 0, chunks[0].DataChunks)
+		for _, chunk := range chunks {
+			mapping := chunks[0].MappingValue
+
+			vecs = append(vecs, gf.MapToGFWith(chunk.Data, mapping))
+			indices = append(indices, int(chunk.ChunkIndex))
+
+			if len(vecs) == int(chunks[0].DataChunks) {
+				break
+			}
+		}
+
+		dataVecs := rs.RecoverData(vecs, indices)
+		for _, vec := range dataVecs {
+			data = append(data, gf.MapFromGF(chunks[0].MappingValue, vec)...)
+		}
 	}
 
 	r.Data = data[:chunks[0].FullLength]
