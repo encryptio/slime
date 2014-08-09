@@ -46,12 +46,7 @@ func (m *Multi) findPreferred(count int) ([]store.Target, error) {
 			continue
 		}
 
-		if !m.config.AllowOverProvision {
-			return nil, ErrNotEnoughTargets
-		}
-
-		// if the user has told us to, break our redundancy principles
-		out = append(out, m.targets[rand.Intn(len(m.targets))])
+		return nil, ErrNotEnoughTargets
 	}
 
 	return out, nil

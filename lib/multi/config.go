@@ -21,7 +21,6 @@ type Config struct {
 	ConfigSaveInterval  time.Duration `json:"config_save_interval"`
 	ChunksNeed          int           `json:"chunks_need"`
 	ChunksTotal         int           `json:"chunks_total"`
-	AllowOverProvision  bool          `json:"allow_over_provision"`
 }
 
 var DefaultConfig = Config{
@@ -31,7 +30,6 @@ var DefaultConfig = Config{
 	ConfigSaveInterval:  30 * time.Minute,
 	ChunksNeed:          2,
 	ChunksTotal:         3,
-	AllowOverProvision:  false,
 }
 
 func (m *Multi) SetConfig(c Config) error {
