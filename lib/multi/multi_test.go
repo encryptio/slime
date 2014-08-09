@@ -151,3 +151,44 @@ func TestDataFS(t *testing.T) {
 
 	testData(t, targets)
 }
+
+func BenchmarkSet1MB(b *testing.B) {
+	m, err := New([]store.Target{store.NewRAM(), store.NewRAM(), store.NewRAM(), store.NewRAM()})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	d := make([]byte, 1024*1024)
+	b.SetBytes(int64(len(d)))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := m.Set("/path", d)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkGet1MB(b *testing.B) {
+	m, err := New([]store.Target{store.NewRAM(), store.NewRAM(), store.NewRAM(), store.NewRAM()})
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	d := make([]byte, 1024*1024)
+	b.SetBytes(int64(len(d)))
+
+	err = m.Set("/path", d)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := m.Get("/path")
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
