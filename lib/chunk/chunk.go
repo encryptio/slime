@@ -46,10 +46,11 @@ func (c *Chunk) MarshalBinary() ([]byte, error) {
 
 	h := fnv.New64a()
 	h.Write(data)
+	fnvSum := h.Sum(nil)
 
 	header := make([]byte, 16)
-	copy(header, chunkMagicNumber)
-	header = h.Sum(chunkMagicNumber)
+	copy(header[0:8], chunkMagicNumber)
+	copy(header[8:16], fnvSum)
 
 	return append(header, data...), nil
 }
