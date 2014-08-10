@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -91,6 +92,12 @@ func store(key, file string) {
 	}
 	sha := hash.Sum(nil)
 
+	length, err := fh.Seek(0, 2)
+	if err != nil {
+		log.Printf("Couldn't seek in %s: %v", file, err)
+		return
+	}
+
 	_, err = fh.Seek(0, 0)
 	if err != nil {
 		log.Printf("Couldn't seek in %s: %v", file, err)
@@ -103,6 +110,7 @@ func store(key, file string) {
 		return
 	}
 	req.Header.Set("X-Content-SHA256", hex.EncodeToString(sha))
+	req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
