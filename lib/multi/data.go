@@ -11,6 +11,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -82,6 +83,7 @@ func (m *Multi) Set(path string, data []byte) error {
 		DataChunks:   uint32(m.config.ChunksNeed),
 		ParityChunks: uint32(m.config.ChunksTotal - m.config.ChunksNeed),
 		MappingValue: mapping,
+		WriteTime:    time.Now().UnixNano(),
 	}
 
 	wg.Wait()

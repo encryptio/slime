@@ -342,6 +342,11 @@ func (m *Multi) scrubFile(path string) {
 		rebuild = true
 	}
 
+	if bestInfo.WriteTime == 0 {
+		log.Printf("[scrub] %v is missing WriteTime field, rebuilding", path)
+		rebuild = true
+	}
+
 	m.updateRebalanceInfo()
 	m.mu.Lock()
 	balanceFrom, balanceTo := m.rebal.from, m.rebal.to
