@@ -84,6 +84,12 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 	case "PUT":
 		w.Header().Set("content-type", "text/plain; charset=utf-8")
 
+		if r.ContentLength > MaxBodySize {
+			w.WriteHeader(413)
+			w.Write([]byte("object too large"))
+			return
+		}
+
 		rdr := &io.LimitedReader{r.Body, MaxBodySize + 1}
 		data, err := ioutil.ReadAll(rdr)
 		if err != nil {
@@ -92,8 +98,8 @@ func (h *Handler) serveFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if int64(len(data)) > MaxBodySize {
-			w.WriteHeader(400)
+		if len(data) > MaxBodySize {
+			w.WriteHeader(413)
 			w.Write([]byte("object too large"))
 			return
 		}
