@@ -147,7 +147,7 @@ func retrieve(key, file string) {
 
 	if resp.StatusCode != 200 {
 		log.Printf("Couldn't GET %v: %v", resp.Request.URL, resp.Status)
-
+		return
 	}
 
 	fh, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
