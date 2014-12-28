@@ -6,8 +6,12 @@ import (
 
 const MaxVal = 1<<32 - 5
 
-// MapToGF maps an arbitrary byte slice to a sequence of points in GF(2^32-5),
+// MapToGF maps a byte slice to a sequence of points in GF(2^32-5),
 // along with a number that represents the particular mapping used.
+//
+// This is only possible for byte slices strictly shorter than 4*(2^32-5) bytes,
+// and becomes significantly slower as larger data points are used. If you need
+// to map such a large byte slice, chunk it into smaller pieces.
 func MapToGF(in []byte) (uint32, []uint32) {
 	outLength := (len(in) + 3) / 4
 
@@ -61,6 +65,9 @@ func MapToGF(in []byte) (uint32, []uint32) {
 
 // MapToGFWith maps an arbitrary byte slice to a sequence of points in GF(2^32-5),
 // using a mapping defined by n, previously chosen by MapToGF.
+//
+// Note that the output data may be padded with up to 3 zero bytes to the next
+// multiple of 4 bytes.
 func MapToGFWith(in []byte, n uint32) []uint32 {
 	outLength := (len(in) + 3) / 4
 
