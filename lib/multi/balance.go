@@ -23,7 +23,7 @@ type targetFreeList []targetFree
 
 func (t targetFreeList) Len() int           { return len(t) }
 func (t targetFreeList) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t targetFreeList) Less(i, j int) bool { return t[i].f > t[j].f } // NB: >, not <
+func (t targetFreeList) Less(i, j int) bool { return t[i].f > t[j].f } // NB: >
 
 func (m *Multi) findPreferred(count int) ([]store.Target, error) {
 	withFree, extra := m.targetsWithFree(RandomSpace)
@@ -66,7 +66,7 @@ func (m *Multi) findRebalanceTargets() (store.Target, store.Target) {
 	return withFree[len(withFree)-1].t, withFree[0].t
 }
 
-func (m *Multi) targetsWithFree(randomSpace int64) (targetFreeList, []store.Target) {
+func (m *Multi) targetsWithFree(fuzz int64) (targetFreeList, []store.Target) {
 	withFree := targetFreeList(make([]targetFree, 0, len(m.targets)))
 	var extra []store.Target
 	for _, tgt := range m.targets {
@@ -76,8 +76,8 @@ func (m *Multi) targetsWithFree(randomSpace int64) (targetFreeList, []store.Targ
 			continue
 		}
 
-		if randomSpace > 0 {
-			free += rand.Int63n(randomSpace)
+		if fuzz > 0 {
+			free += rand.Int63n(fuzz)
 		}
 
 		withFree = append(withFree, targetFree{tgt, free})

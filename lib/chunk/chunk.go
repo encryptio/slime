@@ -100,7 +100,9 @@ func (c *Chunk) unmarshalVersion0000(data []byte) error {
 	buf := bytes.NewBuffer(data[32:])
 
 	var err error
-	for _, field := range []*uint32{&c.FullLength, &c.DataChunks, &c.ParityChunks, &c.MappingValue, &c.ChunkIndex} {
+	for _, field := range []*uint32{&c.FullLength, &c.DataChunks,
+		&c.ParityChunks, &c.MappingValue, &c.ChunkIndex} {
+
 		err = binary.Read(buf, binary.BigEndian, field)
 		if err != nil {
 			return err
@@ -126,7 +128,9 @@ func (c *Chunk) unmarshalVersion0001(data []byte) error {
 	buf := bytes.NewBuffer(data[32:])
 
 	var err error
-	for _, field := range []interface{}{&c.FullLength, &c.DataChunks, &c.ParityChunks, &c.MappingValue, &c.WriteTime, &c.ChunkIndex} {
+	for _, field := range []interface{}{&c.FullLength, &c.DataChunks,
+		&c.ParityChunks, &c.MappingValue, &c.WriteTime, &c.ChunkIndex} {
+
 		err = binary.Read(buf, binary.BigEndian, field)
 		if err != nil {
 			return err

@@ -48,7 +48,8 @@ func TestVandermondeMatrix(t *testing.T) {
 	for _, test := range tests {
 		mat := vandermondeMatrix(test.D, test.P)
 		if !reflect.DeepEqual(mat, test.M) {
-			t.Errorf("vandermondeMatrix(%v, %v) = %v, wanted %v", test.D, test.P, mat, test.M)
+			t.Errorf("vandermondeMatrix(%v, %v) = %v, wanted %v",
+				test.D, test.P, mat, test.M)
 		}
 	}
 }
@@ -107,7 +108,8 @@ func TestParityMatrix(t *testing.T) {
 	for _, test := range tests {
 		mat := ParityMatrix(test.D, test.P)
 		if !reflect.DeepEqual(mat, test.M) {
-			t.Errorf("ParityMatrix(%v, %v) = %v, wanted %v", test.D, test.P, mat, test.M)
+			t.Errorf("ParityMatrix(%v, %v) = %v, wanted %v",
+				test.D, test.P, mat, test.M)
 		}
 	}
 }

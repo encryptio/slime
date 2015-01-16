@@ -20,7 +20,10 @@ func MapToGF(in []byte) (uint32, []uint32) {
 
 	out := make([]uint32, outLength)
 	for i := 0; i < len(in)/4; i++ {
-		out[i] = uint32(in[i*4])<<24 + uint32(in[i*4+1])<<16 + uint32(in[i*4+2])<<8 + uint32(in[i*4+3])
+		out[i] = uint32(in[i*4])<<24 +
+			uint32(in[i*4+1])<<16 +
+			uint32(in[i*4+2])<<8 +
+			uint32(in[i*4+3])
 	}
 	if len(extra) > 0 {
 		out[len(out)-1] = 0
@@ -63,8 +66,8 @@ func MapToGF(in []byte) (uint32, []uint32) {
 	}
 }
 
-// MapToGFWith maps an arbitrary byte slice to a sequence of points in GF(2^32-5),
-// using a mapping defined by n, previously chosen by MapToGF.
+// MapToGFWith maps an arbitrary byte slice to a sequence of points in
+// GF(2^32-5), using a mapping defined by n, previously chosen by MapToGF.
 //
 // Note that the output data may be padded with up to 3 zero bytes to the next
 // multiple of 4 bytes.
@@ -76,7 +79,10 @@ func MapToGFWith(in []byte, n uint32) []uint32 {
 
 	out := make([]uint32, outLength)
 	for i := 0; i < len(in)/4; i++ {
-		out[i] = uint32(in[i*4])<<24 + uint32(in[i*4+1])<<16 + uint32(in[i*4+2])<<8 + uint32(in[i*4+3])
+		out[i] = uint32(in[i*4])<<24 +
+			uint32(in[i*4+1])<<16 +
+			uint32(in[i*4+2])<<8 +
+			uint32(in[i*4+3])
 	}
 	if len(extra) > 0 {
 		out[len(out)-1] = 0

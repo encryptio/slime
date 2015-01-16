@@ -153,7 +153,12 @@ func TestDataFS(t *testing.T) {
 }
 
 func BenchmarkSet1MB(b *testing.B) {
-	m, err := New([]store.Target{store.NewRAM(), store.NewRAM(), store.NewRAM(), store.NewRAM()})
+	m, err := New([]store.Target{
+		store.NewRAM(),
+		store.NewRAM(),
+		store.NewRAM(),
+		store.NewRAM(),
+	})
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -171,7 +176,12 @@ func BenchmarkSet1MB(b *testing.B) {
 }
 
 func BenchmarkGet1MB(b *testing.B) {
-	m, err := New([]store.Target{store.NewRAM(), store.NewRAM(), store.NewRAM(), store.NewRAM()})
+	m, err := New([]store.Target{
+		store.NewRAM(),
+		store.NewRAM(),
+		store.NewRAM(),
+		store.NewRAM(),
+	})
 	if err != nil {
 		b.Fatal(err)
 	}

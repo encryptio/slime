@@ -55,7 +55,8 @@ func TestParityData(t *testing.T) {
 	for _, test := range tests {
 		out := CreateParity(test.Data, test.Index, nil)
 		if !reflect.DeepEqual(out, test.Out) {
-			t.Errorf("CreateParity(%v, %v, nil) = %v, wanted %v", test.Data, test.Index, out, test.Out)
+			t.Errorf("CreateParity(%v, %v, nil) = %v, wanted %v",
+				test.Data, test.Index, out, test.Out)
 		}
 	}
 }

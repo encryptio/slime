@@ -78,7 +78,8 @@ func solveSubIdentity(m [][]uint32) {
 			}
 		}
 
-		// ensure every other value in m[i] is 0 by adding a multiple of column i to them
+		// ensure every other value in m[i] is 0 by adding a multiple of
+		// column i to them
 		for j := 0; j < len(m[0]); j++ {
 			if j == i {
 				continue
