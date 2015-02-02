@@ -19,7 +19,7 @@ func (l *Location) toPair() store.Pair {
 	p.Key[0] = 'l'
 	copy(p.Key[1:], l.UUID[:])
 
-	p.Value = make([]byte, 1+16+4+len(l.Host)+len(l.Path))
+	p.Value = make([]byte, 1+4+len(l.Host)+len(l.Path))
 	p.Value[0] = '\x00' // version
 	binary.BigEndian.PutUint16(p.Value[1:3], uint16(len(l.Host)))
 	binary.BigEndian.PutUint16(p.Value[3:5], uint16(len(l.Path)))
@@ -38,7 +38,7 @@ func (l *Location) fromPair(p store.Pair) error {
 		return ErrBadKeyType
 	}
 
-	copy(l.UUID[:], l.Key[1:])
+	copy(l.UUID[:], p.Key[1:])
 
 	if len(p.Value) < 5 {
 		return ErrBadFormat
