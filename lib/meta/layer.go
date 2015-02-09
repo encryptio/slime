@@ -7,11 +7,14 @@ import (
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/index"
 	"git.encryptio.com/kvl/keys"
+	"git.encryptio.com/kvl/tuple"
 )
 
 var (
 	ErrNotFound    = errors.New("file not found")
 	ErrBadArgument = errors.New("bad argument")
+
+	configKey = tuple.MustAppend(nil, "config")
 )
 
 const MaxListLimit = 10001
@@ -33,6 +36,18 @@ func Open(ctx kvl.Ctx) (*Layer, error) {
 		inner: inner,
 		index: idx,
 	}, nil
+}
+
+func (l *Layer) GetConfig() ([]byte, error) {
+	p, err := l.inner.Get(configKey)
+	if err != nil && err != kvl.ErrNotFound {
+		return nil, err
+	}
+	return p.Value, nil
+}
+
+func (l *Layer) SetConfig(conf []byte) error {
+	return l.inner.Set(kvl.Pair{configKey, conf})
 }
 
 func (l *Layer) GetFile(path string) (*File, error) {
