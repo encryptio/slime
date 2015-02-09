@@ -6,10 +6,10 @@ import (
 )
 
 type Location struct {
-	UUID [16]byte
-	Host string
-	Path string
-	Name string
+	UUID       [16]byte
+	Host       string
+	Path       string
+	Name       string
 	AllocSplit []string
 }
 
