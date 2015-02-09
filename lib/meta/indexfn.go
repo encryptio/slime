@@ -2,6 +2,7 @@ package meta
 
 import (
 	"git.encryptio.com/kvl"
+	"git.encryptio.com/kvl/tuple"
 )
 
 func indexFn(p kvl.Pair) []kvl.Pair {
@@ -9,12 +10,14 @@ func indexFn(p kvl.Pair) []kvl.Pair {
 		return nil
 	}
 
-	if len(p.Key) < 1 {
+	var typ string
+	_, err := tuple.UnpackIntoPartial(p.Key)
+	if err != nil {
 		return nil
 	}
 
-	switch p.Key[0] {
-	case 'f':
+	switch typ {
+	case "file":
 		var f File
 		err := f.fromPair(p)
 		if err != nil {
@@ -22,7 +25,7 @@ func indexFn(p kvl.Pair) []kvl.Pair {
 		}
 		return f.indexPairs()
 
-	case 'l':
+	case "location":
 		var l Location
 		err := l.fromPair(p)
 		if err != nil {
