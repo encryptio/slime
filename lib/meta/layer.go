@@ -2,8 +2,11 @@ package meta
 
 import (
 	"errors"
+	"log"
 
-	"git.encryptio.com/slime/lib/meta/store"
+	"git.encryptio.com/kvl"
+	"git.encryptio.com/kvl/index"
+	"git.encryptio.com/kvl/keys"
 )
 
 var (
@@ -14,93 +17,123 @@ var (
 const MaxListLimit = 10001
 
 type Layer struct {
-	St store.Store
+	ctx   kvl.Ctx
+	inner kvl.Ctx
+	index *index.Index
+}
+
+func Open(ctx kvl.Ctx) (*Layer, error) {
+	inner, idx, err := index.Open(ctx, indexFn)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Layer{
+		ctx:   ctx,
+		inner: inner,
+		index: idx,
+	}, nil
 }
 
 func (l *Layer) GetFile(path string) (*File, error) {
-	ret, err := l.St.RunTx(func(ctx store.Ctx) (interface{}, error) {
-		var ret File
+	pair, err := l.inner.Get(fileKey(path))
+	if err != nil {
+		return nil, err
+	}
 
-		pair, err := ctx.Get(fileKey(path))
-		if err != nil {
-			return nil, err
-		}
+	var f File
+	err = f.fromPair(pair)
+	if err != nil {
+		return nil, err
+	}
 
-		err = ret.fromPair(pair)
-		if err != nil {
-			return nil, err
-		}
-
-		return &ret, nil
-	})
-	file, _ := ret.(*File)
-	return file, err
+	return &f, nil
 }
 
-// returns old File in database, if any
-func (l *Layer) SetFile(f *File) (*File, error) {
-	ret, err := l.St.RunTx(func(ctx store.Ctx) (interface{}, error) {
-		var old *File
-
-		pair, err := ctx.Get(fileKey(f.Path))
-		if err == store.ErrNotFound {
-			// do nothing
-		} else if err != nil {
-			return nil, err
-		} else { // err == nil
-			old = new(File)
-			err := old.fromPair(pair)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		pair = f.toPair()
-
-		err = ctx.Set(pair)
-		if err != nil {
-			return nil, err
-		}
-
-		return old, nil
-	})
-	old, _ := ret.(*File)
-	return old, err
+func (l *Layer) SetFile(f *File) error {
+	return l.inner.Set(f.toPair())
 }
 
 func (l *Layer) RemoveFilePath(path string) error {
-	_, err := l.St.RunTx(func(ctx store.Ctx) (interface{}, error) {
-		err := ctx.Delete(fileKey(path))
-		// ErrNotFound will abort the transaction, but that's okay in this case
-		return nil, err
-	})
-	if err == store.ErrNotFound {
+	err := l.inner.Delete(fileKey(path))
+	if err == kvl.ErrNotFound {
 		return ErrNotFound
 	}
 	return err
 }
 
-func (l *Layer) List(prefix string, limit int) ([]File, error) {
+func (l *Layer) ListFiles(prefix string, limit int) ([]File, error) {
 	if limit < 1 || limit > MaxListLimit {
 		return nil, ErrBadArgument
 	}
-	ret, err := l.St.RunTx(func(ctx store.Ctx) (interface{}, error) {
-		low, high := store.PrefixRange(fileKey(prefix))
-		pairs, err := ctx.Range(low, high, limit)
+
+	var query kvl.RangeQuery
+	query.Low, query.High = keys.PrefixRange(fileKey(prefix))
+	query.Limit = limit
+	pairs, err := l.inner.Range(query)
+	if err != nil {
+		return nil, err
+	}
+
+	files := make([]File, len(pairs))
+	for i, pair := range pairs {
+		err := files[i].fromPair(pair)
 		if err != nil {
 			return nil, err
 		}
+	}
 
-		files := make([]File, len(pairs))
-		for i, pair := range pairs {
-			err := files[i].fromPair(pair)
-			if err != nil {
-				return nil, err
-			}
+	return files, nil
+}
+
+func (l *Layer) AllLocations() ([]Location, error) {
+	var query kvl.RangeQuery
+	query.Low, query.High = keys.PrefixRange([]byte("l"))
+
+	pairs, err := l.inner.Range(query)
+	if err != nil {
+		return nil, err
+	}
+
+	locations := make([]Location, len(pairs))
+	for i, pair := range pairs {
+		err := locations[i].fromPair(pair)
+		if err != nil {
+			return nil, err
 		}
+	}
 
-		return files, nil
-	})
-	files, _ := ret.([]File)
-	return files, err
+	return locations, nil
+}
+
+func (l *Layer) DeleteLocation(loc *Location) error {
+	pair := loc.toPair()
+	return l.inner.Delete(pair.Key)
+}
+
+func (l *Layer) SetLocation(loc *Location) error {
+	pair := loc.toPair()
+	return l.inner.Set(pair)
+}
+
+func Reindex(db kvl.DB, deleteIndicies bool) error {
+	progress := make(chan index.ReindexStats)
+	defer close(progress)
+	go func() {
+		for stats := range progress {
+			log.Printf("Reindexing... so far: %v", stats)
+		}
+	}()
+
+	options := uint64(0)
+	if deleteIndicies {
+		options |= index.REINDEX_DELETE
+	}
+
+	_, err := index.Reindex(db, indexFn, options, progress)
+	if err != nil {
+		log.Printf("Couldn't reindex: %v", err)
+	}
+
+	return err
 }

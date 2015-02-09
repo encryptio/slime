@@ -9,7 +9,7 @@ import (
 func TestFileSerialization(t *testing.T) {
 	serialDeserial := func(f *File) bool {
 		if f.Path == "" {
-			// these don't serialize properly
+			// these are invalid and don't serialize properly
 			return true
 		}
 

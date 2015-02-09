@@ -3,7 +3,7 @@ package meta
 import (
 	"encoding/binary"
 
-	"git.encryptio.com/slime/lib/meta/store"
+	"git.encryptio.com/kvl"
 )
 
 type Location struct {
@@ -12,8 +12,8 @@ type Location struct {
 	Path string
 }
 
-func (l *Location) toPair() store.Pair {
-	var p store.Pair
+func (l *Location) toPair() kvl.Pair {
+	var p kvl.Pair
 
 	p.Key = make([]byte, 17)
 	p.Key[0] = 'l'
@@ -29,7 +29,7 @@ func (l *Location) toPair() store.Pair {
 	return p
 }
 
-func (l *Location) fromPair(p store.Pair) error {
+func (l *Location) fromPair(p kvl.Pair) error {
 	if len(p.Key) != 17 {
 		return ErrBadFormat
 	}
@@ -58,5 +58,9 @@ func (l *Location) fromPair(p store.Pair) error {
 	l.Host = string(p.Value[5 : 5+hostLen])
 	l.Path = string(p.Value[5+hostLen:])
 
+	return nil
+}
+
+func (l *Location) indexPairs() []kvl.Pair {
 	return nil
 }

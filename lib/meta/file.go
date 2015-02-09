@@ -4,7 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"git.encryptio.com/slime/lib/meta/store"
+	"git.encryptio.com/kvl"
+	"git.encryptio.com/kvl/tuple"
 )
 
 var (
@@ -31,8 +32,8 @@ func fileKey(path string) []byte {
 	return key
 }
 
-func (f *File) toPair() store.Pair {
-	var p store.Pair
+func (f *File) toPair() kvl.Pair {
+	var p kvl.Pair
 
 	p.Key = fileKey(f.Path)
 
@@ -54,7 +55,7 @@ func (f *File) toPair() store.Pair {
 	return p
 }
 
-func (f *File) fromPair(p store.Pair) error {
+func (f *File) fromPair(p kvl.Pair) error {
 	if len(p.Key) <= 1 {
 		return ErrBadFormat
 	}
@@ -89,4 +90,19 @@ func (f *File) fromPair(p store.Pair) error {
 	}
 
 	return nil
+}
+
+func (f *File) indexPairs() []kvl.Pair {
+	ret := make([]kvl.Pair, 0, len(f.Locations))
+
+	for _, loc := range f.Locations {
+		key, err := tuple.Append(nil, "file", "location", loc[:])
+		if err != nil {
+			panic(err)
+		}
+
+		ret = append(ret, kvl.Pair{key, []byte(f.Path)})
+	}
+
+	return ret
 }
