@@ -15,6 +15,14 @@ func TestLocationSerialization(t *testing.T) {
 			t.Logf("Couldn't fromPair(toPair(%#v)): %v", l, err)
 			return false
 		}
+
+		if len(l.AllocSplit) == 0 {
+			l.AllocSplit = nil
+		}
+		if len(l2.AllocSplit) == 0 {
+			l2.AllocSplit = nil
+		}
+
 		if !reflect.DeepEqual(l, l2) {
 			t.Logf("input is %#v\n", l)
 			t.Logf("output is %#v\n", l2)

@@ -1,7 +1,6 @@
 package meta
 
 import (
-	"encoding/binary"
 	"errors"
 
 	"git.encryptio.com/kvl"
@@ -26,10 +25,7 @@ type File struct {
 }
 
 func fileKey(path string) []byte {
-	key := make([]byte, len(path)+1)
-	key[0] = 'f'
-	copy(key[1:], []byte(path))
-	return key
+	return tuple.MustAppend(nil, "file", path)
 }
 
 func (f *File) toPair() kvl.Pair {
@@ -37,56 +33,51 @@ func (f *File) toPair() kvl.Pair {
 
 	p.Key = fileKey(f.Path)
 
-	p.Value = make([]byte, 59+16*len(f.Locations))
-	p.Value[0] = '\x00' // version
-	binary.BigEndian.PutUint64(p.Value[1:9], f.Size)
-	copy(p.Value[9:41], f.SHA256[:])
-	binary.BigEndian.PutUint64(p.Value[41:49], f.WriteTime)
-	binary.BigEndian.PutUint16(p.Value[49:51], f.DataChunks)
-	binary.BigEndian.PutUint16(p.Value[51:53], f.ParityChunks)
-	binary.BigEndian.PutUint32(p.Value[53:57], f.MappingValue)
-	binary.BigEndian.PutUint16(p.Value[57:59], uint16(len(f.Locations)))
-	at := 59
+	p.Value = tuple.MustAppend(nil,
+		0, f.Size, f.SHA256[:], f.WriteTime, f.DataChunks, f.ParityChunks,
+		f.MappingValue)
 	for _, loc := range f.Locations {
-		copy(p.Value[at:], loc[:])
-		at += 16
+		p.Value = tuple.MustAppend(p.Value, loc[:])
 	}
 
 	return p
 }
 
 func (f *File) fromPair(p kvl.Pair) error {
-	if len(p.Key) <= 1 {
-		return ErrBadFormat
+	var typ string
+	err := tuple.UnpackInto(p.Key, &typ, &f.Path)
+	if err != nil {
+		return err
 	}
-
-	if p.Key[0] != 'f' {
+	if typ != "file" {
 		return ErrBadKeyType
 	}
 
-	f.Path = string(p.Key[1:])
-
-	if len(p.Value) < 59 {
-		return ErrBadFormat
-	}
-
-	if p.Value[0] != '\x00' {
+	var version int
+	var sha256 []byte
+	left, err := tuple.UnpackIntoPartial(p.Value, &version, &f.Size, &sha256,
+		&f.WriteTime, &f.DataChunks, &f.ParityChunks, &f.MappingValue)
+	if version != 0 {
 		return ErrUnknownMetaVersion
 	}
-
-	f.Size = binary.BigEndian.Uint64(p.Value[1:9])
-	copy(f.SHA256[:], p.Value[9:41])
-	f.WriteTime = binary.BigEndian.Uint64(p.Value[41:49])
-	f.DataChunks = binary.BigEndian.Uint16(p.Value[49:51])
-	f.ParityChunks = binary.BigEndian.Uint16(p.Value[51:53])
-	f.MappingValue = binary.BigEndian.Uint32(p.Value[53:57])
-	locs := int(binary.BigEndian.Uint16(p.Value[57:59]))
-	if len(p.Value) != 59+16*locs {
+	if len(sha256) != 32 {
 		return ErrBadFormat
 	}
-	f.Locations = make([][16]byte, locs)
-	for i := range f.Locations {
-		copy(f.Locations[i][:], p.Value[59+i*16:])
+	copy(f.SHA256[:], sha256)
+
+	f.Locations = nil
+	for len(left) > 0 {
+		var next []byte
+		left, err = tuple.UnpackIntoPartial(left, &next)
+		if err != nil {
+			return err
+		}
+		if len(next) != 16 {
+			return ErrBadFormat
+		}
+		var data [16]byte
+		copy(data[:], next)
+		f.Locations = append(f.Locations, data)
 	}
 
 	return nil
