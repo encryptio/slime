@@ -1,17 +1,14 @@
-package main
+package httputil
 
 import (
 	"bufio"
-	"errors"
 	"log"
 	"net"
 	"net/http"
 	"time"
 )
 
-var ErrBadHijack = errors.New("Hijack called on LogRecord, but underlying ResponseWriter is not a Hijacker")
-
-type LogRecord struct {
+type logRecord struct {
 	http.ResponseWriter
 
 	bytes    int
@@ -20,39 +17,38 @@ type LogRecord struct {
 	hijacked bool
 }
 
-func (r *LogRecord) Write(p []byte) (int, error) {
+func (r *logRecord) Write(p []byte) (int, error) {
 	written, err := r.ResponseWriter.Write(p)
 	r.bytes += written
 	return written, err
 }
 
-func (r *LogRecord) WriteHeader(status int) {
+func (r *logRecord) WriteHeader(status int) {
 	r.code = status
 	r.ResponseWriter.WriteHeader(status)
 }
 
-func (r *LogRecord) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	hj, ok := r.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, ErrBadHijack
-	}
+type hijackableLogRecord struct {
+	*logRecord
+}
 
+func (r hijackableLogRecord) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj := r.ResponseWriter.(http.Hijacker)
 	c, buf, err := hj.Hijack()
-
 	if err == nil {
 		r.hijacked = true
 	}
-
 	return c, buf, err
 }
 
 func LogHttpRequests(inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		record := &LogRecord{
+		record := &logRecord{
 			ResponseWriter: w,
 			code:           200,
 			reqUrl:         req.URL.String(),
 		}
+
 		started := time.Now()
 		defer func() {
 			if record.hijacked {
@@ -65,6 +61,11 @@ func LogHttpRequests(inner http.Handler) http.Handler {
 					record.bytes, time.Now().Sub(started))
 			}
 		}()
-		inner.ServeHTTP(record, req)
+
+		if _, ok := w.(http.Hijacker); ok {
+			inner.ServeHTTP(hijackableLogRecord{record}, req)
+		} else {
+			inner.ServeHTTP(record, req)
+		}
 	})
 }

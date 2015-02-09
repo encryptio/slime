@@ -6,6 +6,7 @@ import (
 	"git.encryptio.com/slime/lib/api"
 	"git.encryptio.com/slime/lib/multi"
 	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/httputil"
 	"log"
 	"math/rand"
 	"net"
@@ -55,7 +56,7 @@ func main() {
 	}
 	mux.Handle("/", api.NewHandler(m))
 
-	logger := LogHttpRequests(mux)
+	logger := httputil.LogHttpRequests(mux)
 
 	lsock, err := net.Listen("tcp", args.Listen)
 	if err != nil {
