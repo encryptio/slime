@@ -10,6 +10,7 @@ type Location struct {
 	UUID [16]byte
 	Host string
 	Path string
+	Name string
 }
 
 func (l *Location) toPair() kvl.Pair {
@@ -23,8 +24,10 @@ func (l *Location) toPair() kvl.Pair {
 	p.Value[0] = '\x00' // version
 	binary.BigEndian.PutUint16(p.Value[1:3], uint16(len(l.Host)))
 	binary.BigEndian.PutUint16(p.Value[3:5], uint16(len(l.Path)))
-	copy(p.Value[5:], []byte(l.Host))
-	copy(p.Value[5+len(l.Host):], []byte(l.Path))
+	binary.BigEndian.PutUint16(p.Value[5:7], uint16(len(l.Name)))
+	copy(p.Value[7:], []byte(l.Host))
+	copy(p.Value[7+len(l.Host):], []byte(l.Path))
+	copy(p.Value[7+len(l.Host)+len(l.Path):], []byte(l.Name))
 
 	return p
 }
@@ -50,13 +53,15 @@ func (l *Location) fromPair(p kvl.Pair) error {
 
 	hostLen := int(binary.BigEndian.Uint16(p.Value[1:3]))
 	pathLen := int(binary.BigEndian.Uint16(p.Value[3:5]))
+	nameLen := int(binary.BigEndian.Uint16(p.Value[5:7]))
 
-	if len(p.Value) != 5+hostLen+pathLen {
+	if len(p.Value) != 7+hostLen+pathLen+nameLen {
 		return ErrBadFormat
 	}
 
-	l.Host = string(p.Value[5 : 5+hostLen])
-	l.Path = string(p.Value[5+hostLen:])
+	l.Host = string(p.Value[7 : 7+hostLen])
+	l.Path = string(p.Value[7+hostLen : 7+hostLen+pathLen])
+	l.Name = string(p.Value[7+hostLen+pathLen:])
 
 	return nil
 }
