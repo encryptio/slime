@@ -119,23 +119,30 @@ func (m *Multi) Set(path string, data []byte) error {
 
 			err = tgt.Set(thisName, data)
 			if err != nil {
-				log.Printf("Couldn't write chunk %d to %v: %v", i, tgt.Name(), err)
+				log.Printf("Couldn't write chunk %d to %v: %v",
+					i, tgt.Name(), err)
 				errs[i] = err
 				return
 			}
 
 			fis, err := tgt.Search(prefix)
 			if err != nil {
-				log.Printf("Couldn't search %v from %v after write: %v", prefix, tgt.Name(), err)
+				log.Printf("Couldn't search %v from %v after write: %v",
+					prefix, tgt.Name(), err)
 				errs[i] = err
 				return
 			}
 
 			for _, fi := range fis {
-				if !fi.IsDir && strings.HasPrefix(fi.Name, prefix) && fi.Name != thisName {
+				if fi.Name == thisName {
+					continue
+				}
+
+				if !fi.IsDir && strings.HasPrefix(fi.Name, prefix) {
 					err = tgt.Set(fi.Name, nil)
 					if err != nil {
-						log.Printf("Couldn't remove %v after write of %v from %v: %v", fi.Name, thisName, tgt.Name(), err)
+						log.Printf("Couldn't remove %v after write of %v from %v: %v",
+							fi.Name, thisName, tgt.Name(), err)
 						errs[i] = err
 						return
 					}
@@ -173,7 +180,8 @@ func (m *Multi) Set(path string, data []byte) error {
 
 			fis, err := tgt.Search(prefix)
 			if err != nil {
-				log.Printf("Couldn't search %v from %v: %v", prefix, tgt.Name(), err)
+				log.Printf("Couldn't search %v from %v: %v",
+					prefix, tgt.Name(), err)
 				errs[i] = err
 				return
 			}
@@ -182,7 +190,8 @@ func (m *Multi) Set(path string, data []byte) error {
 				if !fi.IsDir && strings.HasPrefix(fi.Name, prefix) {
 					err = tgt.Set(fi.Name, nil)
 					if err != nil {
-						log.Printf("Couldn't remove %v from %v: %v", fi.Name, tgt.Name(), err)
+						log.Printf("Couldn't remove %v from %v: %v",
+							fi.Name, tgt.Name(), err)
 						errs[i] = err
 						return
 					}
@@ -216,7 +225,8 @@ func (m *Multi) Delete(path string) error {
 
 			fis, err := tgt.Search(prefix)
 			if err != nil {
-				log.Printf("Couldn't search %v from %v: %v", prefix, tgt.Name(), err)
+				log.Printf("Couldn't search %v from %v: %v",
+					prefix, tgt.Name(), err)
 				errs[i] = err
 				return
 			}
@@ -225,7 +235,8 @@ func (m *Multi) Delete(path string) error {
 				if !fi.IsDir && strings.HasPrefix(fi.Name, prefix) {
 					err = tgt.Set(fi.Name, nil)
 					if err != nil {
-						log.Printf("Couldn't remove %v from %v: %v", fi.Name, tgt.Name(), err)
+						log.Printf("Couldn't remove %v from %v: %v",
+							fi.Name, tgt.Name(), err)
 						errs[i] = err
 						return
 					}
@@ -259,7 +270,8 @@ func (m *Multi) Get(path string) (Result, error) {
 
 			searchResults[i], searchErrors[i] = tgt.Search(prefix)
 			if searchErrors[i] != nil {
-				log.Printf("Couldn't Search for %v on %v: %v", prefix, tgt.Name(), searchErrors[i])
+				log.Printf("Couldn't Search for %v on %v: %v",
+					prefix, tgt.Name(), searchErrors[i])
 			}
 		}(i, tgt)
 	}
@@ -297,14 +309,16 @@ func (m *Multi) Get(path string) (Result, error) {
 
 				data, err := tgt.Get(res[i].Name)
 				if err != nil {
-					log.Printf("Couldn't Get %v from %v: %v", res[i], tgt.Name(), err)
+					log.Printf("Couldn't Get %v from %v: %v",
+						res[i], tgt.Name(), err)
 					continue
 				}
 
 				chunk := new(chunk.Chunk)
 				err = chunk.UnmarshalBinary(data)
 				if err != nil {
-					log.Printf("Couldn't read chunk %v from %v: %v", res[i], tgt.Name(), err)
+					log.Printf("Couldn't read chunk %v from %v: %v",
+						res[i], tgt.Name(), err)
 					continue
 				}
 
@@ -443,7 +457,8 @@ func (m *Multi) List(prefix string) ([]store.FileInfo, error) {
 			var err error
 			searchResults[i], err = tgt.Search(prefix)
 			if err != nil {
-				log.Printf("Couldn't Search for %v on %v: %v", prefix, tgt.Name(), err)
+				log.Printf("Couldn't Search for %v on %v: %v",
+					prefix, tgt.Name(), err)
 			}
 		}(i, tgt)
 	}
@@ -485,14 +500,16 @@ func (m *Multi) Stat(path string) (Result, error) {
 			if !fi.IsDir && trimChunkID(fi.Name) == path {
 				data, err := tgt.Get(fi.Name)
 				if err != nil {
-					log.Printf("Couldn't Get %v from %v: %v", fi.Name, tgt.Name(), err)
+					log.Printf("Couldn't Get %v from %v: %v",
+						fi.Name, tgt.Name(), err)
 					continue
 				}
 
 				loadedChunk := new(chunk.Chunk)
 				err = loadedChunk.UnmarshalBinary(data)
 				if err != nil {
-					log.Printf("Couldn't read chunk %v from %v: %v", fi.Name, tgt.Name(), err)
+					log.Printf("Couldn't read chunk %v from %v: %v",
+						fi.Name, tgt.Name(), err)
 					continue
 				}
 

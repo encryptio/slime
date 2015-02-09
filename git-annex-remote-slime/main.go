@@ -106,7 +106,8 @@ func store(key, file string) {
 
 	req, err := http.NewRequest("PUT", baseURL+addPrefix(key), fh)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v", baseURL+addPrefix(key), err)
+		log.Printf("Couldn't create request for %s: %v",
+			baseURL+addPrefix(key), err)
 		return
 	}
 	req.Header.Set("X-Content-SHA256", hex.EncodeToString(sha))
@@ -147,7 +148,7 @@ func retrieve(key, file string) {
 
 	if resp.StatusCode != 200 {
 		log.Printf("Couldn't GET %v: %v", resp.Request.URL, resp.Status)
-
+		return
 	}
 
 	fh, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
@@ -197,7 +198,8 @@ func retrieve(key, file string) {
 func checkPresent(key string) {
 	req, err := http.NewRequest("HEAD", baseURL+addPrefix(key), nil)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v", baseURL+addPrefix(key), err)
+		log.Printf("Couldn't create request for %s: %v",
+			baseURL+addPrefix(key), err)
 		return
 	}
 
@@ -221,7 +223,8 @@ func checkPresent(key string) {
 func remove(key string) {
 	req, err := http.NewRequest("DELETE", baseURL+addPrefix(key), nil)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v", baseURL+addPrefix(key), err)
+		log.Printf("Couldn't create request for %s: %v",
+			baseURL+addPrefix(key), err)
 		return
 	}
 

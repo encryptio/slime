@@ -56,9 +56,13 @@ func LogHttpRequests(inner http.Handler) http.Handler {
 		started := time.Now()
 		defer func() {
 			if record.hijacked {
-				log.Printf("%s %s %s -> Connection Hijacked for %v", req.RemoteAddr, req.Method, record.reqUrl, time.Now().Sub(started))
+				log.Printf("%s %s %s -> Connection Hijacked for %v",
+					req.RemoteAddr, req.Method, record.reqUrl,
+					time.Now().Sub(started))
 			} else {
-				log.Printf("%s %s %s -> %d, %d bytes in %v", req.RemoteAddr, req.Method, record.reqUrl, record.code, record.bytes, time.Now().Sub(started))
+				log.Printf("%s %s %s -> %d, %d bytes in %v",
+					req.RemoteAddr, req.Method, record.reqUrl, record.code,
+					record.bytes, time.Now().Sub(started))
 			}
 		}()
 		inner.ServeHTTP(record, req)

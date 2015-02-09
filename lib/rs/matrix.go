@@ -6,13 +6,18 @@ import (
 
 // vandermondeMatrix returns a Vandermonde matrix with d+p rows and d columns.
 func vandermondeMatrix(d, p int) [][]uint32 {
+	underlying := make([]uint32, d*(d+p))
+
 	m := make([][]uint32, d+p)
 	for i := 0; i < len(m); i++ {
-		m[i] = make([]uint32, d)
+		m[i] = underlying[:d]
+		underlying = underlying[d:]
+
 		for j := 0; j < len(m[i]); j++ {
 			m[i][j] = gf.Raise(uint32(j+1), uint32(i))
 		}
 	}
+
 	return m
 }
 
@@ -28,19 +33,19 @@ func ParityMatrix(d, p int) [][]uint32 {
 // solveSubIdentity solves the upper len(m[0]) x len(m[0]) submatrix for the
 // identity using column operations. panics if the matrix is singular.
 func solveSubIdentity(m [][]uint32) {
-	swap := func(a, b int) {
+	swap := func(m [][]uint32, a, b int) {
 		for i := 0; i < len(m); i++ {
 			m[i][a], m[i][b] = m[i][b], m[i][a]
 		}
 	}
 
-	multiply := func(a int, n uint32) {
+	multiply := func(m [][]uint32, a int, n uint32) {
 		for i := 0; i < len(m); i++ {
 			m[i][a] = uint32((uint64(m[i][a]) * uint64(n)) % gf.MaxVal)
 		}
 	}
 
-	addMultiple := func(a, b int, n uint32) {
+	addMultiple := func(m [][]uint32, a, b int, n uint32) {
 		for i := 0; i < len(m); i++ {
 			val := (uint64(m[i][b]) * uint64(n)) % gf.MaxVal
 			m[i][a] = uint32((uint64(m[i][a]) + val) % gf.MaxVal)
@@ -53,7 +58,7 @@ func solveSubIdentity(m [][]uint32) {
 		if m[i][i] == 0 {
 			for j := i + 1; j < len(m[0]); j++ {
 				if m[i][j] != 0 {
-					swap(i, j)
+					swap(m, i, j)
 					break
 				}
 			}
@@ -66,21 +71,22 @@ func solveSubIdentity(m [][]uint32) {
 
 		// divide this column by m[i][i]
 		if m[i][i] != 1 {
-			multiply(i, gf.MInverse(m[i][i]))
+			multiply(m, i, gf.MInverse(m[i][i]))
 
 			if m[i][i] != 1 {
 				panic("Couldn't ensure one m[i][i]")
 			}
 		}
 
-		// ensure every other value in m[i] is 0 by adding a multiple of column i to them
+		// ensure every other value in m[i] is 0 by adding a multiple of
+		// column i to them
 		for j := 0; j < len(m[0]); j++ {
 			if j == i {
 				continue
 			}
 
 			if m[i][j] != 0 {
-				addMultiple(j, i, gf.MaxVal-m[i][j])
+				addMultiple(m, j, i, gf.MaxVal-m[i][j])
 
 				if m[i][j] != 0 {
 					panic("Couldn't ensure zero m[i][j]")
@@ -91,11 +97,15 @@ func solveSubIdentity(m [][]uint32) {
 }
 
 func cloneMatrix(m [][]uint32) [][]uint32 {
+	underlying := make([]uint32, len(m)*len(m[0]))
+
 	n := make([][]uint32, len(m))
 	for i := range m {
-		n[i] = make([]uint32, len(m[i]))
+		n[i] = underlying[:len(m[i])]
+		underlying = underlying[len(m[i]):]
 		copy(n[i], m[i])
 	}
+
 	return n
 }
 

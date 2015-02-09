@@ -48,7 +48,8 @@ func TestVandermondeMatrix(t *testing.T) {
 	for _, test := range tests {
 		mat := vandermondeMatrix(test.D, test.P)
 		if !reflect.DeepEqual(mat, test.M) {
-			t.Errorf("vandermondeMatrix(%v, %v) = %v, wanted %v", test.D, test.P, mat, test.M)
+			t.Errorf("vandermondeMatrix(%v, %v) = %v, wanted %v",
+				test.D, test.P, mat, test.M)
 		}
 	}
 }
@@ -107,7 +108,64 @@ func TestParityMatrix(t *testing.T) {
 	for _, test := range tests {
 		mat := ParityMatrix(test.D, test.P)
 		if !reflect.DeepEqual(mat, test.M) {
-			t.Errorf("ParityMatrix(%v, %v) = %v, wanted %v", test.D, test.P, mat, test.M)
+			t.Errorf("ParityMatrix(%v, %v) = %v, wanted %v",
+				test.D, test.P, mat, test.M)
+		}
+	}
+}
+
+func testParityMatrixNonSingularPart(t *testing.T, d, p int) {
+	defer func() {
+		if err := recover(); err != nil {
+			t.Fatalf("Matrix for %vx%v is non-singular: %v", d, p, err)
+		}
+	}()
+	mat := ParityMatrix(d, p)
+
+	pick := make([]int, d)
+	for i := range pick {
+		pick[i] = i
+	}
+
+	for {
+		newMat := make([][]uint32, d)
+		for i := range pick {
+			newMat[i] = mat[pick[i]]
+		}
+		newMat = cloneMatrix(newMat)
+
+		solveSubIdentity(newMat) // panics if the matrix is singular
+
+		// increment pick[] to point to the next subset
+		i := len(pick) - 1
+		for i >= 0 {
+			old := pick[i]
+			pick[i]++
+			if old < p+i {
+				break
+			}
+			i--
+		}
+		if i < 0 {
+			return
+		}
+		old := pick[i]
+		for j := i; j < d; j++ {
+			pick[j] = old + j - i
+		}
+	}
+
+}
+
+func TestParityMatrixNonSingular(t *testing.T) {
+	size := 8
+	if testing.Short() {
+		size = 5
+	}
+
+	for d := 1; d <= size; d++ {
+		for p := 0; p <= size; p++ {
+			testParityMatrixNonSingularPart(t, d, p)
 		}
 	}
 }

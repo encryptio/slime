@@ -88,7 +88,8 @@ func RecoverData(chunks [][]uint32, indices []int) [][]uint32 {
 }
 
 func applyMatrix(mat [][]uint32, in, out [][]uint32) {
-	// TODO(encryptio): optimize with high/low split, as described in http://www.lshift.net/blog/2006/11/29/gf232-5
+	// TODO(encryptio): optimize with high/low split, as described in
+	//                  http://www.lshift.net/blog/2006/11/29/gf232-5
 	for i := 0; i < len(out); i++ {
 		for b := 0; b < len(out[i]); b++ {
 			var o uint64

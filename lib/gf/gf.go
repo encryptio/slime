@@ -1,7 +1,7 @@
 package gf
 
-// MInverse calculates the multiplicative inverse of the given element of GF(2^32-5).
-// In other words, (Inverse(n) * n) % MaxVal = 1.
+// MInverse calculates the multiplicative inverse of the given element of
+// GF(2^32-5). In other words, (Inverse(n) * n) % MaxVal = 1.
 func MInverse(in uint32) uint32 {
 	// Since forall n in G. n^(MaxVal-1) = 1, n^-1 = n^(MaxVal-2)
 

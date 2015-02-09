@@ -82,15 +82,22 @@ func (m *Multi) scrubLoop() {
 func (m *Multi) updateScrubRate(d time.Duration) {
 	m.mu.Lock()
 
+	fpm := m.config.ScrubFilesPerMinute
+	change := (fpm >> 3) + 1
+
+	target := m.config.ScrubTargetDuration
+
 	shouldSave := false
-	if d > m.config.ScrubTargetDuration+m.config.ScrubTargetDuration/4 && m.config.ScrubFilesPerMinute < 1000 {
-		log.Printf("Last scrub duration was too long (%v, want %v), increasing scrub files per minute", d, m.config.ScrubTargetDuration)
-		m.config.ScrubFilesPerMinute += m.config.ScrubFilesPerMinute >> 3
+	if d > target+target/4 && fpm < 1000 {
+		log.Printf("Last scrub duration was too long (%v, want %v), increasing scrub files per minute",
+			d, m.config.ScrubTargetDuration)
+		m.config.ScrubFilesPerMinute += change
 		m.config.Version++
 		shouldSave = true
-	} else if d < m.config.ScrubTargetDuration-m.config.ScrubTargetDuration/4 && m.config.ScrubFilesPerMinute > 10 {
-		log.Printf("Last scrub duration was too short (%v, want %v), decreasing scrub files per minute", d, m.config.ScrubTargetDuration)
-		m.config.ScrubFilesPerMinute -= m.config.ScrubFilesPerMinute >> 3
+	} else if d < target-target/4 && fpm > 10 {
+		log.Printf("Last scrub duration was too short (%v, want %v), decreasing scrub files per minute",
+			d, m.config.ScrubTargetDuration)
+		m.config.ScrubFilesPerMinute -= change
 		m.config.Version++
 		shouldSave = true
 	}
@@ -236,7 +243,8 @@ func (m *Multi) scrubFile(path string) {
 	for _, tgt := range m.targets {
 		l, err := tgt.Search(prefix)
 		if err != nil {
-			log.Printf("[scrub] search on %v returned %v", path, tgt.Name(), err)
+			log.Printf("[scrub] search on %v returned %v",
+				path, tgt.Name(), err)
 			m.incrementScrubErrors(false)
 			return
 		}
@@ -299,10 +307,12 @@ func (m *Multi) scrubFile(path string) {
 		for len(theseChunks) > 1 {
 			chunk := theseChunks[0]
 
-			log.Printf("[scrub] deleting duplicate chunk %v from %v", chunk.name, chunk.tgt.Name())
+			log.Printf("[scrub] deleting duplicate chunk %v from %v",
+				chunk.name, chunk.tgt.Name())
 			err := chunk.tgt.Set(chunk.name, nil)
 			if err != nil {
-				log.Printf("[scrub] couldn't delete duplicate chunk %v from %v: %v", chunk.name, chunk.tgt.Name(), err)
+				log.Printf("[scrub] couldn't delete duplicate chunk %v from %v: %v",
+					chunk.name, chunk.tgt.Name(), err)
 			}
 			m.incrementScrubErrors(err == nil)
 
@@ -338,7 +348,9 @@ func (m *Multi) scrubFile(path string) {
 	cfg := m.config
 	m.mu.Unlock()
 	if int(bestInfo.DataChunks) != cfg.ChunksNeed || int(bestInfo.ParityChunks+bestInfo.DataChunks) != cfg.ChunksTotal {
-		log.Printf("[scrub] %v has incorrect redundancy values (is %v+%v, want %v+%v)", path, bestInfo.DataChunks, bestInfo.ParityChunks, cfg.ChunksNeed, cfg.ChunksTotal-cfg.ChunksNeed)
+		log.Printf("[scrub] %v has incorrect redundancy values (is %v+%v, want %v+%v)",
+			path, bestInfo.DataChunks, bestInfo.ParityChunks, cfg.ChunksNeed,
+			cfg.ChunksTotal-cfg.ChunksNeed)
 		rebuild = true
 	}
 

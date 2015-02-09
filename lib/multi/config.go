@@ -91,7 +91,8 @@ func (m *Multi) loadConfig() error {
 		// ensure the ones left are identical
 		for i := 1; i < len(configs); i++ {
 			if !reflect.DeepEqual(configs[i], configs[0]) {
-				return fmt.Errorf("Configs of max version differ across Targets. Got %#v and %#v", configs[0], configs[i])
+				return fmt.Errorf("Configs of max version differ across Targets. Got %#v and %#v",
+					configs[0], configs[i])
 			}
 		}
 
