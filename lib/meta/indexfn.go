@@ -11,7 +11,7 @@ func indexFn(p kvl.Pair) []kvl.Pair {
 	}
 
 	var typ string
-	_, err := tuple.UnpackIntoPartial(p.Key)
+	_, err := tuple.UnpackIntoPartial(p.Key, &typ)
 	if err != nil {
 		return nil
 	}
