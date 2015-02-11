@@ -20,6 +20,14 @@ func TestFileSerialization(t *testing.T) {
 			t.Logf("Couldn't fromPair(toPair(%#v)): %v", f, err)
 			return false
 		}
+
+		if len(f.Locations) == 0 {
+			f.Locations = nil
+		}
+		if len(f2.Locations) == 0 {
+			f2.Locations = nil
+		}
+
 		if !reflect.DeepEqual(f, f2) {
 			t.Logf("input is %#v\n", f)
 			t.Logf("output is %#v\n", f2)
