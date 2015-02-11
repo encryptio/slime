@@ -10,6 +10,7 @@ type Location struct {
 	URL        string
 	Name       string
 	AllocSplit []string
+	Dead       bool
 }
 
 func (l *Location) toPair() kvl.Pair {
@@ -17,7 +18,7 @@ func (l *Location) toPair() kvl.Pair {
 
 	p.Key = tuple.MustAppend(nil, "location", l.UUID[:])
 
-	p.Value = tuple.MustAppend(nil, 0, l.URL, l.Name)
+	p.Value = tuple.MustAppend(nil, 0, l.URL, l.Name, l.Dead)
 	for _, split := range l.AllocSplit {
 		p.Value = tuple.MustAppend(p.Value, split)
 	}
@@ -42,7 +43,7 @@ func (l *Location) fromPair(p kvl.Pair) error {
 
 	var version int
 	left, err := tuple.UnpackIntoPartial(p.Value,
-		&version, &l.URL, &l.Name)
+		&version, &l.URL, &l.Name, &l.Dead)
 	if err != nil {
 		return err
 	}
