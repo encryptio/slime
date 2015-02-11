@@ -5,12 +5,10 @@ import (
 )
 
 func TestUUIDTwoWay(t *testing.T) {
-	u, err := Gen4()
-	if err != nil {
-		t.Fatalf("Couldn't generate uuid: %v", err)
-	}
+	u := Gen4()
 
 	s := Fmt(u)
+
 	p, err := Parse(s)
 	if err != nil {
 		t.Fatalf("Couldn't parse formatted uuid %#v: %v", s, err)

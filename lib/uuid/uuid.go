@@ -10,15 +10,15 @@ import (
 
 var ErrBadFormat = errors.New("bad format for UUID")
 
-func Gen4() ([16]byte, error) {
+func Gen4() [16]byte {
 	var ret [16]byte
 	_, err := rand.Read(ret[:])
 	if err != nil {
-		return ret, err
+		panic(err)
 	}
 	ret[6] = (ret[6] & 0x0F) | 0x40
 	ret[8] = (ret[8] & 0x3F) | 0x40
-	return ret, nil
+	return ret
 }
 
 func Fmt(uuid [16]byte) string {
