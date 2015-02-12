@@ -1,13 +1,13 @@
 package store
 
 import (
-	"testing"
-	"os"
-	"path/filepath"
+	"bytes"
 	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
-	"bytes"
+	"testing"
 )
 
 func shouldList(t *testing.T, s Store, expect []string) {

@@ -1,15 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"time"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
-	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/chunkserver"
+	"git.encryptio.com/slime/lib/store"
 )
 
 func help() {
@@ -69,8 +69,11 @@ func main() {
 	os.Args = append(os.Args[0:1], os.Args[2:]...)
 
 	switch command {
-	case "mk-chunk-store": mkChunkStore()
-	case "chunk-server": chunkServer()
-	default: help()
+	case "mk-chunk-store":
+		mkChunkStore()
+	case "chunk-server":
+		chunkServer()
+	default:
+		help()
 	}
 }

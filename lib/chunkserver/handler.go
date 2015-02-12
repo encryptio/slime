@@ -91,7 +91,7 @@ func (h *Handler) serveUUIDs(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) serveRoot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Hello there!"))
+	w.Write([]byte("Howdy, slime chunk server here!"))
 }
 
 func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request,
@@ -106,7 +106,7 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request,
 	}
 
 	if len(obj) == 0 {
-		http.Error(w, "no object name given", http.StatusBadRequest)
+		h.serveList(w, r, loc)
 		return
 	}
 
@@ -115,17 +115,17 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request,
 		data, err := loc.Get(obj)
 		if err != nil {
 			if err == store.ErrNotFound {
-				http.Error(w, err.Error(), 404)
+				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			http.Error(w, err.Error(), 500)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Length",
 			strconv.FormatInt(int64(len(data)), 10))
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 
 		if r.Method == "GET" {
 			w.Write(data)
@@ -134,37 +134,72 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request,
 	case "PUT":
 		data, err := ioutil.ReadAll(io.LimitReader(r.Body, MaxFileSize))
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		if len(data) == MaxFileSize {
-			http.Error(w, "file too large", 413)
+			http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
 			return
 		}
 
 		err = loc.Set(obj, data)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 
 	case "DELETE":
 		err := loc.Delete(obj)
 		if err != nil {
 			if err == store.ErrNotFound {
-				http.Error(w, "not found", 404)
+				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}
-			http.Error(w, err.Error(), 500)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 
 	default:
 		w.Header().Set("Allow", "GET, HEAD, PUT, DELETE")
 		http.Error(w, "bad method", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) serveList(w http.ResponseWriter, r *http.Request, loc store.Store) {
+	if r.Method != "GET" {
+		w.Header().Set("Allow", "GET")
+		http.Error(w, "bad method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	qp := r.URL.Query()
+
+	after := qp.Get("after")
+
+	limit := -1
+	if s := qp.Get("limit"); s != "" {
+		i, err := strconv.ParseInt(s, 10, 0)
+		if err != nil {
+			http.Error(w, "bad limit argument", http.StatusBadRequest)
+			return
+		}
+		limit = int(i)
+	}
+
+	names, err := loc.List(after, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	newline := []byte("\n")
+	for _, name := range names {
+		w.Write([]byte(name))
+		w.Write(newline)
 	}
 }
 
@@ -182,15 +217,11 @@ func (h *Handler) scanUntilFull() {
 			default:
 			}
 
-			log.Printf("Trying to open dirstore %v...", dir)
 			ds, err := store.OpenDirStore(dir)
 			if err != nil {
 				log.Printf("Couldn't open dirstore %v: %v\n", dir, err)
 				continue
 			}
-
-			log.Printf("Activating dirstore at %v with uuid %v",
-				dir, uuid.Fmt(ds.UUID()))
 
 			h.mu.Lock()
 			h.serveLocations[ds.UUID()] = ds
@@ -216,8 +247,10 @@ func (h *Handler) scanUntilFull() {
 func (h *Handler) repeatHashcheck(ds *store.DirStore) {
 	for {
 		good, bad := ds.Hashcheck(h.sleepPerFile, h.sleepPerByte, h.stop)
-		log.Printf("Finished hash check on %v: %v good, %v bad\n",
-			uuid.Fmt(ds.UUID()), good, bad)
+		if bad != 0 {
+			log.Printf("Finished hash check on %v: %v good, %v bad\n",
+				uuid.Fmt(ds.UUID()), good, bad)
+		}
 
 		select {
 		case <-time.After(60 * time.Second):

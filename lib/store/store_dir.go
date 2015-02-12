@@ -3,16 +3,16 @@ package store
 import (
 	"bytes"
 	"encoding/base64"
-	"golang.org/x/sys/unix"
-	"time"
-	"sort"
 	"errors"
+	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"time"
 
 	"git.encryptio.com/slime/lib/uuid"
 )
