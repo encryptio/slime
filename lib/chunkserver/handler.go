@@ -25,7 +25,8 @@ type Handler struct {
 	sleepPerFile time.Duration
 	sleepPerByte time.Duration
 
-	stop chan struct{}
+	stop     chan struct{}
+	scanning chan struct{}
 
 	mu             sync.RWMutex
 	serveLocations map[[16]byte]store.Store
@@ -37,6 +38,7 @@ func New(dirs []string, sleepPerFile, sleepPerByte time.Duration) (*Handler, err
 		sleepPerFile:   sleepPerFile,
 		sleepPerByte:   sleepPerByte,
 		stop:           make(chan struct{}),
+		scanning:       make(chan struct{}),
 		serveLocations: make(map[[16]byte]store.Store, len(dirs)),
 	}
 	go h.scanUntilFull()
@@ -115,7 +117,7 @@ func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request,
 		data, err := loc.Get(obj)
 		if err != nil {
 			if err == store.ErrNotFound {
-				http.Error(w, err.Error(), http.StatusNotFound)
+				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -204,6 +206,8 @@ func (h *Handler) serveList(w http.ResponseWriter, r *http.Request, loc store.St
 }
 
 func (h *Handler) scanUntilFull() {
+	defer close(h.scanning)
+
 	found := make(map[string]struct{}, len(h.dirs))
 	for {
 		for _, dir := range h.dirs {
