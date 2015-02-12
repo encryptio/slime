@@ -1,4 +1,4 @@
-package main
+package chunkserver
 
 import (
 	"bytes"
@@ -20,26 +20,38 @@ var ScanInterval = 15 * time.Second
 
 const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 
-type handler struct {
-	dirs []string
+type Handler struct {
+	dirs         []string
+	sleepPerFile time.Duration
+	sleepPerByte time.Duration
 
-	stopped chan struct{}
+	stop chan struct{}
 
 	mu             sync.RWMutex
 	serveLocations map[[16]byte]store.Store
 }
 
-func (h *handler) start() {
-	h.stopped = make(chan struct{})
-	h.serveLocations = make(map[[16]byte]store.Store)
+func New(dirs []string, sleepPerFile, sleepPerByte time.Duration) (*Handler, error) {
+	h := &Handler{
+		dirs:           dirs,
+		sleepPerFile:   sleepPerFile,
+		sleepPerByte:   sleepPerByte,
+		stop:           make(chan struct{}),
+		serveLocations: make(map[[16]byte]store.Store, len(dirs)),
+	}
 	go h.scanUntilFull()
+	return h, nil
 }
 
-func (h *handler) stop() {
-	close(h.stopped)
+func (h *Handler) Stop() {
+	select {
+	case <-h.stop:
+	default:
+		close(h.stop)
+	}
 }
 
-func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/uuids":
 		h.serveUUIDs(w, r)
@@ -65,7 +77,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) serveUUIDs(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) serveUUIDs(w http.ResponseWriter, r *http.Request) {
 	var resp bytes.Buffer
 	h.mu.RLock()
 	for k := range h.serveLocations {
@@ -77,12 +89,12 @@ func (h *handler) serveUUIDs(w http.ResponseWriter, r *http.Request) {
 	w.Write(resp.Bytes())
 }
 
-func (h *handler) serveRoot(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) serveRoot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Hello there!"))
 }
 
-func (h *handler) serveObject(w http.ResponseWriter, r *http.Request,
+func (h *Handler) serveObject(w http.ResponseWriter, r *http.Request,
 	uuid [16]byte, obj string) {
 
 	h.mu.RLock()
@@ -156,7 +168,7 @@ func (h *handler) serveObject(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-func (h *handler) scanUntilFull() {
+func (h *Handler) scanUntilFull() {
 	found := make(map[string]struct{}, len(h.dirs))
 	for {
 		for _, dir := range h.dirs {
@@ -165,7 +177,7 @@ func (h *handler) scanUntilFull() {
 			}
 
 			select {
-			case <-h.stopped:
+			case <-h.stop:
 				return
 			default:
 			}
@@ -184,7 +196,7 @@ func (h *handler) scanUntilFull() {
 			h.serveLocations[ds.UUID()] = ds
 			h.mu.Unlock()
 
-			go repeatHashcheck(ds)
+			go h.repeatHashcheck(ds)
 
 			found[dir] = struct{}{}
 		}
@@ -195,19 +207,22 @@ func (h *handler) scanUntilFull() {
 
 		select {
 		case <-time.After(ScanInterval):
-		case <-h.stopped:
+		case <-h.stop:
 			return
 		}
 	}
 }
 
-func repeatHashcheck(ds *store.DirStore) {
+func (h *Handler) repeatHashcheck(ds *store.DirStore) {
 	for {
-		good, bad := ds.Hashcheck(config.CheckSleepFile, config.CheckSleepByte)
+		good, bad := ds.Hashcheck(h.sleepPerFile, h.sleepPerByte, h.stop)
 		log.Printf("Finished hash check on %v: %v good, %v bad\n",
 			uuid.Fmt(ds.UUID()), good, bad)
 
-		// don't busy-wait if the hash check finishes surprisingly quickly
-		time.Sleep(10 * time.Second)
+		select {
+		case <-time.After(60 * time.Second):
+		case <-h.stop:
+			return
+		}
 	}
 }

@@ -212,7 +212,7 @@ func (ds *DirStore) UUID() [16]byte {
 	return ds.uuid
 }
 
-func (ds *DirStore) Hashcheck(perFileWait, perByteWait time.Duration) (good, bad int64) {
+func (ds *DirStore) Hashcheck(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
 
 	after := ""
 	for {
@@ -239,11 +239,16 @@ func (ds *DirStore) Hashcheck(perFileWait, perByteWait time.Duration) (good, bad
 			if wait > 0 {
 				time.Sleep(wait)
 			}
+
+			select {
+			case <-stop:
+				return
+			default:
+			}
 		}
 
 		after = keys[len(keys)-1]
 	}
-	return
 }
 
 func (ds *DirStore) quarantine(key string) {

@@ -70,7 +70,7 @@ func shouldDeleteMiss(t *testing.T, s Store, key string) {
 }
 
 func shouldHashcheck(t *testing.T, ds *DirStore, good, bad int64) {
-	gotGood, gotBad := ds.Hashcheck(0, 0)
+	gotGood, gotBad := ds.Hashcheck(0, 0, nil)
 	if gotGood != good || gotBad != bad {
 		t.Errorf("Hashcheck() = (%v, %v), but wanted (%v, %v)",
 			gotGood, gotBad, good, bad)
