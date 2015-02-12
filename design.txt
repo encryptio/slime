@@ -1,40 +1,20 @@
-Slime stores small files (<16MB) redundantly over a set of filesystems and exposes them over a RESTful API.
+Slime stores small files (<64MB) redundantly over a set of filesystems and
+exposes them over a RESTful API.
 
-Internal structure:
-    $FILESYSTEM/
-        config.json
-        config.json.bak
-        config.json.sha256sum
-        files/
-            $PATH/
-                filename.vNdNiN
+It is built out of 3 main pieces:
+    - The proxy server, which handles redundancy and error recovery
+    - The chunk servers, which handle storing data and checking for bitrot
+    - The metadata database, which stores information about what files exist
+      and where their chunks can be found.
 
-For each file stored, there are some directories on some filesystems which have the same path and filename (with leading underscores escaped as __ per path component.)
+Chunk dir structure:
+    $DIR/
+        uuid
+        data/
+            ...chunks...
+        quarantine/
+            ...bad chunks...
 
-Within each directory with files in the files/ directory, the _hashes.sha256sum file contains binary sha256sums of each file part.
-
-Input files are mapped to file parts based on the configured redundancy level, which specifies a number of chunks and required number of chunks.
-
-e.g. A file called "name" in "dir/" with 500 bytes configured with 5 of 8 redundancy will generate these files, each one of which is on a different filesystem:
-    dir/name.v1d5i0
-    dir/name.v1d5i1
-    dir/name.v1d5i2
-    dir/name.v1d5i3
-    dir/name.v1d5i4
-    dir/name.v1d5i5
-    dir/name.v1d5i6
-    dir/name.v1d5i7
-Each one holds 100 bytes of data (but is actually longer on disk due to extra information). indicies 0-4 are the raw data, and indicies 5-7 are the parity chunks.
-
-Each chunk has the format:
-    8  bytes: magic number, "SLCK0000"
-    8  bytes: 64-bit fnv1a hash of the rest of the file
-    32 bytes: sha256 sum of the full file
-    4  bytes: the length of the full file in bytes
-    4  bytes: the number of data chunks for this file
-    4  bytes: the number of parity chunks for this file
-    4  bytes: the mapping value used to map the data to GF(2^32-5)
-    4  bytes: the index for this chunk (first data, then parity)
-    N  bytes: the rest of the data
-
-Note that the data chunks are stored directly, as in the input with no processing other than padding with zeroes. The parity however, assumes that the data has been mapped to GF(2^32-5) with the given mapping value.
+Chunks are stored as a 64-bit FNV-1a hash of the data (8 bytes) followed by the
+data. Chunks that are found to not validate via this header hash are
+quarantined for later inspection by a sysadmin.
