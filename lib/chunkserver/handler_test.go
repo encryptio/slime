@@ -86,6 +86,9 @@ func TestHandlerBasics(t *testing.T) {
 
 	<-h.scanning
 
+	shouldRespond(t, h, "GET", "/", "",
+		200, "Howdy, slime chunk server here!\n")
+
 	shouldRespond(t, h, "GET", "/uuids", "", 200, uuid+"\n")
 	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list", "", 200, "")
 
@@ -114,4 +117,26 @@ func TestHandlerBasics(t *testing.T) {
 		200, "z\n")
 
 	shouldRespondInteger(t, h, "GET", "/"+uuid+"/?mode=free", 200)
+}
+
+func TestHandlerMultipleStopsDontPanic(t *testing.T) {
+	h, err := New(nil, 0, 0)
+	if err != nil {
+		t.Fatalf("Couldn't create Handler: %v", err)
+	}
+	h.Stop()
+	h.Stop()
+}
+
+func TestHandlerErrors(t *testing.T) {
+	h, err := New(nil, 0, 0)
+	if err != nil {
+		t.Fatalf("Couldn't create Handler: %v", err)
+	}
+	defer h.Stop()
+
+	shouldRespond(t, h, "GET", "/nonexistent", "", 400, "bad url\n")
+	shouldRespond(t, h, "GET", "/baduuid/", "", 400, "bad uuid\n")
+	shouldRespond(t, h, "GET", "/39447fcd-0f36-4e6a-8400-66111f4275b3/", "",
+		404, "no such uuid\n")
 }

@@ -101,7 +101,7 @@ func (h *Handler) serveUUIDs(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) serveRoot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Howdy, slime chunk server here!"))
+	w.Write([]byte("Howdy, slime chunk server here!\n"))
 }
 
 func (h *Handler) scanUntilFull() {
