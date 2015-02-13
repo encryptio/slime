@@ -34,7 +34,7 @@ func getConfig(name string) string {
 
 	line, err := in.ReadString('\n')
 	if err != nil {
-		log.Fatal("Couldn't get config variable %s: %v", name, err)
+		log.Fatalf("Couldn't get config variable %s: %v", name, err)
 	}
 	line = strings.TrimSuffix(line, "\n")
 
