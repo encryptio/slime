@@ -10,6 +10,7 @@ import (
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/httputil"
 )
 
 func help() {
@@ -43,6 +44,9 @@ func chunkServer() {
 	sleepByte := flag.Duration("sleep-byte", 200*time.Nanosecond,
 		"Sleep per byte checked")
 
+	logEnabled := flag.Bool("log", true,
+		"enable access logging")
+
 	flag.Parse()
 
 	dirs := flag.Args()
@@ -51,9 +55,15 @@ func chunkServer() {
 		log.Fatalf("Must be given a list of directories to serve")
 	}
 
-	h, err := chunkserver.New(dirs, *sleepFile, *sleepByte)
+	var h http.Handler
+	var err error
+	h, err = chunkserver.New(dirs, *sleepFile, *sleepByte)
 	if err != nil {
 		log.Fatalf("Couldn't initialize handler: %v", err)
+	}
+
+	if *logEnabled {
+		h = httputil.LogHttpRequests(h)
 	}
 
 	log.Fatal(http.ListenAndServe(*listen, h))
