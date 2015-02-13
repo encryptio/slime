@@ -59,7 +59,7 @@ func shouldGetMiss(t *testing.T, s Store, key string) {
 func shouldDelete(t *testing.T, s Store, key string) {
 	err := s.Delete(key)
 	if err != nil {
-		t.Errorf("Delete(%#v) returned unexpected error %v", err)
+		t.Errorf("Delete(%#v) returned unexpected error %v", key, err)
 	}
 }
 
