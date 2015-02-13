@@ -16,19 +16,19 @@ import (
 func help() {
 	fmt.Fprintf(os.Stderr, "Usage: %v command [args]\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "Commands:\n")
-	fmt.Fprintf(os.Stderr, "    mk-chunk-store dir\n")
-	fmt.Fprintf(os.Stderr, "        initialize a new chunk store in the specified directory\n")
+	fmt.Fprintf(os.Stderr, "    fmt-dir dir\n")
+	fmt.Fprintf(os.Stderr, "        initialize a new directory store\n")
 	fmt.Fprintf(os.Stderr, "    chunk-server dir1 dir2 ...\n")
 	fmt.Fprintf(os.Stderr, "        run a chunk server serving the given directories\n")
 }
 
-func mkChunkStore() {
+func fmtDir() {
 	if len(os.Args) != 2 {
 		help()
 		os.Exit(1)
 	}
 
-	err := store.CreateDirStore(os.Args[1])
+	err := store.CreateDirectory(os.Args[1])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
@@ -79,8 +79,8 @@ func main() {
 	os.Args = append(os.Args[0:1], os.Args[2:]...)
 
 	switch command {
-	case "mk-chunk-store":
-		mkChunkStore()
+	case "fmt-dir":
+		fmtDir()
 	case "chunk-server":
 		chunkServer()
 	default:
