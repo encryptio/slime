@@ -84,7 +84,7 @@ func TestHandlerBasics(t *testing.T) {
 	}
 	defer h.Stop()
 
-	<-h.scanning
+	h.WaitScanDone()
 
 	shouldRespond(t, h, "GET", "/", "",
 		200, "Howdy, slime chunk server here!\n")
