@@ -120,9 +120,9 @@ func (h *Handler) scanUntilFull() {
 			default:
 			}
 
-			ds, err := store.OpenDirStore(dir)
+			ds, err := store.OpenDirectory(dir)
 			if err != nil {
-				log.Printf("Couldn't open dirstore %v: %v\n", dir, err)
+				log.Printf("Couldn't open directory store %v: %v\n", dir, err)
 				continue
 			}
 
@@ -147,7 +147,7 @@ func (h *Handler) scanUntilFull() {
 	}
 }
 
-func (h *Handler) repeatHashcheck(ds *store.DirStore) {
+func (h *Handler) repeatHashcheck(ds *store.Directory) {
 	for {
 		good, bad := ds.Hashcheck(h.sleepPerFile, h.sleepPerByte, h.stop)
 		if bad != 0 {

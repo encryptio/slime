@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func shouldHashcheck(t *testing.T, ds *DirStore, good, bad int64) {
+func shouldHashcheck(t *testing.T, ds *Directory, good, bad int64) {
 	gotGood, gotBad := ds.Hashcheck(0, 0, nil)
 	if gotGood != good || gotBad != bad {
 		t.Errorf("Hashcheck() = (%v, %v), but wanted (%v, %v)",
@@ -49,37 +49,37 @@ func shouldFileExist(t *testing.T, filename string) {
 	}
 }
 
-func makeDirStore(t *testing.T) (*DirStore, string) {
+func makeDirectory(t *testing.T) (*Directory, string) {
 	tmpDir, err := ioutil.TempDir("", "slime_test_")
 	if err != nil {
 		t.Fatalf("Couldn't create temporary directory: %v", err)
 	}
 
-	err = CreateDirStore(tmpDir)
+	err = CreateDirectory(tmpDir)
 	if err != nil {
 		os.RemoveAll(tmpDir)
-		t.Fatalf("CreateDirStore returned unexpected error %v", err)
+		t.Fatalf("CreateDirectory returned unexpected error %v", err)
 	}
 
-	ds, err := OpenDirStore(tmpDir)
+	ds, err := OpenDirectory(tmpDir)
 	if err != nil {
 		os.RemoveAll(tmpDir)
-		t.Fatalf("OpenDirStore returned unexpected error %v", err)
+		t.Fatalf("OpenDirectory returned unexpected error %v", err)
 	}
 
 	return ds, tmpDir
 }
 
-func TestDirStoreBasics(t *testing.T) {
-	ds, tmpDir := makeDirStore(t)
+func TestDirectoryBasics(t *testing.T) {
+	ds, tmpDir := makeDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
 	testStoreBasics(t, ds)
 	shouldHashcheck(t, ds, 0, 0)
 }
 
-func TestDirStoreCorruption(t *testing.T) {
-	ds, tmpDir := makeDirStore(t)
+func TestDirectoryCorruption(t *testing.T) {
+	ds, tmpDir := makeDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
 	shouldSet(t, ds, "hello", []byte("world"))

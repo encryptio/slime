@@ -67,9 +67,9 @@ func TestHandlerBasics(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpdir)
 
-	err = store.CreateDirStore(tmpdir)
+	err = store.CreateDirectory(tmpdir)
 	if err != nil {
-		t.Fatalf("Couldn't initialize dirstore in %v: %v", tmpdir, err)
+		t.Fatalf("Couldn't initialize directory store in %v: %v", tmpdir, err)
 	}
 
 	uuidBytes, err := ioutil.ReadFile(filepath.Join(tmpdir, "uuid"))

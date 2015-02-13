@@ -19,12 +19,12 @@ import (
 
 var ErrCorruptObject = errors.New("object is corrupt")
 
-type DirStore struct {
+type Directory struct {
 	Dir  string
 	uuid [16]byte
 }
 
-func CreateDirStore(dir string) error {
+func CreateDirectory(dir string) error {
 	dirs := []string{
 		dir,
 		filepath.Join(dir, "data"),
@@ -52,7 +52,7 @@ func CreateDirStore(dir string) error {
 	return f.Close()
 }
 
-func OpenDirStore(dir string) (*DirStore, error) {
+func OpenDirectory(dir string) (*Directory, error) {
 	data, err := ioutil.ReadFile(filepath.Join(dir, "uuid"))
 	if err != nil {
 		return nil, err
@@ -63,21 +63,21 @@ func OpenDirStore(dir string) (*DirStore, error) {
 		return nil, err
 	}
 
-	return &DirStore{
+	return &Directory{
 		Dir:  dir,
 		uuid: myUUID,
 	}, nil
 }
 
-func (ds *DirStore) encodeKey(key string) string {
+func (ds *Directory) encodeKey(key string) string {
 	return base64.URLEncoding.EncodeToString([]byte(key))
 }
 
-func (ds *DirStore) keyToFilename(key string) string {
+func (ds *Directory) keyToFilename(key string) string {
 	return filepath.Join(ds.Dir, "data", ds.encodeKey(key))
 }
 
-func (ds *DirStore) Get(key string) ([]byte, error) {
+func (ds *Directory) Get(key string) ([]byte, error) {
 	path := ds.keyToFilename(key)
 
 	fh, err := os.Open(path)
@@ -112,7 +112,7 @@ func (ds *DirStore) Get(key string) ([]byte, error) {
 	return data, nil
 }
 
-func (ds *DirStore) Set(key string, data []byte) error {
+func (ds *Directory) Set(key string, data []byte) error {
 	h := fnv.New64a()
 	h.Write(data)
 	hashValue := h.Sum(nil)
@@ -152,7 +152,7 @@ func (ds *DirStore) Set(key string, data []byte) error {
 	return nil
 }
 
-func (ds *DirStore) Delete(key string) error {
+func (ds *Directory) Delete(key string) error {
 	err := os.Remove(ds.keyToFilename(key))
 	if os.IsNotExist(err) {
 		return ErrNotFound
@@ -160,7 +160,7 @@ func (ds *DirStore) Delete(key string) error {
 	return err
 }
 
-func (ds *DirStore) List(afterKey string, limit int) ([]string, error) {
+func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
 	dh, err := os.Open(filepath.Join(ds.Dir, "data"))
 	if err != nil {
 		return nil, err
@@ -197,7 +197,7 @@ func (ds *DirStore) List(afterKey string, limit int) ([]string, error) {
 	return decodedNames, nil
 }
 
-func (ds *DirStore) FreeSpace() (int64, error) {
+func (ds *Directory) FreeSpace() (int64, error) {
 	s := unix.Statfs_t{}
 	err := unix.Statfs(filepath.Join(ds.Dir, "data"), &s)
 	if err != nil {
@@ -208,11 +208,11 @@ func (ds *DirStore) FreeSpace() (int64, error) {
 	return int64(s.Bavail) * s.Bsize, nil
 }
 
-func (ds *DirStore) UUID() [16]byte {
+func (ds *Directory) UUID() [16]byte {
 	return ds.uuid
 }
 
-func (ds *DirStore) Hashcheck(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
+func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
 	after := ""
 	for {
 		keys, err := ds.List(after, 1000)
@@ -250,7 +250,7 @@ func (ds *DirStore) Hashcheck(perFileWait, perByteWait time.Duration, stop <-cha
 	}
 }
 
-func (ds *DirStore) quarantine(key string) {
+func (ds *Directory) quarantine(key string) {
 	quarantinePath := filepath.Join(ds.Dir, "quarantine", ds.encodeKey(key))
 	dataPath := ds.keyToFilename(key)
 

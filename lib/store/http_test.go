@@ -7,7 +7,7 @@ import (
 )
 
 func TestHTTPBasics(t *testing.T) {
-	ds, tmpDir := makeDirStore(t)
+	ds, tmpDir := makeDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
 	srv := httptest.NewServer(NewServer(ds))
