@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"git.encryptio.com/slime/lib/chunkserver"
-	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/httputil"
+	"git.encryptio.com/slime/lib/store"
 )
 
 func help() {
