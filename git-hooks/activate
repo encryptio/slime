@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+
+[ -d .git/hooks ] || mkdir .git/hooks
+ln -sf ../../git-hooks/pre-commit .git/hooks/pre-commit

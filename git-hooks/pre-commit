@@ -1,0 +1,20 @@
+#!/bin/sh
+
+gofmtidempotent() {
+    gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.go$')
+    [ -z "$gofiles" ] && return 0
+
+    unformatted=$(gofmt -l $gofiles)
+    [ -z "$unformatted" ] && return 0
+
+    echo >&2 "These files are not gofmt'd: $unformatted"
+    return 1
+}
+
+gotestworks() {
+    go test ./...
+    return $?
+}
+
+gofmtidempotent || exit 1
+gotestworks || exit 1
