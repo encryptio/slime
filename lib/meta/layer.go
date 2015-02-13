@@ -77,24 +77,29 @@ func (l *Layer) RemoveFilePath(path string) error {
 	return err
 }
 
-func (l *Layer) ListFiles(prefix string, limit int) ([]File, error) {
+func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
 	if limit < 1 || limit > MaxListLimit {
 		return nil, ErrBadArgument
 	}
 
 	var query kvl.RangeQuery
-	query.Low, query.High = keys.PrefixRange(fileKey(prefix))
+	query.Low = fileKey(after)
 	query.Limit = limit
 	pairs, err := l.inner.Range(query)
 	if err != nil {
 		return nil, err
 	}
 
-	files := make([]File, len(pairs))
-	for i, pair := range pairs {
-		err := files[i].fromPair(pair)
+	files := make([]File, 0, len(pairs))
+	for _, pair := range pairs {
+		var f File
+		err := f.fromPair(pair)
 		if err != nil {
 			return nil, err
+		}
+
+		if f.Path > after {
+			files = append(files, f)
 		}
 	}
 
