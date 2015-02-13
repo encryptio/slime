@@ -46,11 +46,15 @@ func New(dirs []string, sleepPerFile, sleepPerByte time.Duration) (*Handler, err
 }
 
 func (h *Handler) Stop() {
+	h.mu.Lock()
+
 	select {
 	case <-h.stop:
 	default:
 		close(h.stop)
 	}
+
+	h.mu.Unlock()
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
