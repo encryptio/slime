@@ -183,6 +183,11 @@ func (h *Handler) serveList(w http.ResponseWriter, r *http.Request, loc store.St
 
 	qp := r.URL.Query()
 
+	if qp.Get("free") != "" {
+		h.serveFree(w, r, loc)
+		return
+	}
+
 	after := qp.Get("after")
 
 	limit := -1
@@ -207,6 +212,17 @@ func (h *Handler) serveList(w http.ResponseWriter, r *http.Request, loc store.St
 		w.Write([]byte(name))
 		w.Write(newline)
 	}
+}
+
+func (h *Handler) serveFree(w http.ResponseWriter, r *http.Request, loc store.Store) {
+	free, err := loc.FreeSpace()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(strconv.FormatInt(free, 10)))
 }
 
 func (h *Handler) scanUntilFull() {

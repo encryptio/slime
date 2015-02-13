@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"git.encryptio.com/slime/lib/store"
@@ -36,6 +37,26 @@ func shouldRespond(t *testing.T, handler http.Handler, method, url string, reque
 	if responseBody != w.Body.String() {
 		t.Errorf("%v %v responded with %#v, wanted %#v",
 			method, url, w.Body.String(), responseBody)
+	}
+}
+
+func shouldRespondInteger(t *testing.T, handler http.Handler, method, url string, code int) {
+	r, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		t.Fatalf("NewRequest(%v, %v, %v) returned %v", method, url, nil, err)
+	}
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if code != 200 {
+		t.Errorf("%v %v returned code %v, wanted 200", method, url, w.Code)
+	}
+
+	_, err = strconv.ParseInt(w.Body.String(), 10, 64)
+	if err != nil {
+		t.Errorf("%v %v responded with a non-integer response %#v",
+			method, url, w.Body.String())
 	}
 }
 
@@ -87,4 +108,6 @@ func TestHandlerBasics(t *testing.T) {
 	shouldRespond(t, h, "GET", "/"+uuid+"/?limit=3", "", 200, "a\nb\nc\n")
 	shouldRespond(t, h, "GET", "/"+uuid+"/?limit=2&after=b", "", 200, "c\nx\n")
 	shouldRespond(t, h, "GET", "/"+uuid+"/?limit=3&after=y", "", 200, "z\n")
+
+	shouldRespondInteger(t, h, "GET", "/"+uuid+"/?free=1", 200)
 }
