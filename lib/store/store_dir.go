@@ -213,7 +213,6 @@ func (ds *DirStore) UUID() [16]byte {
 }
 
 func (ds *DirStore) Hashcheck(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
-
 	after := ""
 	for {
 		keys, err := ds.List(after, 1000)
