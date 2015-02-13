@@ -126,12 +126,29 @@ func (l *Layer) AllLocations() ([]Location, error) {
 	return locations, nil
 }
 
-func (l *Layer) DeleteLocation(loc *Location) error {
+func (l *Layer) GetLocation(uuid [16]byte) (*Location, error) {
+	loc := Location{UUID: uuid}
+	q := loc.toPair()
+	pair, err := l.inner.Get(q.Key)
+	if err != nil {
+		if err == kvl.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	err = loc.fromPair(pair)
+	if err != nil {
+		return nil, err
+	}
+	return &loc, nil
+}
+
+func (l *Layer) DeleteLocation(loc Location) error {
 	pair := loc.toPair()
 	return l.inner.Delete(pair.Key)
 }
 
-func (l *Layer) SetLocation(loc *Location) error {
+func (l *Layer) SetLocation(loc Location) error {
 	pair := loc.toPair()
 	return l.inner.Set(pair)
 }
