@@ -1,10 +1,11 @@
 package rs
 
 import (
-	"git.encryptio.com/slime/lib/gf"
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"git.encryptio.com/slime/lib/rs/gf"
 )
 
 func genRandomGFVector(l int) []uint32 {

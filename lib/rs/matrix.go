@@ -1,7 +1,7 @@
 package rs
 
 import (
-	"git.encryptio.com/slime/lib/gf"
+	"git.encryptio.com/slime/lib/rs/gf"
 )
 
 // vandermondeMatrix returns a Vandermonde matrix with d+p rows and d columns.

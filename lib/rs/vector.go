@@ -1,7 +1,7 @@
 package rs
 
 import (
-	"git.encryptio.com/slime/lib/gf"
+	"git.encryptio.com/slime/lib/rs/gf"
 )
 
 // CreateParity takes a slice of data chunks (in GF(2^32-5)), a total number of
