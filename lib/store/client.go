@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"git.encryptio.com/slime/lib/httputil"
+	"git.encryptio.com/slime/lib/uuid"
 )
 
 // A Client is a Store which interfaces with the standard HTTP interface.
@@ -22,14 +23,20 @@ type Client struct {
 }
 
 // NewClient creates a Client. The URL passed should end with a trailing slash.
-func NewClient(url string, uuid [16]byte) *Client {
-	return &Client{
-		url:  url,
-		uuid: uuid,
+func NewClient(url string) (*Client, error) {
+	c := &Client{
+		url: url,
 		client: &http.Client{
 			Timeout: time.Second * 15,
 		},
 	}
+
+	err := c.loadUUID()
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 func (cc *Client) UUID() [16]byte {
@@ -89,6 +96,7 @@ func (cc *Client) Delete(key string) error {
 
 func (cc *Client) List(after string, limit int) ([]string, error) {
 	args := make(url.Values)
+	args.Add("mode", "list")
 	if after != "" {
 		args.Add("after", after)
 	}
@@ -129,7 +137,7 @@ func (cc *Client) List(after string, limit int) ([]string, error) {
 }
 
 func (cc *Client) FreeSpace() (int64, error) {
-	resp, err := cc.startReq("GET", cc.url+"?free=1", nil)
+	resp, err := cc.startReq("GET", cc.url+"?mode=free", nil)
 	if err != nil {
 		return 0, err
 	}
@@ -145,6 +153,31 @@ func (cc *Client) FreeSpace() (int64, error) {
 	}
 
 	return strconv.ParseInt(string(data), 10, 64)
+}
+
+func (cc *Client) loadUUID() error {
+	resp, err := cc.startReq("GET", cc.url+"?mode=uuid", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return httputil.ReadResponseAsError(resp)
+	}
+
+	// 37 is the length of a formatted UUID plus one (to avoid false positives)
+	data, err := ioutil.ReadAll(io.LimitReader(resp.Body, 37))
+	if err != nil {
+		return err
+	}
+
+	cc.uuid, err = uuid.Parse(string(data))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (cc *Client) startReq(method, url string, body io.Reader) (*http.Response, error) {

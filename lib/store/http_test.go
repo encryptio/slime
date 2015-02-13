@@ -4,6 +4,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	"git.encryptio.com/slime/lib/uuid"
 )
 
 func TestHTTPBasics(t *testing.T) {
@@ -13,7 +15,15 @@ func TestHTTPBasics(t *testing.T) {
 	srv := httptest.NewServer(NewServer(ds))
 	defer srv.Close()
 
-	client := NewClient(srv.URL+"/", ds.UUID())
+	client, err := NewClient(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("Couldn't initialize client: %v", err)
+	}
 
 	testStoreBasics(t, client)
+
+	if client.UUID() != ds.UUID() {
+		t.Errorf("client UUID %v does not match directory UUID %v",
+			uuid.Fmt(client.UUID()), uuid.Fmt(ds.UUID()))
+	}
 }

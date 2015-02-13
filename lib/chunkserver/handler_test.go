@@ -87,16 +87,16 @@ func TestHandlerBasics(t *testing.T) {
 	<-h.scanning
 
 	shouldRespond(t, h, "GET", "/uuids", "", 200, uuid+"\n")
-	shouldRespond(t, h, "GET", "/"+uuid+"/", "", 200, "")
+	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list", "", 200, "")
 
 	shouldRespond(t, h, "PUT", "/"+uuid+"/file", "contents", 204, "")
 	shouldRespond(t, h, "GET", "/"+uuid+"/file", "", 200, "contents")
-	shouldRespond(t, h, "GET", "/"+uuid+"/", "", 200, "file\n")
+	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list", "", 200, "file\n")
 
 	shouldRespond(t, h, "DELETE", "/"+uuid+"/file", "", 204, "")
 	shouldRespond(t, h, "GET", "/"+uuid+"/file", "", 404, "not found\n")
 	shouldRespond(t, h, "DELETE", "/"+uuid+"/file", "", 404, "not found\n")
-	shouldRespond(t, h, "GET", "/"+uuid+"/", "", 200, "")
+	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list", "", 200, "")
 
 	shouldRespond(t, h, "PUT", "/"+uuid+"/z", "z", 204, "")
 	shouldRespond(t, h, "PUT", "/"+uuid+"/y", "y", 204, "")
@@ -104,10 +104,14 @@ func TestHandlerBasics(t *testing.T) {
 	shouldRespond(t, h, "PUT", "/"+uuid+"/c", "c", 204, "")
 	shouldRespond(t, h, "PUT", "/"+uuid+"/x", "x", 204, "")
 	shouldRespond(t, h, "PUT", "/"+uuid+"/b", "b", 204, "")
-	shouldRespond(t, h, "GET", "/"+uuid+"/", "", 200, "a\nb\nc\nx\ny\nz\n")
-	shouldRespond(t, h, "GET", "/"+uuid+"/?limit=3", "", 200, "a\nb\nc\n")
-	shouldRespond(t, h, "GET", "/"+uuid+"/?limit=2&after=b", "", 200, "c\nx\n")
-	shouldRespond(t, h, "GET", "/"+uuid+"/?limit=3&after=y", "", 200, "z\n")
+	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list", "",
+		200, "a\nb\nc\nx\ny\nz\n")
+	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list&limit=3", "",
+		200, "a\nb\nc\n")
+	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list&limit=2&after=b", "",
+		200, "c\nx\n")
+	shouldRespond(t, h, "GET", "/"+uuid+"/?mode=list&limit=3&after=y", "",
+		200, "z\n")
 
-	shouldRespondInteger(t, h, "GET", "/"+uuid+"/?free=1", 200)
+	shouldRespondInteger(t, h, "GET", "/"+uuid+"/?mode=free", 200)
 }

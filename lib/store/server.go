@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"git.encryptio.com/slime/lib/uuid"
 )
 
 // MaxFileSize is the maximum size to accept in a Server request.
@@ -13,6 +15,15 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 
 // A Server is an http.Handler which serves a Store with the standard HTTP
 // interface, suitable for use by Client.
+//
+// A Server responds to the following requests:
+//     GET /key - retrieve key contents
+//     PUT /key - set key contents
+//     DELETE /key - remove a key
+//     GET /?mode=list&after=xx&limit=nn - list keys, after and limit are
+//                                         optional.
+//     GET /?mode=free - get the number of free bytes
+//     GET /?mode=uuid - get the uuid
 type Server struct {
 	store Store
 }
@@ -26,7 +37,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	obj := strings.TrimPrefix(r.URL.Path, "/")
 
 	if len(obj) == 0 {
-		h.serveList(w, r)
+		h.serveRoot(w, r)
 		return
 	}
 
@@ -88,6 +99,21 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Server) serveRoot(w http.ResponseWriter, r *http.Request) {
+	qp := r.URL.Query()
+	mode := qp.Get("mode")
+	switch mode {
+	case "list":
+		h.serveList(w, r)
+	case "free":
+		h.serveFree(w, r)
+	case "", "uuid":
+		h.serveUUID(w, r)
+	default:
+		http.Error(w, "no such query mode", http.StatusBadRequest)
+	}
+}
+
 func (h *Server) serveList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		w.Header().Set("Allow", "GET")
@@ -96,11 +122,6 @@ func (h *Server) serveList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	qp := r.URL.Query()
-
-	if qp.Get("free") != "" {
-		h.serveFree(w, r)
-		return
-	}
 
 	after := qp.Get("after")
 
@@ -137,4 +158,9 @@ func (h *Server) serveFree(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(strconv.FormatInt(free, 10)))
+}
+
+func (h *Server) serveUUID(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(uuid.Fmt(h.store.UUID())))
 }
