@@ -1,4 +1,4 @@
-// package store provides an interface for key-value stores
+// package store provides an interface for object stores
 package store
 
 import (
@@ -7,11 +7,11 @@ import (
 
 var (
 	// ErrNotFound is returned from Store.Get and Store.Delete if the key
-	// requested was not found in the key-value store
+	// requested was not found in the object store
 	ErrNotFound = errors.New("key not found")
 )
 
-// A Store is a key-value store. Keys are strings of non-zero length, subject to
+// A Store is a object store. Keys are strings of non-zero length, subject to
 // implementation-specific restrictions. Data is arbitrary, subject to
 // implementation-specific limits on length.
 type Store interface {
