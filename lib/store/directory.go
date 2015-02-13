@@ -19,11 +19,14 @@ import (
 
 var ErrCorruptObject = errors.New("object is corrupt")
 
+// A Directory is a Store which stores its data on a local filesystem.
 type Directory struct {
 	Dir  string
 	uuid [16]byte
 }
 
+// CreateDirectory initializes a new Directory at the given location, suitable
+// for OpenDirectory. It will return an error if one already exists.
 func CreateDirectory(dir string) error {
 	dirs := []string{
 		dir,
@@ -52,6 +55,7 @@ func CreateDirectory(dir string) error {
 	return f.Close()
 }
 
+// OpenDirectory opens an existing directory store.
 func OpenDirectory(dir string) (*Directory, error) {
 	data, err := ioutil.ReadFile(filepath.Join(dir, "uuid"))
 	if err != nil {

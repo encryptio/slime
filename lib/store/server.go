@@ -8,12 +8,16 @@ import (
 	"strings"
 )
 
+// MaxFileSize is the maximum size to accept in a Server request.
 const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 
+// A Server is an http.Handler which serves a Store with the standard HTTP
+// interface, suitable for use by Client.
 type Server struct {
 	store Store
 }
 
+// NewServer creates a Server out of a Store.
 func NewServer(s Store) *Server {
 	return &Server{s}
 }

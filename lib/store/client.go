@@ -14,12 +14,14 @@ import (
 	"git.encryptio.com/slime/lib/httputil"
 )
 
+// A Client is a Store which interfaces with the standard HTTP interface.
 type Client struct {
 	url    string
 	uuid   [16]byte
 	client *http.Client
 }
 
+// NewClient creates a Client. The URL passed should end with a trailing slash.
 func NewClient(url string, uuid [16]byte) *Client {
 	return &Client{
 		url:  url,
