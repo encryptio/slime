@@ -83,12 +83,14 @@ func TestDirectoryCorruption(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	shouldSet(t, ds, "hello", []byte("world"))
+	shouldHashcheck(t, ds, 1, 0)
 	shouldCorrupt(t, filepath.Join(tmpDir, "data", "aGVsbG8="))
 	shouldGetError(t, ds, "hello", ErrCorruptObject)
 	shouldGetMiss(t, ds, "hello")
 	shouldFileExist(t, filepath.Join(tmpDir, "quarantine", "aGVsbG8="))
 
 	shouldSet(t, ds, "other", []byte("werld"))
+	shouldHashcheck(t, ds, 1, 0)
 	shouldCorrupt(t, filepath.Join(tmpDir, "data", "b3RoZXI="))
 	shouldHashcheck(t, ds, 0, 1)
 	shouldGetMiss(t, ds, "other")
