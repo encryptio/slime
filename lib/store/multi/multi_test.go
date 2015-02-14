@@ -10,22 +10,42 @@ import (
 	"git.encryptio.com/kvl/backend/ram"
 )
 
-func TestMultiBasics(t *testing.T) {
+func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, func()) {
 	var killers []*killHandler
+
 	var servers []*httptest.Server
-	for i := 0; i < 5; i++ {
+	var chunkServers []*chunkserver.Handler
+	var tmpPaths []string
+	var finder *Finder
+
+	done := func() {
+		if finder != nil {
+			finder.Stop()
+		}
+		for _, srv := range servers {
+			srv.Close()
+		}
+		for _, cs := range chunkServers {
+			cs.Stop()
+		}
+		for _, path := range tmpPaths {
+			os.RemoveAll(path)
+		}
+	}
+
+	for i := 0; i < serverCount; i++ {
 		_, tmpPath := makeDirectory(t)
-		defer os.RemoveAll(tmpPath)
+		tmpPaths = append(tmpPaths, tmpPath)
 
 		cs, err := chunkserver.New([]string{tmpPath}, 0, 0)
 		if err != nil {
+			done()
 			t.Fatalf("Couldn't create chunkserver: %v", err)
 		}
-		defer cs.Stop()
+		chunkServers = append(chunkServers, cs)
 
 		killer := &killHandler{inner: cs}
 		srv := httptest.NewServer(killer)
-		defer srv.Close()
 
 		killers = append(killers, killer)
 		servers = append(servers, srv)
@@ -35,25 +55,35 @@ func TestMultiBasics(t *testing.T) {
 
 	finder, err := NewFinder(db)
 	if err != nil {
+		done()
 		t.Fatalf("Couldn't create new finder: %v", err)
 	}
-	defer finder.Stop()
 
 	for _, srv := range servers {
 		err = finder.Scan(srv.URL)
 		if err != nil {
+			done()
 			t.Fatalf("Couldn't scan %v: %v", srv.URL, err)
 		}
 	}
 
 	if len(finder.Stores()) != len(servers) {
+		done()
 		t.Fatalf("Finder did not find all stores")
 	}
 
-	m, err := NewMulti(db, finder, MultiConfig{Need: 3, Total: 4})
+	multi, err := NewMulti(db, finder, MultiConfig{Need: need, Total: total})
 	if err != nil {
+		done()
 		t.Fatalf("Couldn't create multi: %v", err)
 	}
 
-	testStoreBasics(t, m)
+	return killers, multi, done
+}
+
+func TestMultiBasics(t *testing.T) {
+	_, multi, done := prepareMultiTest(t, 3, 4, 5)
+	defer done()
+
+	testStoreBasics(t, multi)
 }
