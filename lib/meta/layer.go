@@ -11,10 +11,7 @@ import (
 )
 
 var (
-	ErrNotFound    = errors.New("file not found")
 	ErrBadArgument = errors.New("bad argument")
-
-	configKey = tuple.MustAppend(nil, "config")
 )
 
 const MaxListLimit = 10001
@@ -38,21 +35,24 @@ func Open(ctx kvl.Ctx) (*Layer, error) {
 	}, nil
 }
 
-func (l *Layer) GetConfig() ([]byte, error) {
-	p, err := l.inner.Get(configKey)
+func (l *Layer) GetConfig(key string) ([]byte, error) {
+	p, err := l.inner.Get(tuple.MustAppend(nil, "config", key))
 	if err != nil && err != kvl.ErrNotFound {
 		return nil, err
 	}
 	return p.Value, nil
 }
 
-func (l *Layer) SetConfig(conf []byte) error {
-	return l.inner.Set(kvl.Pair{configKey, conf})
+func (l *Layer) SetConfig(key string, data []byte) error {
+	return l.inner.Set(kvl.Pair{tuple.MustAppend(nil, "config", key), data})
 }
 
 func (l *Layer) GetFile(path string) (*File, error) {
 	pair, err := l.inner.Get(fileKey(path))
 	if err != nil {
+		if err == kvl.ErrNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -70,11 +70,7 @@ func (l *Layer) SetFile(f *File) error {
 }
 
 func (l *Layer) RemoveFilePath(path string) error {
-	err := l.inner.Delete(fileKey(path))
-	if err == kvl.ErrNotFound {
-		return ErrNotFound
-	}
-	return err
+	return l.inner.Delete(fileKey(path))
 }
 
 func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
