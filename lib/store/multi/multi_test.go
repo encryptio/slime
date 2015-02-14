@@ -1,8 +1,11 @@
 package multi
 
 import (
+	"bytes"
+	"math/rand"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 
 	"git.encryptio.com/slime/lib/chunkserver"
@@ -86,4 +89,52 @@ func TestMultiBasics(t *testing.T) {
 	defer done()
 
 	testStoreBasics(t, multi)
+}
+
+func TestMultiRecovery(t *testing.T) {
+	for total := 4; total < 8; total++ {
+		killers, multi, done := prepareMultiTest(t, 3, total, 10)
+		defer done()
+
+		for i := 0; i < 50; i++ {
+			key := strconv.FormatInt(int64(i), 10)
+			var value []byte
+			for j := 0; j < i; j++ {
+				value = append(value, []byte(key)...)
+			}
+
+			err := multi.Set(key, value)
+			if err != nil {
+				t.Fatalf("Couldn't write to multi: %v", err)
+			}
+		}
+
+		for i := 0; i < total-3; i++ {
+			for {
+				k := killers[rand.Intn(len(killers))]
+				if k.killed {
+					continue
+				}
+				k.killed = true
+				break
+			}
+		}
+
+		for i := 0; i < 50; i++ {
+			key := strconv.FormatInt(int64(i), 10)
+			var value []byte
+			for j := 0; j < i; j++ {
+				value = append(value, []byte(key)...)
+			}
+
+			gotVal, err := multi.Get(key)
+			if err != nil {
+				t.Fatalf("Couldn't get %v from multi after failing underneath redundancy level: %v", key, err)
+			}
+
+			if !bytes.Equal(value, gotVal) {
+				t.Fatalf("Value for %v is incorrect (got %#v, wanted %#v)", gotVal, value)
+			}
+		}
+	}
 }
