@@ -71,6 +71,13 @@ func (f *Finder) Stores() map[[16]byte]store.Store {
 	return ret
 }
 
+func (f *Finder) StoreFor(uuid [16]byte) store.Store {
+	f.mu.Lock()
+	ret := f.stores[uuid]
+	f.mu.Unlock()
+	return ret
+}
+
 func (f *Finder) scanLoop() {
 	for {
 		err := f.scanStart()
