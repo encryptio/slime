@@ -14,8 +14,6 @@ var (
 	ErrBadArgument = errors.New("bad argument")
 )
 
-const MaxListLimit = 10001
-
 type Layer struct {
 	ctx   kvl.Ctx
 	inner kvl.Ctx
@@ -74,13 +72,16 @@ func (l *Layer) RemoveFilePath(path string) error {
 }
 
 func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
-	if limit < 1 || limit > MaxListLimit {
+	if limit < 0 {
 		return nil, ErrBadArgument
 	}
 
 	var query kvl.RangeQuery
 	query.Low = fileKey(after)
-	query.Limit = limit
+	query.High = keys.PrefixNext(tuple.MustAppend(nil, "file"))
+	if limit > 0 {
+		query.Limit = limit + 1
+	}
 	pairs, err := l.inner.Range(query)
 	if err != nil {
 		return nil, err
@@ -96,6 +97,9 @@ func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
 
 		if f.Path > after {
 			files = append(files, f)
+			if limit > 0 && len(files) == limit {
+				break
+			}
 		}
 	}
 
