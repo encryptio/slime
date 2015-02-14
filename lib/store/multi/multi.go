@@ -408,7 +408,7 @@ func (m *Multi) FreeSpace() (int64, error) {
 	fillable := frees[len(frees)-m.config.Total]
 
 	// removing parity amount
-	free := fillable - fillable/int64(m.config.Total)*int64(m.config.Need)
+	free := fillable / int64(m.config.Total) * int64(m.config.Need)
 
 	return free, nil
 }
