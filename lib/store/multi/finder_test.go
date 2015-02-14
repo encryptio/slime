@@ -2,7 +2,6 @@ package multi
 
 import (
 	"fmt"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -13,19 +12,6 @@ import (
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/backend/ram"
 )
-
-type killHandler struct {
-	inner  http.Handler
-	killed bool
-}
-
-func (k *killHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if k.killed {
-		http.Error(w, "killed", http.StatusInternalServerError)
-		return
-	}
-	k.inner.ServeHTTP(w, r)
-}
 
 func TestFinderScan(t *testing.T) {
 	db := ram.New()
@@ -49,6 +35,7 @@ func TestFinderScan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Couldn't create new finder: %v", err)
 	}
+	defer f.Stop()
 
 	err = f.Scan(srv.URL)
 	if err != nil {

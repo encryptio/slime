@@ -2,6 +2,7 @@ package multi
 
 import (
 	"io/ioutil"
+	"net/http"
 	"os"
 	"testing"
 
@@ -27,4 +28,17 @@ func makeDirectory(t *testing.T) (*store.Directory, string) {
 	}
 
 	return ds, tmpDir
+}
+
+type killHandler struct {
+	inner  http.Handler
+	killed bool
+}
+
+func (k *killHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if k.killed {
+		http.Error(w, "killed", http.StatusInternalServerError)
+		return
+	}
+	k.inner.ServeHTTP(w, r)
 }
