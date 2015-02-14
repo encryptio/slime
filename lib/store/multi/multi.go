@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"sort"
 	"sync"
@@ -378,8 +377,6 @@ func (m *Multi) List(after string, limit int) ([]string, error) {
 	for i, file := range files {
 		names[i] = file.Path
 	}
-
-	log.Printf("multi.List(%#v, %v) = %#v", after, limit, names)
 
 	return names, nil
 }
