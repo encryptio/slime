@@ -108,7 +108,8 @@ func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
 
 func (l *Layer) AllLocations() ([]Location, error) {
 	var query kvl.RangeQuery
-	query.Low, query.High = keys.PrefixRange([]byte("l"))
+	key, _ := tuple.Append(nil, "location")
+	query.Low, query.High = keys.PrefixRange(key)
 
 	pairs, err := l.inner.Range(query)
 	if err != nil {

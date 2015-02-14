@@ -3,6 +3,7 @@ package store
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -33,7 +34,8 @@ func NewClient(url string) (*Client, error) {
 
 	err := c.loadUUID()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Couldn't load uuid from store at %v: %v",
+			url, err)
 	}
 
 	return c, nil

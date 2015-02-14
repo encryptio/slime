@@ -1,0 +1,108 @@
+package multi
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+
+	"git.encryptio.com/slime/lib/chunkserver"
+	"git.encryptio.com/slime/lib/meta"
+
+	"git.encryptio.com/kvl"
+	"git.encryptio.com/kvl/backend/ram"
+)
+
+type killHandler struct {
+	inner  http.Handler
+	killed bool
+}
+
+func (k *killHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if k.killed {
+		http.Error(w, "killed", http.StatusInternalServerError)
+		return
+	}
+	k.inner.ServeHTTP(w, r)
+}
+
+func TestFinderScan(t *testing.T) {
+	db := ram.New()
+
+	ds, tmpPath := makeDirectory(t)
+	defer os.RemoveAll(tmpPath)
+
+	cs, err := chunkserver.New([]string{tmpPath}, 0, 0)
+	if err != nil {
+		t.Fatalf("Couldn't create chunkserver: %v", err)
+	}
+	defer cs.Stop()
+
+	cs.WaitScanDone()
+
+	killer := &killHandler{inner: cs}
+	srv := httptest.NewServer(killer)
+	defer srv.Close()
+
+	f, err := NewFinder(db)
+	if err != nil {
+		t.Fatalf("Couldn't create new finder: %v", err)
+	}
+
+	err = f.Scan(srv.URL)
+	if err != nil {
+		t.Fatalf("Couldn't scan %v: %v", srv.URL, err)
+	}
+
+	// newly scanned store should be in the Finder
+	stores := f.Stores()
+	if _, ok := stores[ds.UUID()]; !ok {
+		t.Fatalf("Finder did not find uuid of directory store")
+	}
+
+	// kill the store and update the Finder
+	killer.killed = true
+	f.test(0)
+
+	// should have been removed
+	stores = f.Stores()
+	if len(stores) > 0 {
+		t.Fatalf("Finder did not remove dead store")
+	}
+
+	// but should stay in the DB
+	_, err = db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		loc, err := layer.GetLocation(ds.UUID())
+		if err != nil {
+			return nil, err
+		}
+
+		if loc == nil {
+			return nil, fmt.Errorf("No location in database")
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("Couldn't verify locations: %v", err)
+	}
+
+	// when the store comes back
+	killer.killed = false
+	err = f.scanStart()
+	if err != nil {
+		t.Fatalf("Couldn't scanStart: %v", err)
+	}
+
+	// it should be there again
+	stores = f.Stores()
+	if _, ok := stores[ds.UUID()]; !ok {
+		t.Fatalf("Finder did not find uuid of directory store after resurrection")
+	}
+}
