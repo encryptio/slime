@@ -6,14 +6,8 @@ package multi
 
 import (
 	"sync"
-	"time"
 
 	"git.encryptio.com/kvl"
-)
-
-var (
-	scrubWaitPerFile = time.Millisecond * 250
-	scrubFileCount   = 50
 )
 
 type Multi struct {
