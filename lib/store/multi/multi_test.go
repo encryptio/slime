@@ -151,3 +151,45 @@ func TestMultiRecovery(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiScrub(t *testing.T) {
+	_, multi, dirstores, done := prepareMultiTest(t, 3, 4, 4)
+	defer done()
+
+	data := "hello world! this is some test data."
+
+	err := multi.Set("key", []byte(data))
+	if err != nil {
+		t.Fatalf("Couldn't write to multi: %v", err)
+	}
+
+	names, err := dirstores[0].List("", 1)
+	if err != nil {
+		t.Fatalf("Couldn't list first dirstore: %v")
+	}
+	if len(names) != 1 {
+		t.Fatalf("Didn't get a name from dirstore")
+	}
+
+	err = dirstores[0].Delete(names[0])
+	if err != nil {
+		t.Fatalf("Couldn't delete from dirstore: %v", err)
+	}
+
+	multi.scrubAll()
+
+	found := 0
+	for _, ds := range dirstores {
+		names, err := ds.List("", 1)
+		if err != nil {
+			t.Fatalf("Couldn't list dirstore: %v", err)
+		}
+		if len(names) == 1 {
+			found++
+		}
+	}
+
+	if found != 4 {
+		t.Fatalf("scrubAll didn't recreate missing chunk")
+	}
+}
