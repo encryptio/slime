@@ -15,16 +15,11 @@ import (
 )
 
 var (
-	in      = bufio.NewReader(os.Stdin)
-	out     = bufio.NewWriter(os.Stdout)
-	baseURL string
+	in            = bufio.NewReader(os.Stdin)
+	out           = bufio.NewWriter(os.Stdout)
+	baseURL       string
+	oldPrefixMode bool
 )
-
-func addPrefix(key string) string {
-	sha := sha256.Sum256([]byte(strings.ToLower(key)))
-	hexed := hex.EncodeToString(sha[0:3])
-	return hexed[0:3] + "/" + hexed[3:6] + "/" + key
-}
 
 func getConfig(name string) string {
 	out.WriteString("GETCONFIG ")
@@ -45,12 +40,25 @@ func getConfig(name string) string {
 	}
 }
 
+func keyURL(key string) string {
+	if oldPrefixMode {
+		sha := sha256.Sum256([]byte(strings.ToLower(key)))
+		hexed := hex.EncodeToString(sha[0:3])
+		return baseURL + hexed[0:3] + "/" + hexed[3:6] + "/" + key
+	} else {
+		return baseURL + key
+	}
+}
+
 func initRemote() {
 	baseURL = getConfig("baseurl")
 	if baseURL == "" {
-		out.WriteString("INITREMOTE-FAILURE You must set baseurl to the slimed URL and path you want to use\n")
+		out.WriteString("INITREMOTE-FAILURE You must set baseurl to the URL (ending in /) that you want to use\n")
 		return
 	}
+
+	old := getConfig("oldprefixmode")
+	oldPrefixMode = old == "true"
 
 	out.WriteString("INITREMOTE-SUCCESS\n")
 }
@@ -58,7 +66,7 @@ func initRemote() {
 func prepare() {
 	baseURL = getConfig("baseurl")
 	if baseURL == "" {
-		out.WriteString("PREPARE-FAILURE You must set baseurl to the slimed URL and path you want to use\n")
+		out.WriteString("PREPARE-FAILURE You must set baseurl to the URL (ending in /) that you want to use\n")
 		return
 	}
 
@@ -104,10 +112,10 @@ func store(key, file string) {
 		return
 	}
 
-	req, err := http.NewRequest("PUT", baseURL+addPrefix(key), fh)
+	req, err := http.NewRequest("PUT", keyURL(key), fh)
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v",
-			baseURL+addPrefix(key), err)
+			keyURL(key), err)
 		return
 	}
 	req.Header.Set("X-Content-SHA256", hex.EncodeToString(sha))
@@ -120,7 +128,7 @@ func store(key, file string) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Printf("Couldn't PUT to %v: %v", req.URL, resp.Status)
 		return
 	}
@@ -140,13 +148,13 @@ func retrieve(key, file string) {
 		out.WriteString("\n")
 	}()
 
-	resp, err := http.Get(baseURL + addPrefix(key))
+	resp, err := http.Get(keyURL(key))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Printf("Couldn't GET %v: %v", resp.Request.URL, resp.Status)
 		return
 	}
@@ -196,10 +204,10 @@ func retrieve(key, file string) {
 }
 
 func checkPresent(key string) {
-	req, err := http.NewRequest("HEAD", baseURL+addPrefix(key), nil)
+	req, err := http.NewRequest("HEAD", keyURL(key), nil)
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v",
-			baseURL+addPrefix(key), err)
+			keyURL(key), err)
 		return
 	}
 
@@ -209,7 +217,7 @@ func checkPresent(key string) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 200 {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		out.WriteString("CHECKPRESENT-SUCCESS ")
 	} else if resp.StatusCode == 404 {
 		out.WriteString("CHECKPRESENT-FAILURE ")
@@ -221,10 +229,10 @@ func checkPresent(key string) {
 }
 
 func remove(key string) {
-	req, err := http.NewRequest("DELETE", baseURL+addPrefix(key), nil)
+	req, err := http.NewRequest("DELETE", keyURL(key), nil)
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v",
-			baseURL+addPrefix(key), err)
+			keyURL(key), err)
 		return
 	}
 
@@ -234,7 +242,7 @@ func remove(key string) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == 200 || resp.StatusCode == 404 {
+	if (resp.StatusCode >= 200 && resp.StatusCode < 300) || resp.StatusCode == 404 {
 		out.WriteString("REMOVE-SUCCESS ")
 	} else {
 		out.WriteString("REMOVE-FAILURE ")
