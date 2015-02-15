@@ -126,7 +126,7 @@ func (cc *Client) List(after string, limit int) ([]string, error) {
 
 	for {
 		line, err := r.ReadString('\n')
-		if err != nil {
+		if line == "" && err != nil {
 			if err == io.EOF {
 				break
 			}

@@ -143,7 +143,7 @@ func (f *Finder) Scan(url string) error {
 	rdr := bufio.NewReader(resp.Body)
 	for {
 		line, err := rdr.ReadString('\n')
-		if err != nil {
+		if line == "" && err != nil {
 			if err == io.EOF {
 				break
 			}

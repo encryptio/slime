@@ -108,7 +108,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		rdr := bufio.NewReader(r.Body)
 		for {
 			line, err := rdr.ReadString('\n')
-			if err != nil {
+			if line == "" && err != nil {
 				if err == io.EOF {
 					break
 				}
