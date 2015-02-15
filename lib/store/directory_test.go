@@ -23,7 +23,7 @@ func shouldCorrupt(t *testing.T, filename string) {
 	}
 	defer fh.Close()
 
-	b := make([]byte, 10)
+	b := make([]byte, 4)
 	_, err = io.ReadFull(fh, b)
 	if err != nil {
 		t.Fatalf("Couldn't read from file: %v", err)
@@ -34,7 +34,7 @@ func shouldCorrupt(t *testing.T, filename string) {
 		t.Fatalf("Couldn't seek in file: %v", err)
 	}
 
-	b[9]++
+	b[3]++
 
 	_, err = fh.Write(b)
 	if err != nil {

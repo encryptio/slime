@@ -1,6 +1,8 @@
 package store
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -24,12 +26,19 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 //                                         optional.
 //     GET /?mode=free - get the number of free bytes
 //     GET /?mode=uuid - get the uuid
+//
+// The X-Content-SHA256 header is used to verify the hash of PUT'd content
+// and is sent in responses.
+//
+// If an X-CAS-From-SHA256 header is present on a PUT request, the server
+// will return 409 if the existing value does not have the given SHA256,
+// and will atomically swap if it does.
 type Server struct {
-	store Store
+	store Store256
 }
 
-// NewServer creates a Server out of a Store.
-func NewServer(s Store) *Server {
+// NewServer creates a Server out of a Store256.
+func NewServer(s Store256) *Server {
 	return &Server{s}
 }
 
@@ -43,7 +52,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET", "HEAD":
-		data, err := h.store.Get(obj)
+		data, hash, err := h.store.GetWith256(obj)
 		if err != nil {
 			if err == ErrNotFound {
 				http.Error(w, "not found", http.StatusNotFound)
@@ -56,6 +65,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length",
 			strconv.FormatInt(int64(len(data)), 10))
 		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("X-Content-SHA256", hex.EncodeToString(hash[:]))
 		w.WriteHeader(http.StatusOK)
 
 		if r.Method == "GET" {
@@ -74,9 +84,51 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = h.store.Set(obj, data)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		haveHash := sha256.Sum256(data)
+
+		if want := r.Header.Get("X-Content-SHA256"); want != "" {
+			wantBytes, err := hex.DecodeString(want)
+			if err != nil || len(wantBytes) != 32 {
+				http.Error(w, "bad format for x-content-sha256",
+					http.StatusBadRequest)
+				return
+			}
+
+			var wantHash [32]byte
+			copy(wantHash[:], wantBytes)
+
+			if wantHash != haveHash {
+				http.Error(w, "hash mismatch", http.StatusBadRequest)
+				return
+			}
+		}
+
+		if casString := r.Header.Get("X-CAS-From-SHA256"); casString != "" {
+			casBytes, err := hex.DecodeString(casString)
+			if err != nil || len(casBytes) != 32 {
+				http.Error(w, "bad format for x-cas-from-sha256",
+					http.StatusBadRequest)
+				return
+			}
+
+			var cas [32]byte
+			copy(cas[:], casBytes)
+
+			err = h.store.CASWith256(obj, cas, data, haveHash)
+			if err != nil {
+				if err == ErrCASFailure {
+					http.Error(w, err.Error(), http.StatusConflict)
+					return
+				}
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		} else {
+			// no CAS
+			err = h.store.SetWith256(obj, data, haveHash)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 
 		w.WriteHeader(http.StatusNoContent)

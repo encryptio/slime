@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"golang.org/x/sys/unix"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"git.encryptio.com/slime/lib/uuid"
@@ -23,6 +25,10 @@ var ErrCorruptObject = errors.New("object is corrupt")
 type Directory struct {
 	Dir  string
 	uuid [16]byte
+
+	// protects write operations into the directory, to make the multiple
+	// open calls during CAS operations work atomically
+	mu sync.Mutex
 }
 
 // CreateDirectory initializes a new Directory at the given location, suitable
@@ -82,52 +88,112 @@ func (ds *Directory) keyToFilename(key string) string {
 }
 
 func (ds *Directory) Get(key string) ([]byte, error) {
+	d, _, err := ds.GetWith256(key)
+	return d, err
+}
+
+func (ds *Directory) GetWith256(key string) ([]byte, [32]byte, error) {
+	var h [32]byte
+
 	path := ds.keyToFilename(key)
 
 	fh, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, ErrNotFound
+			return nil, h, ErrNotFound
 		}
-		return nil, err
+		return nil, h, err
 	}
 	defer fh.Close()
 
-	var expectedHash [8]byte
-	_, err = io.ReadFull(fh, expectedHash[:])
+	var expectedFNV [8]byte
+	_, err = io.ReadFull(fh, expectedFNV[:])
 	if err != nil {
-		return nil, err
+		return nil, h, err
 	}
 
-	h := fnv.New64a()
-	rdr := io.TeeReader(fh, h)
+	_, err = io.ReadFull(fh, h[:])
+	if err != nil {
+		return nil, h, err
+	}
+
+	fnver := fnv.New64a()
+	rdr := io.TeeReader(fh, fnver)
 	data, err := ioutil.ReadAll(rdr)
 	if err != nil {
-		return nil, err
+		return nil, h, err
 	}
 
-	actualHash := h.Sum(nil)
+	actualFNV := fnver.Sum(nil)
 
-	if !bytes.Equal(actualHash, expectedHash[:]) {
+	if !bytes.Equal(actualFNV, expectedFNV[:]) {
 		ds.quarantine(key)
-		return nil, ErrCorruptObject
+		return nil, h, ErrCorruptObject
 	}
 
-	return data, nil
+	return data, h, nil
 }
 
 func (ds *Directory) Set(key string, data []byte) error {
+	return ds.SetWith256(key, data, sha256.Sum256(data))
+}
+
+func (ds *Directory) SetWith256(key string, data []byte, sha [32]byte) error {
 	h := fnv.New64a()
 	h.Write(data)
-	hashValue := h.Sum(nil)
+	fnvHash := h.Sum(nil)
 
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+
+	return ds.lockedSet(key, data, sha, fnvHash)
+}
+
+func (ds *Directory) CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte) error {
+	h := fnv.New64a()
+	h.Write(data)
+	fnvHash := h.Sum(nil)
+
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+
+	fh, err := os.Open(ds.keyToFilename(key))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ErrNotFound
+		}
+		return err
+	}
+	defer fh.Close()
+
+	var haveSHA [32]byte
+	_, err = fh.ReadAt(haveSHA[:], 8)
+	if err != nil {
+		return err
+	}
+
+	if haveSHA != oldH {
+		return ErrCASFailure
+	}
+
+	return ds.lockedSet(key, data, newH, fnvHash)
+}
+
+func (ds *Directory) lockedSet(key string, data []byte, sha [32]byte, fnvHash []byte) error {
 	fh, err := ioutil.TempFile(filepath.Join(ds.Dir, "data"), ".set_tmp_")
 	if err != nil {
 		return err
 	}
 	tmpname := fh.Name()
 
-	_, err = fh.Write(hashValue)
+	_, err = fh.Write(fnvHash)
+	if err != nil {
+		os.Remove(tmpname)
+		fh.Close()
+		return err
+	}
+
+	_, err = fh.Write(sha[:])
 	if err != nil {
 		os.Remove(tmpname)
 		fh.Close()
@@ -157,6 +223,9 @@ func (ds *Directory) Set(key string, data []byte) error {
 }
 
 func (ds *Directory) Delete(key string) error {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+
 	err := os.Remove(ds.keyToFilename(key))
 	if os.IsNotExist(err) {
 		return ErrNotFound
@@ -257,6 +326,9 @@ func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-ch
 func (ds *Directory) quarantine(key string) {
 	quarantinePath := filepath.Join(ds.Dir, "quarantine", ds.encodeKey(key))
 	dataPath := ds.keyToFilename(key)
+
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
 
 	err := os.Rename(dataPath, quarantinePath)
 	if err != nil {
