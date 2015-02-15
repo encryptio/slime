@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -28,7 +29,7 @@ var (
 	ErrInsufficientChunks = errors.New("not enough chunks available")
 	ErrBadHash            = errors.New("bad checksum after reconstruction")
 
-	ConfigGetInterval = time.Minute * 15
+	loadConfigInterval = time.Minute * 15
 )
 
 type BadConfigError string
@@ -85,6 +86,8 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	go m.loadConfigLoop(loadConfigInterval)
 
 	return m, nil
 }
@@ -558,4 +561,18 @@ func (m *Multi) loadConfig() error {
 		return nil, nil
 	})
 	return err
+}
+
+func (m *Multi) loadConfigLoop(interval time.Duration) {
+	for {
+		select {
+		case <-m.stop:
+			return
+		case <-time.After(interval):
+			err := m.loadConfig()
+			if err != nil {
+				log.Printf("Couldn't load config: %v", err)
+			}
+		}
+	}
 }

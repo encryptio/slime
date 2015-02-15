@@ -20,8 +20,12 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 	var chunkServers []*chunkserver.Handler
 	var tmpPaths []string
 	var finder *Finder
+	var multi *Multi
 
 	done := func() {
+		if multi != nil {
+			multi.Stop()
+		}
 		if finder != nil {
 			finder.Stop()
 		}
@@ -75,7 +79,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		t.Fatalf("Finder did not find all stores")
 	}
 
-	multi, err := NewMulti(db, finder)
+	multi, err = NewMulti(db, finder)
 	if err != nil {
 		done()
 		t.Fatalf("Couldn't create multi: %v", err)
