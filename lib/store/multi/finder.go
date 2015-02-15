@@ -93,7 +93,7 @@ func (f *Finder) scanLoop() {
 		select {
 		case <-f.stop:
 			return
-		case <-time.After(ScanInterval):
+		case <-time.After(jitterDuration(ScanInterval)):
 		}
 	}
 }
@@ -237,7 +237,7 @@ func (f *Finder) test(wait time.Duration) {
 		select {
 		case <-f.stop:
 			return
-		case <-time.After(wait):
+		case <-time.After(jitterDuration(wait)):
 		}
 	}
 }

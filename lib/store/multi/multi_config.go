@@ -179,7 +179,7 @@ func (m *Multi) loadConfigLoop(interval time.Duration) {
 		select {
 		case <-m.stop:
 			return
-		case <-time.After(interval):
+		case <-time.After(jitterDuration(interval)):
 			err := m.loadConfig()
 			if err != nil {
 				log.Printf("Couldn't load config: %v", err)

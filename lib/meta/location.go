@@ -9,9 +9,9 @@ type Location struct {
 	UUID       [16]byte
 	URL        string
 	Name       string
-	AllocSplit []string
 	Dead       bool
 	LastSeen   int64 // seconds since unix epoch
+	AllocSplit []string
 }
 
 func (l *Location) toPair() kvl.Pair {
