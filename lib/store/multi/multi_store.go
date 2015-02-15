@@ -28,6 +28,13 @@ func (m *Multi) UUID() [16]byte {
 }
 
 func (m *Multi) Get(key string) ([]byte, error) {
+	d, _, err := m.GetWith256(key)
+	return d, err
+}
+
+func (m *Multi) GetWith256(key string) ([]byte, [32]byte, error) {
+	var h [32]byte
+
 	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -45,14 +52,16 @@ func (m *Multi) Get(key string) ([]byte, error) {
 		return f, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, h, err
 	}
 
 	if ret == nil {
-		return nil, store.ErrNotFound
+		return nil, h, store.ErrNotFound
 	}
 
 	f := ret.(*meta.File)
+
+	copy(h[:], f.SHA256[:])
 
 	chunkData := make([][]byte, len(f.Locations))
 	var wg sync.WaitGroup
@@ -81,7 +90,7 @@ func (m *Multi) Get(key string) ([]byte, error) {
 	}
 
 	if len(chunks) < int(f.DataChunks) {
-		return nil, ErrInsufficientChunks
+		return nil, h, ErrInsufficientChunks
 	}
 
 	chunks = chunks[:int(f.DataChunks)]
@@ -94,16 +103,16 @@ func (m *Multi) Get(key string) ([]byte, error) {
 	}
 	data = data[:int(f.Size)]
 
-	h := sha256.New()
-	h.Write(data)
+	hasher := sha256.New()
+	hasher.Write(data)
 	var have [32]byte
-	h.Sum(have[:0])
+	hasher.Sum(have[:0])
 
 	if have != f.SHA256 {
-		return nil, ErrBadHash
+		return nil, h, ErrBadHash
 	}
 
-	return data, nil
+	return data, h, nil
 }
 
 func splitVector(data []uint32, count int) [][]uint32 {
@@ -137,13 +146,141 @@ func splitVector(data []uint32, count int) [][]uint32 {
 }
 
 func (m *Multi) Set(key string, data []byte) error {
+	return m.SetWith256(key, data, sha256.Sum256(data))
+}
+
+func (m *Multi) SetWith256(key string, data []byte, h [32]byte) error {
+	file, err := m.writeChunks(key, data, h)
+	if err != nil {
+		return err
+	}
+
+	var oldFile *meta.File
+	_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		oldFile, err = layer.GetFile(key)
+		if err != nil {
+			return nil, err
+		}
+
+		err = layer.SetFile(file)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if oldFile != nil {
+		m.deleteOldChunks(oldFile, file)
+	}
+
+	return nil
+}
+
+func (m *Multi) CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte) error {
+	var oldFile *meta.File
+
+	// pessimistically check before doing work
+	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		oldFile, err = layer.GetFile(key)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		return err
+	}
+	if oldFile == nil || oldFile.SHA256 != oldH {
+		return store.ErrCASFailure
+	}
+
+	// write data
+	file, err := m.writeChunks(key, data, newH)
+	if err != nil {
+		return err
+	}
+
+	// and then do the actual swap
+	_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		oldFile, err = layer.GetFile(key)
+		if err != nil {
+			return nil, err
+		}
+
+		if oldFile == nil || oldFile.SHA256 != oldH {
+			return nil, store.ErrCASFailure
+		}
+
+		err = layer.SetFile(file)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	m.deleteOldChunks(oldFile, file)
+
+	return nil
+}
+
+func (m *Multi) deleteOldChunks(oldFile, newFile *meta.File) error {
+	storesMap := m.finder.Stores()
+
+	// remove chunks on old stores that are not shared by the new write
+	for i, loc := range oldFile.Locations {
+		if newFile != nil &&
+			oldFile.SHA256 == newFile.SHA256 &&
+			oldFile.Size == newFile.Size &&
+			newFile.Locations[i] == loc {
+			// this is a shared key between the old and new writes, keep it
+			continue
+		}
+		localKey := fmt.Sprintf("%x %v %v", oldFile.SHA256, oldFile.Size, i)
+
+		st := storesMap[loc]
+		if st != nil {
+			// TODO: log err
+			st.Delete(localKey)
+		} else {
+			// TODO: log delete skip
+		}
+	}
+
+	return nil
+}
+
+func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, error) {
 	m.mu.Lock()
 	conf := m.config
 	m.mu.Unlock()
 
 	storesMap := m.finder.Stores()
 	if len(storesMap) < conf.Total {
-		return ErrInsufficientStores
+		return nil, ErrInsufficientStores
 	}
 
 	// TODO: better ordering of stores based on allocation preferences
@@ -171,30 +308,27 @@ func (m *Multi) Set(key string, data []byte) error {
 	wg.Wait()
 	parts = append(parts, parityParts...)
 
-	writeFile := &meta.File{
+	file := &meta.File{
 		Path:         key,
 		Size:         uint64(len(data)),
 		WriteTime:    uint64(time.Now().Unix()),
 		DataChunks:   uint16(conf.Need),
 		MappingValue: mapping,
+		SHA256:       sha,
 	}
 
-	h := sha256.New()
-	h.Write(data)
-	h.Sum(writeFile.SHA256[:0])
-
-	writeFile.Locations = make([][16]byte, 0, len(parityParts))
+	file.Locations = make([][16]byte, 0, len(parityParts))
 	storeIdx := 0
 	for i, part := range parts {
 		// TODO: parallelize writes
 
 		partData := gf.MapFromGF(mapping, part)
-		localKey := fmt.Sprintf("%x %v %v", writeFile.SHA256, writeFile.Size, i)
+		localKey := fmt.Sprintf("%x %v %v", file.SHA256, file.Size, i)
 
 		for {
 			if storeIdx >= len(stores) {
 				// TODO: cleanup chunks we wrote in earlier iterations
-				return ErrInsufficientStores
+				return nil, ErrInsufficientStores
 			}
 
 			st := stores[storeIdx]
@@ -206,54 +340,12 @@ func (m *Multi) Set(key string, data []byte) error {
 				continue
 			}
 
-			writeFile.Locations = append(writeFile.Locations, st.UUID())
+			file.Locations = append(file.Locations, st.UUID())
 			break
 		}
 	}
 
-	var oldFile *meta.File
-	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
-		layer, err := meta.Open(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		oldFile, err = layer.GetFile(key)
-		if err != nil {
-			return nil, err
-		}
-
-		err = layer.SetFile(writeFile)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	if oldFile != nil {
-		// remove chunks on old stores that are not shared by the new write
-		for i, loc := range oldFile.Locations {
-			if oldFile.SHA256 == writeFile.SHA256 &&
-				oldFile.Size == writeFile.Size &&
-				writeFile.Locations[i] == loc {
-				// this is a shared key between the old and new writes, keep it
-				continue
-			}
-			localKey := fmt.Sprintf("%x %v %v", oldFile.SHA256, oldFile.Size, i)
-
-			st := storesMap[loc]
-			if st != nil {
-				// TODO: log err
-				st.Delete(localKey)
-			}
-		}
-	}
-
-	return nil
+	return file, nil
 }
 
 func (m *Multi) Delete(key string) error {
@@ -286,15 +378,7 @@ func (m *Multi) Delete(key string) error {
 		return store.ErrNotFound
 	}
 
-	for i, loc := range oldFile.Locations {
-		localKey := fmt.Sprintf("%x %v %v", oldFile.SHA256, oldFile.Size, i)
-
-		st := m.finder.StoreFor(loc)
-		if st != nil {
-			// TODO: log err
-			st.Delete(localKey)
-		}
-	}
+	m.deleteOldChunks(oldFile, nil)
 
 	return err
 }
