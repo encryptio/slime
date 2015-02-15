@@ -1,12 +1,16 @@
 package proxyserver
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
 	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/multi"
+	"git.encryptio.com/slime/lib/uuid"
 
 	"git.encryptio.com/kvl"
 )
@@ -53,6 +57,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/redundancy":
 		h.serveRedundancy(w, r)
+	case "/stores":
+		h.serveStores(w, r)
 	case "/":
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Hello from slime proxy server!"))
@@ -94,5 +100,40 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "bad method", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		rdr := bufio.NewReader(r.Body)
+		for {
+			line, err := rdr.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			line = strings.TrimSuffix(line, "\n")
+
+			err = h.finder.Scan(line)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(fmt.Sprintf("Couldn't scan %v: %v", line, err)))
+				return
+			}
+		}
+	} else if r.Method != "GET" {
+		w.Header().Set("Allow", "GET, POST")
+		http.Error(w, "bad method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	for k := range h.finder.Stores() {
+		w.Write([]byte(uuid.Fmt(k)))
+		w.Write([]byte("\n"))
 	}
 }
