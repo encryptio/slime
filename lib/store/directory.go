@@ -134,6 +134,32 @@ func (ds *Directory) GetWith256(key string) ([]byte, [32]byte, error) {
 	return data, h, nil
 }
 
+func (ds *Directory) Stat(key string) (*Stat, error) {
+	fh, err := os.Open(ds.keyToFilename(key))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	defer fh.Close()
+
+	st := &Stat{}
+
+	_, err = fh.ReadAt(st.SHA256[:], 8)
+	if err != nil {
+		return nil, err
+	}
+
+	fi, err := fh.Stat()
+	if err != nil {
+		return nil, err
+	}
+	st.Size = fi.Size()
+
+	return st, nil
+}
+
 func (ds *Directory) Set(key string, data []byte) error {
 	return ds.SetWith256(key, data, sha256.Sum256(data))
 }

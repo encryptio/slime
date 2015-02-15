@@ -115,6 +115,35 @@ func (m *Multi) GetWith256(key string) ([]byte, [32]byte, error) {
 	return data, h, nil
 }
 
+func (m *Multi) Stat(key string) (*store.Stat, error) {
+	var file *meta.File
+	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		file, err = layer.GetFile(key)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if file == nil {
+		return nil, store.ErrNotFound
+	}
+
+	return &store.Stat{
+		SHA256: file.SHA256,
+		Size:   int64(file.Size),
+	}, nil
+}
+
 func splitVector(data []uint32, count int) [][]uint32 {
 	perVector := (len(data) + count - 1) / count
 

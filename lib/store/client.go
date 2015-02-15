@@ -225,6 +225,36 @@ func (cc *Client) FreeSpace() (int64, error) {
 	return strconv.ParseInt(string(data), 10, 64)
 }
 
+func (cc *Client) Stat(key string) (*Stat, error) {
+	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, ErrNotFound
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, httputil.ReadResponseAsError(resp)
+	}
+
+	st := &Stat{}
+
+	if sha := resp.Header.Get("x-content-sha256"); sha != "" {
+		shaBytes, err := hex.DecodeString(sha)
+		if err != nil || len(shaBytes) != 32 {
+			return nil, ErrUnparsableSHAResponse
+		}
+		copy(st.SHA256[:], shaBytes)
+	}
+
+	st.Size = resp.ContentLength
+
+	return st, nil
+}
+
 func (cc *Client) loadUUID() error {
 	resp, err := cc.startReq("GET", cc.url+"?mode=uuid", nil)
 	if err != nil {

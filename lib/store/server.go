@@ -20,6 +20,7 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 //
 // A Server responds to the following requests:
 //     GET /key - retrieve key contents
+//     HEAD /key - retrieve metadata (sha256, length)
 //     PUT /key - set key contents
 //     DELETE /key - remove a key
 //     GET /?mode=list&after=xx&limit=nn - list keys, after and limit are
@@ -51,7 +52,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch r.Method {
-	case "GET", "HEAD":
+	case "GET":
 		data, hash, err := h.store.GetWith256(obj)
 		if err != nil {
 			if err == ErrNotFound {
@@ -68,9 +69,32 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-SHA256", hex.EncodeToString(hash[:]))
 		w.WriteHeader(http.StatusOK)
 
-		if r.Method == "GET" {
-			w.Write(data)
+		w.Write(data)
+
+	case "HEAD":
+		st, err := h.store.Stat(obj)
+		if err != nil {
+			if err == ErrNotFound {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
+
+		if st.Size >= 0 {
+			w.Header().Set("Content-Length",
+				strconv.FormatInt(st.Size, 10))
+		}
+
+		var zeroes [32]byte
+		if zeroes != st.SHA256 {
+			w.Header().Set("X-Content-SHA256",
+				hex.EncodeToString(st.SHA256[:]))
+		}
+
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(http.StatusOK)
 
 	case "PUT":
 		data, err := ioutil.ReadAll(io.LimitReader(r.Body, MaxFileSize))

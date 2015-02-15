@@ -15,6 +15,15 @@ var (
 	ErrCASFailure = errors.New("cas failure")
 )
 
+type Stat struct {
+	// The SHA256 of the content. May be all zeroes if the store does not
+	// support this operation.
+	SHA256 [32]byte
+
+	// Number of bytes in the file. -1 indicates unknown.
+	Size int64
+}
+
 // A Store is a object store. Keys are strings of non-zero length, subject to
 // implementation-specific restrictions. Data is arbitrary, subject to
 // implementation-specific limits on length.
@@ -39,6 +48,9 @@ type Store interface {
 
 	// FreeSpace returns the expected number of bytes free on this Store.
 	FreeSpace() (int64, error)
+
+	// Stat returns a bit of info about the key given.
+	Stat(key string) (*Stat, error)
 }
 
 // A Store256 is a Store with additional methods that specify the SHA256 of the
