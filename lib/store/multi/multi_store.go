@@ -23,6 +23,12 @@ var (
 	ErrBadHash            = errors.New("bad checksum after reconstruction")
 )
 
+func localKeyFor(file *meta.File, idx int) string {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%v %x %v",
+		file.Path, file.SHA256, file.Size)))
+	return fmt.Sprintf("%x %v", hash, idx)
+}
+
 func (m *Multi) UUID() [16]byte {
 	return m.uuid
 }
@@ -67,7 +73,7 @@ func (m *Multi) GetWith256(key string) ([]byte, [32]byte, error) {
 	var wg sync.WaitGroup
 	for i := range chunkData {
 		st := m.finder.StoreFor(f.Locations[i])
-		localKey := fmt.Sprintf("%x %v %v", f.SHA256, f.Size, i)
+		localKey := localKeyFor(f, i)
 
 		wg.Add(1)
 		go func(into *[]byte, st store.Store, localKey string) {
@@ -282,13 +288,15 @@ func (m *Multi) deleteOldChunks(oldFile, newFile *meta.File) error {
 	// remove chunks on old stores that are not shared by the new write
 	for i, loc := range oldFile.Locations {
 		if newFile != nil &&
+			oldFile.Path == newFile.Path &&
 			oldFile.SHA256 == newFile.SHA256 &&
 			oldFile.Size == newFile.Size &&
 			newFile.Locations[i] == loc {
 			// this is a shared key between the old and new writes, keep it
 			continue
 		}
-		localKey := fmt.Sprintf("%x %v %v", oldFile.SHA256, oldFile.Size, i)
+
+		localKey := localKeyFor(oldFile, i)
 
 		st := storesMap[loc]
 		if st != nil {
@@ -352,7 +360,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 		// TODO: parallelize writes
 
 		partData := gf.MapFromGF(mapping, part)
-		localKey := fmt.Sprintf("%x %v %v", file.SHA256, file.Size, i)
+		localKey := localKeyFor(file, i)
 
 		for {
 			if storeIdx >= len(stores) {

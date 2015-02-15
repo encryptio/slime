@@ -135,7 +135,7 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 			continue
 		}
 
-		localKey := fmt.Sprintf("%x %v %v", file.SHA256, file.Size, i)
+		localKey := localKeyFor(&file, i)
 		_, err := st.Stat(localKey)
 		if err != nil {
 			if err == store.ErrNotFound {

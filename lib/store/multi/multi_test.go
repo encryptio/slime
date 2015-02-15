@@ -193,3 +193,44 @@ func TestMultiScrub(t *testing.T) {
 		t.Fatalf("scrubAll didn't recreate missing chunk")
 	}
 }
+
+func TestMultiDuplicates(t *testing.T) {
+	_, multi, _, done := prepareMultiTest(t, 3, 4, 5)
+	defer done()
+
+	data := "this is some test data"
+
+	for i := 0; i < 50; i++ {
+		err := multi.Set(strconv.FormatInt(int64(i), 10), []byte(data))
+		if err != nil {
+			t.Fatalf("Couldn't add key %v: %v", i, err)
+		}
+	}
+
+	for i := 0; i < 50; i++ {
+		got, err := multi.Get(strconv.FormatInt(int64(i), 10))
+		if err != nil {
+			t.Fatalf("Couldn't Get key %v: %v", i, err)
+		}
+		if string(got) != data {
+			t.Fatalf("Got corrupt data on key %v: %v", i, got)
+		}
+	}
+
+	for i := 0; i < 25; i++ {
+		err := multi.Delete(strconv.FormatInt(int64(i), 10))
+		if err != nil {
+			t.Fatalf("Couldn't Delete %v: %v", i, err)
+		}
+	}
+
+	for i := 25; i < 50; i++ {
+		got, err := multi.Get(strconv.FormatInt(int64(i), 10))
+		if err != nil {
+			t.Fatalf("Couldn't Get key %v after removal of lower half: %v", i, err)
+		}
+		if string(got) != data {
+			t.Fatalf("Got corrupt data on key %v after removal of lower half: %v", i, got)
+		}
+	}
+}
