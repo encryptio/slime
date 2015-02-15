@@ -113,18 +113,22 @@ func (m *Multi) scrubStep() (bool, error) {
 }
 
 func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
+	m.mu.Lock()
+	conf := m.config
+	m.mu.Unlock()
+
 	var messages []string
-	var missing []int
+	rebuild := false
 	for i, id := range file.Locations {
 		loc, ok := allLocs[id]
 		if !ok {
-			missing = append(missing, i)
+			rebuild = true
 			messages = append(messages, fmt.Sprintf("location %v does not exist", uuid.Fmt(id)))
 			continue
 		}
 
 		if loc.Dead {
-			missing = append(missing, i)
+			rebuild = true
 			messages = append(messages, fmt.Sprintf("location %v is marked dead", uuid.Fmt(id)))
 			continue
 		}
@@ -139,7 +143,7 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 		_, err := st.Stat(localKey)
 		if err != nil {
 			if err == store.ErrNotFound {
-				missing = append(missing, i)
+				rebuild = true
 				messages = append(messages, fmt.Sprintf("missing from %v", uuid.Fmt(id)))
 				continue
 			}
@@ -148,22 +152,28 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 		}
 	}
 
+	if len(file.Locations) != conf.Total || int(file.DataChunks) != conf.Need {
+		rebuild = true
+		messages = append(messages, fmt.Sprintf("has redundancy %v of %v, but want %v of %v",
+			file.DataChunks, len(file.Locations), conf.Need, conf.Total))
+	}
+
 	if len(messages) > 0 {
 		for _, msg := range messages {
 			m.SaveMessagef("scan on %v: %v", file.Path, msg)
 		}
 	}
 
-	if len(missing) > 0 {
+	if rebuild {
 		data, hash, err := m.GetWith256(file.Path)
 		if err != nil {
-			m.SaveMessagef("scan on %v: couldn't get for repair: %v", file.Path, err)
+			m.SaveMessagef("scan on %v: couldn't get for rebuild: %v", file.Path, err)
 			return
 		}
 
 		err = m.CASWith256(file.Path, hash, data, hash)
 		if err != nil {
-			m.SaveMessagef("scan on %v: couldn't cas: %v", err)
+			m.SaveMessagef("scan on %v: couldn't cas for rebuild: %v", err)
 		}
 
 		m.SaveMessagef("scan on %v: successfully rebuilt", file.Path)

@@ -234,3 +234,38 @@ func TestMultiDuplicates(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiScrubChangeRedundancy(t *testing.T) {
+	killers, multi, _, done := prepareMultiTest(t, 2, 3, 5)
+	defer done()
+
+	data := "who knows where the wind goes"
+
+	for i := 0; i < 10; i++ {
+		err := multi.Set(strconv.FormatInt(int64(i), 10), []byte(data))
+		if err != nil {
+			t.Fatalf("Couldn't add key %v: %v", i, err)
+		}
+	}
+
+	err := multi.SetRedundancy(2, 5)
+	if err != nil {
+		t.Fatalf("Couldn't adjust redundancy: %v", err)
+	}
+
+	multi.scrubAll()
+
+	killers[0].killed = true
+	killers[1].killed = true
+	killers[2].killed = true
+
+	for i := 0; i < 10; i++ {
+		got, err := multi.Get(strconv.FormatInt(int64(i), 10))
+		if err != nil {
+			t.Fatalf("Couldn't get key %v: %v", i, err)
+		}
+		if string(got) != data {
+			t.Fatalf("Got corrupt data on key %v: %v", i, got)
+		}
+	}
+}
