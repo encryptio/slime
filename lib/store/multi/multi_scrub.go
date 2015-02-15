@@ -165,5 +165,7 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 		if err != nil {
 			m.SaveMessagef("scan on %v: couldn't cas: %v", err)
 		}
+
+		m.SaveMessagef("scan on %v: successfully rebuilt", file.Path)
 	}
 }
