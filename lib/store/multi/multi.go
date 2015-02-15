@@ -104,6 +104,14 @@ func (m *Multi) Stop() {
 	m.mu.Unlock()
 }
 
+func (m *Multi) GetRedundancy() (need, total int) {
+	m.mu.Lock()
+	need = m.config.Need
+	total = m.config.Total
+	m.mu.Unlock()
+	return
+}
+
 func (m *Multi) SetRedundancy(need, total int) error {
 	m.mu.Lock()
 	conf := m.config
