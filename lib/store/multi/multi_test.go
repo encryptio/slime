@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	"git.encryptio.com/slime/lib/chunkserver"
+	"git.encryptio.com/slime/lib/store"
 
 	"git.encryptio.com/kvl/backend/ram"
 )
 
-func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, func()) {
+func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*store.Directory, func()) {
 	var killers []*killHandler
+	var dirstores []*store.Directory
 
 	var servers []*httptest.Server
 	var chunkServers []*chunkserver.Handler
@@ -41,8 +43,9 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 	}
 
 	for i := 0; i < serverCount; i++ {
-		_, tmpPath := makeDirectory(t)
+		dirstore, tmpPath := makeDirectory(t)
 		tmpPaths = append(tmpPaths, tmpPath)
+		dirstores = append(dirstores, dirstore)
 
 		cs, err := chunkserver.New([]string{tmpPath}, 0, 0)
 		if err != nil {
@@ -91,11 +94,11 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		t.Fatalf("Couldn't set redundancy levels: %v", err)
 	}
 
-	return killers, multi, done
+	return killers, multi, dirstores, done
 }
 
 func TestMultiBasics(t *testing.T) {
-	_, multi, done := prepareMultiTest(t, 3, 4, 5)
+	_, multi, _, done := prepareMultiTest(t, 3, 4, 5)
 	defer done()
 
 	testStoreBasics(t, multi)
@@ -103,7 +106,7 @@ func TestMultiBasics(t *testing.T) {
 
 func TestMultiRecovery(t *testing.T) {
 	for total := 4; total < 8; total++ {
-		killers, multi, done := prepareMultiTest(t, 3, total, 10)
+		killers, multi, _, done := prepareMultiTest(t, 3, total, 10)
 		defer done()
 
 		for i := 0; i < 50; i++ {
