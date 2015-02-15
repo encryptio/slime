@@ -10,7 +10,10 @@ import (
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/httputil"
+	"git.encryptio.com/slime/lib/proxyserver"
 	"git.encryptio.com/slime/lib/store"
+
+	"git.encryptio.com/kvl/backend/psql"
 )
 
 func help() {
@@ -20,6 +23,8 @@ func help() {
 	fmt.Fprintf(os.Stderr, "        initialize a new directory store\n")
 	fmt.Fprintf(os.Stderr, "    chunk-server dir1 dir2 ...\n")
 	fmt.Fprintf(os.Stderr, "        run a chunk server serving the given directories\n")
+	fmt.Fprintf(os.Stderr, "    proxy-server ...\n")
+	fmt.Fprintf(os.Stderr, "        run a proxy server (see -h for details)\n")
 }
 
 func fmtDir() {
@@ -69,6 +74,35 @@ func chunkServer() {
 	log.Fatal(http.ListenAndServe(*listen, h))
 }
 
+func proxyServer() {
+	listen := flag.String("listen", ":17942",
+		"Address and port to serve on")
+	logEnabled := flag.Bool("log", true,
+		"enable access logging")
+	flag.Parse()
+
+	db, err := psql.Open(os.Getenv("SLIME_PGDSN"))
+	if err != nil {
+		if os.Getenv("SLIME_PGDSN") == "" {
+			log.Printf("Set SLIME_PGDSN for PostgreSQL driver options")
+		}
+		log.Fatalf("Couldn't connect to postgresql database: %v", err)
+	}
+	defer db.Close()
+
+	var h http.Handler
+	h, err = proxyserver.New(db)
+	if err != nil {
+		log.Fatalf("Couldn't initialize handler: %v", err)
+	}
+
+	if *logEnabled {
+		h = httputil.LogHttpRequests(h)
+	}
+
+	log.Fatal(http.ListenAndServe(*listen, h))
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		help()
@@ -83,6 +117,8 @@ func main() {
 		fmtDir()
 	case "chunk-server":
 		chunkServer()
+	case "proxy-server":
+		proxyServer()
 	default:
 		help()
 	}
