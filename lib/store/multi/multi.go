@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,6 +27,8 @@ var (
 	ErrInsufficientStores = errors.New("not enough stores to match redundancy level")
 	ErrInsufficientChunks = errors.New("not enough chunks available")
 	ErrBadHash            = errors.New("bad checksum after reconstruction")
+
+	ConfigGetInterval = time.Minute * 15
 )
 
 type BadConfigError string
@@ -38,15 +41,19 @@ type Multi struct {
 	db     kvl.DB
 	finder *Finder
 	uuid   [16]byte
-	config MultiConfig
+
+	stop chan struct{}
+
+	mu     sync.Mutex
+	config multiConfig
 }
 
-type MultiConfig struct {
+type multiConfig struct {
 	Need  int
 	Total int
 }
 
-func checkConfig(config MultiConfig) error {
+func checkConfig(config multiConfig) error {
 	if config.Need <= 0 {
 		return BadConfigError("need is non-positive")
 	}
@@ -62,24 +69,74 @@ func checkConfig(config MultiConfig) error {
 	return nil
 }
 
-func NewMulti(db kvl.DB, finder *Finder, config MultiConfig) (*Multi, error) {
-	err := checkConfig(config)
+func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
+	m := &Multi{
+		db:     db,
+		finder: finder,
+		stop:   make(chan struct{}),
+	}
+
+	err := m.loadUUID()
 	if err != nil {
 		return nil, err
 	}
 
-	m := &Multi{
-		db:     db,
-		finder: finder,
-		config: config,
-	}
-
-	err = m.loadUUID()
+	err = m.loadConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	return m, nil
+}
+
+func (m *Multi) Stop() {
+	m.mu.Lock()
+
+	select {
+	case <-m.stop:
+	default:
+		close(m.stop)
+	}
+
+	m.mu.Unlock()
+}
+
+func (m *Multi) SetRedundancy(need, total int) error {
+	m.mu.Lock()
+	conf := m.config
+	m.mu.Unlock()
+
+	conf.Need = need
+	conf.Total = total
+
+	err := checkConfig(conf)
+	if err != nil {
+		return err
+	}
+
+	_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		err = layer.SetConfig("need", strconv.AppendInt(nil, int64(conf.Need), 10))
+		if err != nil {
+			return nil, err
+		}
+		err = layer.SetConfig("total", strconv.AppendInt(nil, int64(conf.Total), 10))
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	})
+
+	m.mu.Lock()
+	m.config = conf
+	m.mu.Unlock()
+
+	return nil
 }
 
 func (m *Multi) UUID() [16]byte {
@@ -196,8 +253,12 @@ func splitVector(data []uint32, count int) [][]uint32 {
 }
 
 func (m *Multi) Set(key string, data []byte) error {
+	m.mu.Lock()
+	conf := m.config
+	m.mu.Unlock()
+
 	storesMap := m.finder.Stores()
-	if len(storesMap) < m.config.Total {
+	if len(storesMap) < conf.Total {
 		return ErrInsufficientStores
 	}
 
@@ -213,8 +274,8 @@ func (m *Multi) Set(key string, data []byte) error {
 	}
 
 	mapping, all := gf.MapToGF(data)
-	parts := splitVector(all, m.config.Need)
-	parityParts := make([][]uint32, m.config.Total-m.config.Need)
+	parts := splitVector(all, conf.Need)
+	parityParts := make([][]uint32, conf.Total-conf.Need)
 	var wg sync.WaitGroup
 	for i := range parityParts {
 		wg.Add(1)
@@ -230,7 +291,7 @@ func (m *Multi) Set(key string, data []byte) error {
 		Path:         key,
 		Size:         uint64(len(data)),
 		WriteTime:    uint64(time.Now().Unix()),
-		DataChunks:   uint16(m.config.Need),
+		DataChunks:   uint16(conf.Need),
 		MappingValue: mapping,
 	}
 
@@ -389,6 +450,10 @@ func (s int64Slice) Less(i, j int) bool { return s[i] < s[j] }
 func (s int64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func (m *Multi) FreeSpace() (int64, error) {
+	m.mu.Lock()
+	conf := m.config
+	m.mu.Unlock()
+
 	var frees []int64
 	for _, st := range m.finder.Stores() {
 		free, err := st.FreeSpace()
@@ -399,16 +464,16 @@ func (m *Multi) FreeSpace() (int64, error) {
 
 	sort.Sort(int64Slice(frees))
 
-	if len(frees) < m.config.Total {
+	if len(frees) < conf.Total {
 		return 0, nil
 	}
 
-	// the minimum of the highest m.config.Total free spaces is the
+	// the minimum of the highest conf.Total free spaces is the
 	// space we can fill, including parity
-	fillable := frees[len(frees)-m.config.Total]
+	fillable := frees[len(frees)-conf.Total]
 
 	// removing parity amount
-	free := fillable / int64(m.config.Total) * int64(m.config.Need)
+	free := fillable / int64(conf.Total) * int64(conf.Need)
 
 	return free, nil
 }
@@ -442,4 +507,55 @@ func (m *Multi) loadUUID() error {
 
 	copy(m.uuid[:], ret.([]byte))
 	return nil
+}
+
+func (m *Multi) loadConfig() error {
+	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		m.mu.Lock()
+		conf := m.config
+		m.mu.Unlock()
+
+		needBytes, err := layer.GetConfig("need")
+		if err != nil {
+			return nil, err
+		}
+		if needBytes == nil {
+			needBytes = []byte("3")
+		}
+		need, err := strconv.ParseInt(string(needBytes), 10, 0)
+		if err != nil {
+			return nil, err
+		}
+		conf.Need = int(need)
+
+		totalBytes, err := layer.GetConfig("total")
+		if err != nil {
+			return nil, err
+		}
+		if totalBytes == nil {
+			totalBytes = []byte("5")
+		}
+		total, err := strconv.ParseInt(string(totalBytes), 10, 0)
+		if err != nil {
+			return nil, err
+		}
+		conf.Total = int(total)
+
+		err = checkConfig(conf)
+		if err != nil {
+			return nil, err
+		}
+
+		m.mu.Lock()
+		m.config = conf
+		m.mu.Unlock()
+
+		return nil, nil
+	})
+	return err
 }
