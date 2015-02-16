@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"golang.org/x/sys/unix"
 	"hash/fnv"
 	"io"
 	"io/ioutil"
@@ -301,17 +300,6 @@ func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
 	}
 
 	return decodedNames, nil
-}
-
-func (ds *Directory) FreeSpace() (int64, error) {
-	s := unix.Statfs_t{}
-	err := unix.Statfs(filepath.Join(ds.Dir, "data"), &s)
-	if err != nil {
-		return -1, err
-	}
-
-	// TODO: figure out and properly handle overflow
-	return int64(s.Bavail) * s.Bsize, nil
 }
 
 func (ds *Directory) UUID() [16]byte {

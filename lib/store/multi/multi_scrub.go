@@ -173,7 +173,7 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 
 		err = m.CASWith256(file.Path, hash, data, hash)
 		if err != nil {
-			m.SaveMessagef("scan on %v: couldn't cas for rebuild: %v", err)
+			m.SaveMessagef("scan on %v: couldn't cas for rebuild: %v", file.Path, err)
 		}
 
 		m.SaveMessagef("scan on %v: successfully rebuilt", file.Path)
