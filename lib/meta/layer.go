@@ -154,7 +154,7 @@ func (l *Layer) SetLocation(loc Location) error {
 	return l.inner.Set(pair)
 }
 
-func Reindex(db kvl.DB, deleteIndicies bool) error {
+func Reindex(db kvl.DB) error {
 	progress := make(chan index.ReindexStats)
 	defer close(progress)
 	go func() {
@@ -163,12 +163,7 @@ func Reindex(db kvl.DB, deleteIndicies bool) error {
 		}
 	}()
 
-	options := uint64(0)
-	if deleteIndicies {
-		options |= index.REINDEX_DELETE
-	}
-
-	_, err := index.Reindex(db, indexFn, options, progress)
+	_, err := index.Reindex(db, indexFn, progress)
 	if err != nil {
 		log.Printf("Couldn't reindex: %v", err)
 	}

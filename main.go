@@ -10,6 +10,7 @@ import (
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/httputil"
+	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/proxyserver"
 	"git.encryptio.com/slime/lib/store"
 
@@ -25,6 +26,8 @@ func help() {
 	fmt.Fprintf(os.Stderr, "        run a chunk server serving the given directories\n")
 	fmt.Fprintf(os.Stderr, "    proxy-server ...\n")
 	fmt.Fprintf(os.Stderr, "        run a proxy server (see -h for details)\n")
+	fmt.Fprintf(os.Stderr, "    db-reindex\n")
+	fmt.Fprintf(os.Stderr, "        reindex a database\n")
 }
 
 func fmtDir() {
@@ -103,6 +106,22 @@ func proxyServer() {
 	log.Fatal(http.ListenAndServe(*listen, h))
 }
 
+func dbReindex() {
+	db, err := psql.Open(os.Getenv("SLIME_PGDSN"))
+	if err != nil {
+		if os.Getenv("SLIME_PGDSN") == "" {
+			log.Printf("Set SLIME_PGDSN for PostgreSQL driver options")
+		}
+		log.Fatalf("Couldn't connect to postgresql database: %v", err)
+	}
+	defer db.Close()
+
+	err = meta.Reindex(db) // does its own logging
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		help()
@@ -119,6 +138,8 @@ func main() {
 		chunkServer()
 	case "proxy-server":
 		proxyServer()
+	case "db-reindex":
+		dbReindex()
 	default:
 		help()
 	}
