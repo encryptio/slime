@@ -75,8 +75,10 @@ func (m *Multi) GetWith256(key string) ([]byte, [32]byte, error) {
 	chunkData := make([][]byte, len(f.Locations))
 	for i := range chunkData {
 		st := m.finder.StoreFor(f.Locations[i])
-		localKey := localKeyFor(f, i)
-		chunkData[i], _ = st.Get(localKey)
+		if st != nil {
+			localKey := localKeyFor(f, i)
+			chunkData[i], _ = st.Get(localKey)
+		}
 	}
 
 	indicies := make([]int, 0, len(chunkData))
