@@ -98,13 +98,18 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
 	case "PUT":
-		data, err := ioutil.ReadAll(io.LimitReader(r.Body, MaxFileSize))
+		if r.ContentLength > MaxFileSize {
+			http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+
+		data, err := ioutil.ReadAll(io.LimitReader(r.Body, MaxFileSize+1))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		if len(data) == MaxFileSize {
+		if len(data) == MaxFileSize+1 {
 			http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
 			return
 		}
