@@ -116,27 +116,74 @@ type storesResponseEntry struct {
 	Error     string    `json:"error,omitempty"`
 }
 
+type storesRequest struct {
+	Operation string `json:"operation"`
+	URL       string `json:"url,omitempty"`
+	UUID      string `json:"uuid,omitempty"`
+}
+
 func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
-		rdr := bufio.NewReader(r.Body)
-		for {
-			line, err := rdr.ReadString('\n')
-			if line == "" && err != nil {
-				if err == io.EOF {
-					break
+		var req storesRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		switch req.Operation {
+		case "scan":
+			err = h.finder.Scan(req.URL)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Couldn't scan %v: %v", req.URL, err),
+					http.StatusBadRequest)
+				return
+			}
+
+		case "dead":
+			id, err := uuid.Parse(req.UUID)
+			if err != nil {
+				http.Error(w, "Couldn't parse UUID", http.StatusBadRequest)
+				return
+			}
+
+			_, err = h.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+				layer, err := meta.Open(ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				loc, err := layer.GetLocation(id)
+				if err != nil {
+					return nil, err
+				}
+
+				if loc == nil {
+					return nil, kvl.ErrNotFound
+				}
+
+				loc.Dead = true
+
+				err = layer.SetLocation(*loc)
+				if err != nil {
+					return nil, err
+				}
+
+				return nil, nil
+			})
+			if err != nil {
+				if err == kvl.ErrNotFound {
+					http.Error(w, "No store with that UUID",
+						http.StatusBadRequest)
+					return
 				}
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			line = strings.TrimSuffix(line, "\n")
-
-			err = h.finder.Scan(line)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(fmt.Sprintf("Couldn't scan %v: %v", line, err)))
-				return
-			}
+		default:
+			http.Error(w, "unsupported operation", http.StatusBadRequest)
+			return
 		}
 	} else if r.Method != "GET" {
 		w.Header().Set("Allow", "GET, POST")
