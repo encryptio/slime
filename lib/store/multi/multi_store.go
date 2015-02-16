@@ -307,12 +307,34 @@ func (m *Multi) deleteOldChunks(oldFile, newFile *meta.File) error {
 	return nil
 }
 
-func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, error) {
+func (m *Multi) orderTargets() ([]store.Store, error) {
 	m.mu.Lock()
 	conf := m.config
 	m.mu.Unlock()
 
 	storesMap := m.finder.Stores()
+
+	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		locs, err := layer.AllLocations()
+		if err != nil {
+			return nil, err
+		}
+		return locs, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, loc := range ret.([]meta.Location) {
+		if loc.Dead {
+			delete(storesMap, loc.UUID)
+		}
+	}
+
 	if len(storesMap) < conf.Total {
 		return nil, ErrInsufficientStores
 	}
@@ -326,6 +348,19 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 	for i := range stores {
 		j := rand.Intn(i + 1)
 		stores[i], stores[j] = stores[j], stores[i]
+	}
+
+	return stores, nil
+}
+
+func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, error) {
+	m.mu.Lock()
+	conf := m.config
+	m.mu.Unlock()
+
+	stores, err := m.orderTargets()
+	if err != nil {
+		return nil, err
 	}
 
 	mapping, all := gf.MapToGF(data)
