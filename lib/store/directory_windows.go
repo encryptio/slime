@@ -3,9 +3,10 @@
 package store
 
 import (
-	"golang.org/x/sys/windows"
 	"path/filepath"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var getDiskFreeSpaceExW = windows.MustLoadDLL("Kernel32.dll").MustFindProc("GetDiskFreeSpaceExW")

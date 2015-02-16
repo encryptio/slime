@@ -3,8 +3,9 @@
 package store
 
 import (
-	"golang.org/x/sys/unix"
 	"path/filepath"
+
+	"golang.org/x/sys/unix"
 )
 
 func (ds *Directory) FreeSpace() (int64, error) {
