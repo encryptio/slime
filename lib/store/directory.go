@@ -325,7 +325,7 @@ func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-ch
 
 		for _, key := range keys {
 			data, err := ds.Get(key)
-			if err != nil {
+			if err != nil && err != ErrNotFound {
 				bad++
 			} else {
 				good++
