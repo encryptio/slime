@@ -16,11 +16,10 @@ var (
 )
 
 type Stat struct {
-	// The SHA256 of the content. May be all zeroes if the store does not
-	// support this operation.
+	// The SHA256 of the content.
 	SHA256 [32]byte
 
-	// Number of bytes in the file. -1 indicates unknown.
+	// Number of bytes in the file. Always >= 0.
 	Size int64
 }
 
@@ -52,12 +51,6 @@ type Store interface {
 
 	// Stat returns a bit of info about the key given.
 	Stat(key string) (*Stat, error)
-}
-
-// A Store256 is a Store with additional methods that specify the SHA256 of the
-// content.
-type Store256 interface {
-	Store
 
 	// GetWith256 is like Get, but also returns the SHA256 of the content.
 	GetWith256(key string) ([]byte, [32]byte, error)

@@ -36,11 +36,11 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 // if the existing value does not have the given ETag/SHA256, and will
 // atomically swap if it does.
 type Server struct {
-	store Store256
+	store Store
 }
 
 // NewServer creates a Server out of a Store256.
-func NewServer(s Store256) *Server {
+func NewServer(s Store) *Server {
 	return &Server{s}
 }
 
