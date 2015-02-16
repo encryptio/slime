@@ -90,6 +90,20 @@ func (ds *Directory) keyToFilename(key string) string {
 	return filepath.Join(ds.Dir, "data", ds.encodeKey(key))
 }
 
+func (ds *Directory) StillValid() bool {
+	data, err := ioutil.ReadFile(filepath.Join(ds.Dir, "uuid"))
+	if err != nil {
+		return false
+	}
+
+	thatUUID, err := uuid.Parse(string(data))
+	if err != nil {
+		return false
+	}
+
+	return thatUUID == ds.uuid
+}
+
 func (ds *Directory) Get(key string) ([]byte, error) {
 	d, _, err := ds.GetWith256(key)
 	return d, err

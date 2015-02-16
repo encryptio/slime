@@ -17,7 +17,7 @@ import (
 )
 
 var ScanInterval = time.Minute * 5
-var TestIntervalBetween = time.Second * 45
+var TestIntervalBetween = time.Second * 10
 
 // A Finder keeps track of all currently reachable meta.Locations and their
 // store.Stores.

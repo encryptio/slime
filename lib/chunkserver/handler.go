@@ -13,35 +13,43 @@ import (
 	"git.encryptio.com/slime/lib/uuid"
 )
 
-var ScanInterval = 15 * time.Second
+var ScanInterval = 30 * time.Second
 
 type Handler struct {
 	dirs         []string
 	sleepPerFile time.Duration
 	sleepPerByte time.Duration
 
-	stop     chan struct{}
-	scanDone chan struct{}
+	stop chan struct{}
 
-	mu             sync.RWMutex
-	serveLocations map[[16]byte]*store.Server
+	c      *sync.Cond
+	loaded map[[16]byte]loadedDir
+}
+
+type loadedDir struct {
+	dir     string
+	handler *store.Server
+	store   *store.Directory
+	stop    chan struct{}
 }
 
 func New(dirs []string, sleepPerFile, sleepPerByte time.Duration) (*Handler, error) {
 	h := &Handler{
-		dirs:           dirs,
-		sleepPerFile:   sleepPerFile,
-		sleepPerByte:   sleepPerByte,
-		stop:           make(chan struct{}),
-		scanDone:       make(chan struct{}),
-		serveLocations: make(map[[16]byte]*store.Server, len(dirs)),
+		dirs:         dirs,
+		sleepPerFile: sleepPerFile,
+		sleepPerByte: sleepPerByte,
+		stop:         make(chan struct{}),
+		c:            sync.NewCond(&sync.Mutex{}),
+		loaded:       make(map[[16]byte]loadedDir, len(dirs)),
 	}
-	go h.scanUntilFull()
+
+	go h.scanLoop()
+
 	return h, nil
 }
 
 func (h *Handler) Stop() {
-	h.mu.Lock()
+	h.c.L.Lock()
 
 	select {
 	case <-h.stop:
@@ -49,11 +57,15 @@ func (h *Handler) Stop() {
 		close(h.stop)
 	}
 
-	h.mu.Unlock()
+	h.c.L.Unlock()
 }
 
 func (h *Handler) WaitScanDone() {
-	<-h.scanDone
+	h.c.L.Lock()
+	for len(h.loaded) != len(h.dirs) {
+		h.c.Wait()
+	}
+	h.c.L.Unlock()
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -78,26 +90,26 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.mu.RLock()
-		subHandler, ok := h.serveLocations[uuid]
-		h.mu.RUnlock()
+		h.c.L.Lock()
+		subHandler, ok := h.loaded[uuid]
+		h.c.L.Unlock()
 		if !ok {
 			http.Error(w, "no such uuid", http.StatusNotFound)
 			return
 		}
 
 		r.URL.Path = "/" + subObject
-		subHandler.ServeHTTP(w, r)
+		subHandler.handler.ServeHTTP(w, r)
 	}
 }
 
 func (h *Handler) serveUUIDs(w http.ResponseWriter, r *http.Request) {
+	h.c.L.Lock()
 	var resp bytes.Buffer
-	h.mu.RLock()
-	for k := range h.serveLocations {
+	for k := range h.loaded {
 		fmt.Fprintf(&resp, "%v\n", uuid.Fmt(k))
 	}
-	h.mu.RUnlock()
+	h.c.L.Unlock()
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(resp.Bytes())
@@ -108,39 +120,66 @@ func (h *Handler) serveRoot(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Howdy, slime chunk server here!\n"))
 }
 
-func (h *Handler) scanUntilFull() {
-	defer close(h.scanDone)
+func (h *Handler) scanLoop() {
+	defer func() {
+		h.c.L.Lock()
+		for id, ldir := range h.loaded {
+			delete(h.loaded, id)
+			close(ldir.stop)
+		}
+		h.c.L.Unlock()
+	}()
 
-	found := make(map[string]struct{}, len(h.dirs))
 	for {
 		for _, dir := range h.dirs {
-			if _, ok := found[dir]; ok {
-				continue
-			}
-
 			select {
 			case <-h.stop:
 				return
 			default:
 			}
 
-			ds, err := store.OpenDirectory(dir)
-			if err != nil {
-				log.Printf("Couldn't open directory store %v: %v\n", dir, err)
-				continue
+			h.c.L.Lock()
+			found := false
+			var ldir loadedDir
+			for _, ldir = range h.loaded {
+				if ldir.dir == dir {
+					found = true
+					break
+				}
 			}
+			h.c.L.Unlock()
 
-			h.mu.Lock()
-			h.serveLocations[ds.UUID()] = store.NewServer(ds)
-			h.mu.Unlock()
+			if found {
+				if !ldir.store.StillValid() {
+					log.Printf("Directory store at %v (%v) is no longer valid, removing",
+						dir, uuid.Fmt(ldir.store.UUID()))
+					h.c.L.Lock()
+					delete(h.loaded, ldir.store.UUID())
+					close(ldir.stop)
+					h.c.Broadcast()
+					h.c.L.Unlock()
+				}
+			} else {
+				ds, err := store.OpenDirectory(dir)
+				if err != nil {
+					log.Printf("Couldn't open directory store %v: %v", dir, err)
+					continue
+				}
 
-			go h.repeatHashcheck(ds)
+				ldir = loadedDir{
+					dir:     dir,
+					handler: store.NewServer(ds),
+					store:   ds,
+					stop:    make(chan struct{}),
+				}
 
-			found[dir] = struct{}{}
-		}
+				h.c.L.Lock()
+				h.loaded[ds.UUID()] = ldir
+				h.c.Broadcast()
+				h.c.L.Unlock()
 
-		if len(found) == len(h.dirs) {
-			return
+				go h.repeatHashcheck(ldir)
+			}
 		}
 
 		select {
@@ -151,17 +190,17 @@ func (h *Handler) scanUntilFull() {
 	}
 }
 
-func (h *Handler) repeatHashcheck(ds *store.Directory) {
+func (h *Handler) repeatHashcheck(ldir loadedDir) {
 	for {
-		good, bad := ds.Hashcheck(h.sleepPerFile, h.sleepPerByte, h.stop)
+		good, bad := ldir.store.Hashcheck(h.sleepPerFile, h.sleepPerByte, ldir.stop)
 		if bad != 0 {
 			log.Printf("Finished hash check on %v: %v good, %v bad\n",
-				uuid.Fmt(ds.UUID()), good, bad)
+				uuid.Fmt(ldir.store.UUID()), good, bad)
 		}
 
 		select {
 		case <-time.After(60 * time.Second):
-		case <-h.stop:
+		case <-ldir.stop:
 			return
 		}
 	}
