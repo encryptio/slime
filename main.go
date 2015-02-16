@@ -30,6 +30,16 @@ func help() {
 	fmt.Fprintf(os.Stderr, "        reindex a database\n")
 }
 
+func serveOrDie(listen string, h http.Handler) {
+	srv := &http.Server{
+		Addr:         listen,
+		Handler:      h,
+		ReadTimeout:  time.Minute * 15,
+		WriteTimeout: time.Minute * 15,
+	}
+	log.Fatal(srv.ListenAndServe())
+}
+
 func fmtDir() {
 	if len(os.Args) != 2 {
 		help()
@@ -74,7 +84,7 @@ func chunkServer() {
 		h = httputil.LogHttpRequests(h)
 	}
 
-	log.Fatal(http.ListenAndServe(*listen, h))
+	serveOrDie(*listen, h)
 }
 
 func proxyServer() {
@@ -103,7 +113,7 @@ func proxyServer() {
 		h = httputil.LogHttpRequests(h)
 	}
 
-	log.Fatal(http.ListenAndServe(*listen, h))
+	serveOrDie(*listen, h)
 }
 
 func dbReindex() {
