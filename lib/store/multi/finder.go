@@ -155,30 +155,30 @@ func (f *Finder) Scan(url string) error {
 			return fmt.Errorf("bad line in response %#v: %v", line, err)
 		}
 
-		err = f.markActive(url, id)
-		if err != nil {
-			return err
-		}
-
 		f.mu.Lock()
-		_, found := f.stores[id]
+		st, found := f.stores[id]
 		f.mu.Unlock()
 		if !found {
-			s, err := store.NewClient(url + "/" + uuid.Fmt(id) + "/")
+			st, err = store.NewClient(url + "/" + uuid.Fmt(id) + "/")
 			if err != nil {
 				return err
 			}
 
 			f.mu.Lock()
-			f.stores[id] = s
+			f.stores[id] = st
 			f.mu.Unlock()
+		}
+
+		f.markActive(url, st.Name(), id)
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (f *Finder) markActive(url string, id [16]byte) error {
+func (f *Finder) markActive(url, name string, id [16]byte) error {
 	_, err := f.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -198,6 +198,7 @@ func (f *Finder) markActive(url string, id [16]byte) error {
 		}
 
 		loc.URL = url
+		loc.Name = name
 		loc.Dead = false
 		loc.LastSeen = time.Now().Unix()
 

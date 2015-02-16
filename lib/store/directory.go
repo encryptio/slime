@@ -25,6 +25,7 @@ var ErrCorruptObject = errors.New("object is corrupt")
 type Directory struct {
 	Dir  string
 	uuid [16]byte
+	name string
 
 	// protects write operations into the directory, to make the multiple
 	// open calls during CAS operations work atomically
@@ -73,9 +74,12 @@ func OpenDirectory(dir string) (*Directory, error) {
 		return nil, err
 	}
 
+	host, _ := os.Hostname()
+
 	return &Directory{
 		Dir:  dir,
 		uuid: myUUID,
+		name: host + ":" + dir,
 	}, nil
 }
 
@@ -312,6 +316,10 @@ func (ds *Directory) FreeSpace() (int64, error) {
 
 func (ds *Directory) UUID() [16]byte {
 	return ds.uuid
+}
+
+func (ds *Directory) Name() string {
+	return ds.name
 }
 
 func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {

@@ -29,6 +29,7 @@ type Stat struct {
 // implementation-specific limits on length.
 type Store interface {
 	UUID() [16]byte
+	Name() string
 
 	// Get retrieves the value for the given key, or ErrNotFound if the key does
 	// not exist.

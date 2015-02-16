@@ -32,6 +32,10 @@ func (m *Multi) UUID() [16]byte {
 	return m.uuid
 }
 
+func (m *Multi) Name() string {
+	return "multi"
+}
+
 func (m *Multi) Get(key string) ([]byte, error) {
 	d, _, err := m.GetWith256(key)
 	return d, err

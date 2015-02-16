@@ -22,6 +22,7 @@ import (
 type Client struct {
 	url    string
 	uuid   [16]byte
+	name   string
 	client *http.Client
 }
 
@@ -34,9 +35,9 @@ func NewClient(url string) (*Client, error) {
 		},
 	}
 
-	err := c.loadUUID()
+	err := c.loadStatics()
 	if err != nil {
-		return nil, fmt.Errorf("Couldn't load uuid from store at %v: %v",
+		return nil, fmt.Errorf("Couldn't load statics from store at %v: %v",
 			url, err)
 	}
 
@@ -45,6 +46,10 @@ func NewClient(url string) (*Client, error) {
 
 func (cc *Client) UUID() [16]byte {
 	return cc.uuid
+}
+
+func (cc *Client) Name() string {
+	return cc.name
 }
 
 func (cc *Client) Get(key string) ([]byte, error) {
@@ -255,6 +260,20 @@ func (cc *Client) Stat(key string) (*Stat, error) {
 	return st, nil
 }
 
+func (cc *Client) loadStatics() error {
+	err := cc.loadUUID()
+	if err != nil {
+		return err
+	}
+
+	err = cc.loadName()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (cc *Client) loadUUID() error {
 	resp, err := cc.startReq("GET", cc.url+"?mode=uuid", nil)
 	if err != nil {
@@ -276,6 +295,27 @@ func (cc *Client) loadUUID() error {
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (cc *Client) loadName() error {
+	resp, err := cc.startReq("GET", cc.url+"?mode=name", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return httputil.ReadResponseAsError(resp)
+	}
+
+	data, err := ioutil.ReadAll(io.LimitReader(resp.Body, 1000))
+	if err != nil {
+		return err
+	}
+
+	cc.name = string(data)
 
 	return nil
 }

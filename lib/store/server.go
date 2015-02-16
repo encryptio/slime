@@ -27,6 +27,7 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 //                                         optional.
 //     GET /?mode=free - get the number of free bytes
 //     GET /?mode=uuid - get the uuid
+//     GET /?mode=name - get the name
 //
 // The X-Content-SHA256 header is used to verify the hash of PUT'd content
 // and is sent in responses.
@@ -183,6 +184,8 @@ func (h *Server) serveRoot(w http.ResponseWriter, r *http.Request) {
 		h.serveList(w, r)
 	case "free":
 		h.serveFree(w, r)
+	case "name":
+		h.serveName(w, r)
 	case "", "uuid":
 		h.serveUUID(w, r)
 	default:
@@ -239,4 +242,9 @@ func (h *Server) serveFree(w http.ResponseWriter, r *http.Request) {
 func (h *Server) serveUUID(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(uuid.Fmt(h.store.UUID())))
+}
+
+func (h *Server) serveName(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(h.store.Name()))
 }
