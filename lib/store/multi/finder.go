@@ -116,16 +116,10 @@ func (f *Finder) scanStart() error {
 	locs := ret.([]meta.Location)
 	searched := make(map[string]struct{})
 	for _, loc := range locs {
-		f.mu.Lock()
-		_, found := f.stores[loc.UUID]
-		f.mu.Unlock()
-
+		_, found := searched[loc.URL]
 		if !found {
-			_, found := searched[loc.URL]
-			if !found {
-				searched[loc.URL] = struct{}{}
-				f.Scan(loc.URL) // TODO: how to handle this error return?
-			}
+			searched[loc.URL] = struct{}{}
+			f.Scan(loc.URL) // TODO: how to handle this error return?
 		}
 	}
 
