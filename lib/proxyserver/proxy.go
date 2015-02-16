@@ -181,6 +181,51 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+		case "delete":
+			id, err := uuid.Parse(req.UUID)
+			if err != nil {
+				http.Error(w, "Couldn't parse UUID", http.StatusBadRequest)
+				return
+			}
+
+			st := h.finder.StoreFor(id)
+			if st != nil {
+				http.Error(w, "UUID currently connected", http.StatusBadRequest)
+				return
+			}
+
+			_, err = h.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+				layer, err := meta.Open(ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				loc, err := layer.GetLocation(id)
+				if err != nil {
+					return nil, err
+				}
+
+				if loc == nil {
+					return nil, kvl.ErrNotFound
+				}
+
+				err = layer.DeleteLocation(*loc)
+				if err != nil {
+					return nil, err
+				}
+
+				return nil, nil
+			})
+			if err != nil {
+				if err == kvl.ErrNotFound {
+					http.Error(w, "No store with that UUID",
+						http.StatusBadRequest)
+					return
+				}
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
 		default:
 			http.Error(w, "unsupported operation", http.StatusBadRequest)
 			return
