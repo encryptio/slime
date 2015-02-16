@@ -85,12 +85,12 @@ func (f *File) indexPairs() []kvl.Pair {
 	ret := make([]kvl.Pair, 0, len(f.Locations))
 
 	for _, loc := range f.Locations {
-		key, err := tuple.Append(nil, "file", "location", loc[:])
+		key, err := tuple.Append(nil, "file", "location", loc[:], f.Path)
 		if err != nil {
 			panic(err)
 		}
 
-		ret = append(ret, kvl.Pair{key, []byte(f.Path)})
+		ret = append(ret, kvl.Pair{key, nil})
 	}
 
 	return ret
