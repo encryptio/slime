@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/multi"
 	"git.encryptio.com/slime/lib/uuid"
@@ -104,8 +106,14 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 }
 
 type storesResponseEntry struct {
-	UUID string `json:"uuid"`
-	Name string `json:"name"`
+	UUID      string    `json:"uuid"`
+	URL       string    `json:"url"`
+	Name      string    `json:"name"`
+	Dead      bool      `json:"dead"`
+	Connected bool      `json:"connected"`
+	LastSeen  time.Time `json:"last_seen"`
+	Free      int64     `json:"free,omitempty"`
+	Error     string    `json:"error,omitempty"`
 }
 
 func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
@@ -136,18 +144,55 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("content-type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-
 	stores := h.finder.Stores()
 
-	ret := make([]storesResponseEntry, 0, len(stores))
-	for k, v := range stores {
-		ret = append(ret, storesResponseEntry{
-			UUID: uuid.Fmt(k),
-			Name: v.Name(),
-		})
+	ret := make([]storesResponseEntry, 0, 10)
+	_, err := h.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		ret = ret[:0]
+
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		locs, err := layer.AllLocations()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, loc := range locs {
+			st, connected := stores[loc.UUID]
+
+			var free int64
+			var errorField string
+			if connected {
+				free, err = st.FreeSpace()
+				if err != nil {
+					errorField = err.Error()
+					free = 0
+				}
+			}
+
+			ret = append(ret, storesResponseEntry{
+				UUID:      uuid.Fmt(loc.UUID),
+				URL:       loc.URL,
+				Name:      loc.Name,
+				Dead:      loc.Dead,
+				Connected: connected,
+				LastSeen:  time.Unix(loc.LastSeen, 0).UTC(),
+				Free:      free,
+				Error:     errorField,
+			})
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
+	w.Header().Set("content-type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(ret)
 }
