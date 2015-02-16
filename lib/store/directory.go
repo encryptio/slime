@@ -112,13 +112,14 @@ func (ds *Directory) GetWith256(key string) ([]byte, [32]byte, error) {
 		return nil, h, err
 	}
 
-	_, err = io.ReadFull(fh, h[:])
+	fnver := fnv.New64a()
+	rdr := io.TeeReader(fh, fnver)
+
+	_, err = io.ReadFull(rdr, h[:])
 	if err != nil {
 		return nil, h, err
 	}
 
-	fnver := fnv.New64a()
-	rdr := io.TeeReader(fh, fnver)
 	data, err := ioutil.ReadAll(rdr)
 	if err != nil {
 		return nil, h, err
@@ -166,6 +167,7 @@ func (ds *Directory) Set(key string, data []byte) error {
 
 func (ds *Directory) SetWith256(key string, data []byte, sha [32]byte) error {
 	h := fnv.New64a()
+	h.Write(sha[:])
 	h.Write(data)
 	fnvHash := h.Sum(nil)
 
@@ -177,6 +179,7 @@ func (ds *Directory) SetWith256(key string, data []byte, sha [32]byte) error {
 
 func (ds *Directory) CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte) error {
 	h := fnv.New64a()
+	h.Write(newH[:])
 	h.Write(data)
 	fnvHash := h.Sum(nil)
 
