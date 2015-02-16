@@ -199,7 +199,6 @@ func (f *Finder) markActive(url, name string, id [16]byte) error {
 
 		loc.URL = url
 		loc.Name = name
-		loc.Dead = false
 		loc.LastSeen = time.Now().Unix()
 
 		err = layer.SetLocation(*loc)
