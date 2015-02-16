@@ -103,6 +103,11 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type storesResponseEntry struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
 func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		rdr := bufio.NewReader(r.Body)
@@ -131,9 +136,18 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	for k := range h.finder.Stores() {
-		w.Write([]byte(uuid.Fmt(k)))
-		w.Write([]byte("\n"))
+
+	stores := h.finder.Stores()
+
+	ret := make([]storesResponseEntry, 0, len(stores))
+	for k, v := range stores {
+		ret = append(ret, storesResponseEntry{
+			UUID: uuid.Fmt(k),
+			Name: v.Name(),
+		})
 	}
+
+	json.NewEncoder(w).Encode(ret)
 }
