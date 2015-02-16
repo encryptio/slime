@@ -287,6 +287,7 @@ func (m *Multi) deleteOldChunks(oldFile, newFile *meta.File) error {
 			oldFile.Path == newFile.Path &&
 			oldFile.SHA256 == newFile.SHA256 &&
 			oldFile.Size == newFile.Size &&
+			len(newFile.Locations) > i &&
 			newFile.Locations[i] == loc {
 			// this is a shared key between the old and new writes, keep it
 			continue
