@@ -132,7 +132,7 @@ func (cc *Client) CASWith256(key string, oldH [32]byte, data []byte, newH [32]by
 	}
 
 	req.Header.Set("x-content-sha256", hex.EncodeToString(newH[:]))
-	req.Header.Set("x-cas-from-sha256", hex.EncodeToString(oldH[:]))
+	req.Header.Set("if-match", `"`+hex.EncodeToString(oldH[:])+`"`)
 
 	resp, err := cc.client.Do(req)
 	if err != nil {

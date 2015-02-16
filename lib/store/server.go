@@ -32,9 +32,9 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 // The X-Content-SHA256 header is used to verify the hash of PUT'd content
 // and is sent in responses.
 //
-// If an X-CAS-From-SHA256 header is present on a PUT request, the server
-// will return 409 if the existing value does not have the given SHA256,
-// and will atomically swap if it does.
+// If an If-Match header is present on a PUT request, the server will return 409
+// if the existing value does not have the given ETag/SHA256, and will
+// atomically swap if it does.
 type Server struct {
 	store Store256
 }
@@ -54,6 +54,33 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
+		if theirEtags := r.Header.Get("if-none-match"); theirEtags != "" {
+			st, err := h.store.Stat(obj)
+			if err != nil {
+				if err == ErrNotFound {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			etag := `"` + hex.EncodeToString(st.SHA256[:]) + `"`
+
+			matched := false
+			for _, s := range strings.Split(theirEtags, ",") {
+				s = strings.TrimSpace(s)
+				if s == "*" || s == etag {
+					matched = true
+				}
+			}
+
+			if matched {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+
 		data, hash, err := h.store.GetWith256(obj)
 		if err != nil {
 			if err == ErrNotFound {
@@ -68,6 +95,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			strconv.FormatInt(int64(len(data)), 10))
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("X-Content-SHA256", hex.EncodeToString(hash[:]))
+		w.Header().Set("ETag", `"`+hex.EncodeToString(hash[:])+`"`)
 		w.WriteHeader(http.StatusOK)
 
 		w.Write(data)
@@ -92,6 +120,8 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if zeroes != st.SHA256 {
 			w.Header().Set("X-Content-SHA256",
 				hex.EncodeToString(st.SHA256[:]))
+			w.Header().Set("ETag",
+				`"`+hex.EncodeToString(st.SHA256[:])+`"`)
 		}
 
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -133,10 +163,12 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if casString := r.Header.Get("X-CAS-From-SHA256"); casString != "" {
+		if casString := r.Header.Get("If-Match"); casString != "" {
+			casString = strings.Trim(casString, `" `)
+
 			casBytes, err := hex.DecodeString(casString)
 			if err != nil || len(casBytes) != 32 {
-				http.Error(w, "bad format for x-cas-from-sha256",
+				http.Error(w, "bad format for if-match",
 					http.StatusBadRequest)
 				return
 			}
