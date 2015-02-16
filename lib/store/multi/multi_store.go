@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
-	"sync"
 	"time"
 
 	"git.encryptio.com/slime/lib/meta"
@@ -70,18 +69,11 @@ func (m *Multi) GetWith256(key string) ([]byte, [32]byte, error) {
 	copy(h[:], f.SHA256[:])
 
 	chunkData := make([][]byte, len(f.Locations))
-	var wg sync.WaitGroup
 	for i := range chunkData {
 		st := m.finder.StoreFor(f.Locations[i])
 		localKey := localKeyFor(f, i)
-
-		wg.Add(1)
-		go func(into *[]byte, st store.Store, localKey string) {
-			*into, _ = st.Get(localKey)
-			wg.Done()
-		}(&chunkData[i], st, localKey)
+		chunkData[i], _ = st.Get(localKey)
 	}
-	wg.Wait()
 
 	indicies := make([]int, 0, len(chunkData))
 	chunks := make([][]uint32, 0, len(chunkData))
@@ -334,15 +326,9 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 	mapping, all := gf.MapToGF(data)
 	parts := splitVector(all, conf.Need)
 	parityParts := make([][]uint32, conf.Total-conf.Need)
-	var wg sync.WaitGroup
 	for i := range parityParts {
-		wg.Add(1)
-		go func(i int) {
-			parityParts[i] = rs.CreateParity(parts, i+len(parts), nil)
-			wg.Done()
-		}(i)
+		parityParts[i] = rs.CreateParity(parts, i+len(parts), nil)
 	}
-	wg.Wait()
 	parts = append(parts, parityParts...)
 
 	file := &meta.File{
