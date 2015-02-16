@@ -1,10 +1,8 @@
 package proxyserver
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -77,10 +75,8 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		redundancy.Need, redundancy.Total = h.multi.GetRedundancy()
+		// do nothing
 
-		w.Header().Set("content-type", "application/json; charset=utf-8")
-		json.NewEncoder(w).Encode(redundancy)
 	case "POST":
 		err := json.NewDecoder(r.Body).Decode(&redundancy)
 		if err != nil {
@@ -98,11 +94,15 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.WriteHeader(http.StatusNoContent)
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "bad method", http.StatusMethodNotAllowed)
 	}
+
+	redundancy.Need, redundancy.Total = h.multi.GetRedundancy()
+
+	w.Header().Set("content-type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(redundancy)
 }
 
 type storesResponseEntry struct {
