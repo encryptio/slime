@@ -73,6 +73,23 @@ func prepare() {
 	out.WriteString("PREPARE-SUCCESS\n")
 }
 
+type positionPrinter struct {
+	n         int64
+	lastPrint int64
+	rdr       io.Reader
+}
+
+func (p *positionPrinter) Read(buf []byte) (int, error) {
+	n, err := p.rdr.Read(buf)
+	p.n += int64(n)
+	if p.n-p.lastPrint > 131072 {
+		fmt.Fprintf(out, "PROGRESS %d\n", p.n)
+		out.Flush()
+		p.lastPrint = p.n
+	}
+	return n, err
+}
+
 func store(key, file string) {
 	ok := false
 	defer func() {
@@ -112,7 +129,8 @@ func store(key, file string) {
 		return
 	}
 
-	req, err := http.NewRequest("PUT", keyURL(key), fh)
+	req, err := http.NewRequest("PUT", keyURL(key),
+		&positionPrinter{rdr: fh})
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v",
 			keyURL(key), err)
