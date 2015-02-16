@@ -70,6 +70,9 @@ func prepare() {
 		return
 	}
 
+	old := getConfig("oldprefixmode")
+	oldPrefixMode = old == "true"
+
 	out.WriteString("PREPARE-SUCCESS\n")
 }
 
