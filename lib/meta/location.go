@@ -17,7 +17,7 @@ type Location struct {
 func (l *Location) toPair() kvl.Pair {
 	var p kvl.Pair
 
-	p.Key = tuple.MustAppend(nil, "location", l.UUID[:])
+	p.Key = tuple.MustAppend(nil, "location", l.UUID)
 
 	p.Value = tuple.MustAppend(nil, 0, l.URL, l.Name, l.Dead, l.LastSeen)
 	for _, split := range l.AllocSplit {
@@ -29,18 +29,13 @@ func (l *Location) toPair() kvl.Pair {
 
 func (l *Location) fromPair(p kvl.Pair) error {
 	var typ string
-	var uuid []byte
-	err := tuple.UnpackInto(p.Key, &typ, &uuid)
+	err := tuple.UnpackInto(p.Key, &typ, &l.UUID)
 	if err != nil {
 		return err
 	}
 	if typ != "location" {
 		return ErrBadKeyType
 	}
-	if len(uuid) != 16 {
-		return ErrBadFormat
-	}
-	copy(l.UUID[:], uuid)
 
 	var version int
 	left, err := tuple.UnpackIntoPartial(p.Value,

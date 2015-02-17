@@ -33,9 +33,9 @@ func (f *File) toPair() kvl.Pair {
 	p.Key = fileKey(f.Path)
 
 	p.Value = tuple.MustAppend(nil,
-		0, f.Size, f.SHA256[:], f.WriteTime, f.DataChunks, f.MappingValue)
+		0, f.Size, f.SHA256, f.WriteTime, f.DataChunks, f.MappingValue)
 	for _, loc := range f.Locations {
-		p.Value = tuple.MustAppend(p.Value, loc[:])
+		p.Value = tuple.MustAppend(p.Value, loc)
 	}
 
 	return p
@@ -52,30 +52,20 @@ func (f *File) fromPair(p kvl.Pair) error {
 	}
 
 	var version int
-	var sha256 []byte
-	left, err := tuple.UnpackIntoPartial(p.Value, &version, &f.Size, &sha256,
+	left, err := tuple.UnpackIntoPartial(p.Value, &version, &f.Size, &f.SHA256,
 		&f.WriteTime, &f.DataChunks, &f.MappingValue)
 	if version != 0 {
 		return ErrUnknownMetaVersion
 	}
-	if len(sha256) != 32 {
-		return ErrBadFormat
-	}
-	copy(f.SHA256[:], sha256)
 
 	f.Locations = nil
 	for len(left) > 0 {
-		var next []byte
+		var next [16]byte
 		left, err = tuple.UnpackIntoPartial(left, &next)
 		if err != nil {
 			return err
 		}
-		if len(next) != 16 {
-			return ErrBadFormat
-		}
-		var data [16]byte
-		copy(data[:], next)
-		f.Locations = append(f.Locations, data)
+		f.Locations = append(f.Locations, next)
 	}
 
 	return nil
@@ -85,7 +75,7 @@ func (f *File) indexPairs() []kvl.Pair {
 	ret := make([]kvl.Pair, 0, len(f.Locations))
 
 	for _, loc := range f.Locations {
-		key, err := tuple.Append(nil, "file", "location", loc[:], f.Path)
+		key, err := tuple.Append(nil, "file", "location", loc, f.Path)
 		if err != nil {
 			panic(err)
 		}
