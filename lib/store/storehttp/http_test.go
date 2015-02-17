@@ -10,7 +10,7 @@ import (
 	"git.encryptio.com/slime/lib/uuid"
 )
 
-func TestHTTPBasics(t *testing.T) {
+func TestHTTPCommon(t *testing.T) {
 	ds, tmpDir := storedir.MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
@@ -22,7 +22,7 @@ func TestHTTPBasics(t *testing.T) {
 		t.Fatalf("Couldn't initialize client: %v", err)
 	}
 
-	storetests.TestStoreBasics(t, client)
+	storetests.TestStore(t, client)
 
 	if client.UUID() != ds.UUID() {
 		t.Errorf("client UUID %v does not match directory UUID %v",

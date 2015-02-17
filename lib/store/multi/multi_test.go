@@ -10,6 +10,7 @@ import (
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/store/storedir"
+	"git.encryptio.com/slime/lib/store/storetests"
 
 	"git.encryptio.com/kvl/backend/ram"
 )
@@ -97,11 +98,10 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 	return killers, multi, dirstores, done
 }
 
-func TestMultiBasics(t *testing.T) {
+func TestMultiCommon(t *testing.T) {
 	_, multi, _, done := prepareMultiTest(t, 3, 4, 5)
 	defer done()
-
-	testStoreBasics(t, multi)
+	storetests.TestStore(t, multi)
 }
 
 func TestMultiRecovery(t *testing.T) {

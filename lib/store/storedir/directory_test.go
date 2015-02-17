@@ -50,11 +50,11 @@ func shouldFileExist(t *testing.T, filename string) {
 	}
 }
 
-func TestDirectoryBasics(t *testing.T) {
+func TestDirectoryCommon(t *testing.T) {
 	ds, tmpDir := MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
-	storetests.TestStoreBasics(t, ds)
+	storetests.TestStore(t, ds)
 	shouldHashcheck(t, ds, 0, 0)
 }
 
