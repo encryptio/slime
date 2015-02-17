@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"git.encryptio.com/slime/lib/chunkserver"
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/storedir"
 	"git.encryptio.com/slime/lib/store/storetests"
 
@@ -116,7 +117,7 @@ func TestMultiRecovery(t *testing.T) {
 				value = append(value, []byte(key)...)
 			}
 
-			err := multi.Set(key, value)
+			err := multi.CAS(key, store.MissingV, store.DataV(value))
 			if err != nil {
 				t.Fatalf("Couldn't write to multi: %v", err)
 			}
@@ -158,7 +159,7 @@ func TestMultiScrub(t *testing.T) {
 
 	data := "hello world! this is some test data."
 
-	err := multi.Set("key", []byte(data))
+	err := multi.CAS("key", store.MissingV, store.DataV([]byte(data)))
 	if err != nil {
 		t.Fatalf("Couldn't write to multi: %v", err)
 	}
@@ -171,7 +172,7 @@ func TestMultiScrub(t *testing.T) {
 		t.Fatalf("Didn't get a name from dirstore")
 	}
 
-	err = dirstores[0].Delete(names[0])
+	err = dirstores[0].CAS(names[0], store.AnyV, store.MissingV)
 	if err != nil {
 		t.Fatalf("Couldn't delete from dirstore: %v", err)
 	}
@@ -201,7 +202,8 @@ func TestMultiDuplicates(t *testing.T) {
 	data := "this is some test data"
 
 	for i := 0; i < 50; i++ {
-		err := multi.Set(strconv.FormatInt(int64(i), 10), []byte(data))
+		err := multi.CAS(strconv.FormatInt(int64(i), 10),
+			store.MissingV, store.DataV([]byte(data)))
 		if err != nil {
 			t.Fatalf("Couldn't add key %v: %v", i, err)
 		}
@@ -218,7 +220,8 @@ func TestMultiDuplicates(t *testing.T) {
 	}
 
 	for i := 0; i < 25; i++ {
-		err := multi.Delete(strconv.FormatInt(int64(i), 10))
+		err := multi.CAS(strconv.FormatInt(int64(i), 10),
+			store.AnyV, store.MissingV)
 		if err != nil {
 			t.Fatalf("Couldn't Delete %v: %v", i, err)
 		}
@@ -242,7 +245,8 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	data := "who knows where the wind goes"
 
 	for i := 0; i < 10; i++ {
-		err := multi.Set(strconv.FormatInt(int64(i), 10), []byte(data))
+		err := multi.CAS(strconv.FormatInt(int64(i), 10),
+			store.MissingV, store.DataV([]byte(data)))
 		if err != nil {
 			t.Fatalf("Couldn't add key %v: %v", i, err)
 		}

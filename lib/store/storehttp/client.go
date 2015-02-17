@@ -94,18 +94,32 @@ func (cc *Client) Get(key string) ([]byte, [32]byte, error) {
 	return data, h, nil
 }
 
-func (cc *Client) Set(key string, data []byte) error {
-	return cc.SetWith256(key, data, sha256.Sum256(data))
-}
+func (cc *Client) CAS(key string, from, to store.CASV) error {
+	var req *http.Request
+	var err error
 
-func (cc *Client) SetWith256(key string, data []byte, h [32]byte) error {
-	req, err := http.NewRequest("PUT", cc.url+url.QueryEscape(key),
-		bytes.NewBuffer(data))
-	if err != nil {
-		return err
+	if to.Present {
+		req, err = http.NewRequest("PUT", cc.url+url.QueryEscape(key),
+			bytes.NewBuffer(to.Data))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("x-content-sha256", hex.EncodeToString(to.SHA256[:]))
+	} else {
+		req, err = http.NewRequest("DELETE", cc.url+url.QueryEscape(key), nil)
+		if err != nil {
+			return err
+		}
 	}
 
-	req.Header.Set("x-content-sha256", hex.EncodeToString(h[:]))
+	if !from.Any {
+		if from.Present {
+			req.Header.Set("If-Match",
+				`"`+hex.EncodeToString(from.SHA256[:])+`"`)
+		} else {
+			req.Header.Set("If-Match", `"nonexistent"`)
+		}
+	}
 
 	resp, err := cc.client.Do(req)
 	if err != nil {
@@ -113,56 +127,22 @@ func (cc *Client) SetWith256(key string, data []byte, h [32]byte) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return httputil.ReadResponseAsError(resp)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
 	}
 
-	return nil
-}
-
-func (cc *Client) CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte) error {
-	req, err := http.NewRequest("PUT", cc.url+url.QueryEscape(key),
-		bytes.NewBuffer(data))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("x-content-sha256", hex.EncodeToString(newH[:]))
-	req.Header.Set("if-match", `"`+hex.EncodeToString(oldH[:])+`"`)
-
-	resp, err := cc.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusConflict {
+	if resp.StatusCode == http.StatusPreconditionFailed {
 		return store.ErrCASFailure
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return httputil.ReadResponseAsError(resp)
+	if resp.StatusCode == http.StatusNotFound {
+		if from.Any || !from.Present {
+			return nil
+		}
+		return store.ErrCASFailure
 	}
 
-	return nil
-}
-
-func (cc *Client) Delete(key string) error {
-	resp, err := cc.startReq("DELETE", cc.url+url.QueryEscape(key), nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		return store.ErrNotFound
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return httputil.ReadResponseAsError(resp)
-	}
-
-	return nil
+	return httputil.ReadResponseAsError(resp)
 }
 
 func (cc *Client) List(after string, limit int) ([]string, error) {

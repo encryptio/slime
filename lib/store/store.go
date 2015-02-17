@@ -2,25 +2,24 @@
 package store
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 )
 
 var (
-	// ErrNotFound is returned from Store.Get and Store.Delete if the key
-	// requested was not found in the object store
+	// ErrNotFound is returned from Store.Stat if the key requested was not
+	// found in the object store.
 	ErrNotFound = errors.New("key not found")
 
-	// ErrCASFailure is returned from Store256.CASWith256 if the data stored
-	// at the key given did not match the key given.
+	// ErrCASFailure is returned from Store.CAS if the data stored at the key
+	// given did not match the "from" CASV.
 	ErrCASFailure = errors.New("cas failure")
 )
 
 type Stat struct {
-	// The SHA256 of the content.
 	SHA256 [32]byte
-
-	// Number of bytes in the file. Always >= 0.
-	Size int64
+	Size   int64
 }
 
 // A Store is a object store. Keys are strings of non-zero length, subject to
@@ -34,13 +33,6 @@ type Store interface {
 	// ErrNotFound if the key does not exist.
 	Get(key string) ([]byte, [32]byte, error)
 
-	// Set adds or replaces the value for the given key.
-	Set(key string, data []byte) error
-
-	// Delete removes the value for a given key. It may return ErrNotFound if
-	// the key does not exist.
-	Delete(key string) error
-
 	// List returns a list of keys which compare bytewise greater than after,
 	// up to the limit number of keys. If limit is <=0, then the return size is
 	// unlimited.
@@ -49,15 +41,52 @@ type Store interface {
 	// FreeSpace returns the expected number of bytes free on this Store.
 	FreeSpace() (int64, error)
 
-	// Stat returns a bit of info about the key given.
+	// Stat returns a bit of info about the key given, or ErrNotFound if the
+	// key-value pair is nonexistent.
 	Stat(key string) (*Stat, error)
 
-	// SetWith256 is like Set, but passes in the (already-verified) SHA256 of
-	// the content.
-	SetWith256(key string, data []byte, h [32]byte) error
+	// CAS writes to the object store. It returns ErrCASFailure if the value
+	// currently in the store does not match the "from" argument. If it does,
+	// then CAS atomically writes the value in the "to" argument to the store.
+	//
+	// If "from.Any" is true, it matches any value (including nonexistence.)
+	// If "from.Present" is false, it matches only the nonexistent value.
+	// Otherwise, "from.SHA256" is consulted and must match the SHA256 of
+	// the value stored. "from.Data" is ignored.
+	//
+	// If "to.Present" is false, the value is deleted (set to the nonexistent
+	// value.) Otherwise, "to.Data" is written with the assumed-correct hash
+	// given in "to.SHA256."
+	CAS(key string, from, to CASV) error
+}
 
-	// CASWith256 is an atomic compare-and-swap that sets the content of the
-	// given key-object pair iff the existing data matches oldHash. newHash
-	// is the already-verified SHA256 of the new content, like SetWith256.
-	CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte) error
+var (
+	AnyV     = CASV{Any: true}
+	MissingV = CASV{Present: false}
+)
+
+func DataV(data []byte) CASV {
+	return CASV{
+		Present: true,
+		SHA256:  sha256.Sum256(data),
+		Data:    data,
+	}
+}
+
+// A CASV is a value used for the store.CAS operation.
+type CASV struct {
+	Any     bool
+	Present bool
+	SHA256  [32]byte
+	Data    []byte
+}
+
+func (v CASV) String() string {
+	if v.Any {
+		return "casv(any)"
+	}
+	if !v.Present {
+		return "casv(not present)"
+	}
+	return fmt.Sprintf("casv(sha256=%x, data=%#v)", v.SHA256, string(v.Data))
 }

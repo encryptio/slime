@@ -18,6 +18,7 @@ type File struct {
 	Size         uint64
 	SHA256       [32]byte
 	WriteTime    uint64
+	PrefixID     [16]byte
 	DataChunks   uint16
 	MappingValue uint32
 	Locations    [][16]byte
@@ -33,7 +34,8 @@ func (f *File) toPair() kvl.Pair {
 	p.Key = fileKey(f.Path)
 
 	p.Value = tuple.MustAppend(nil,
-		0, f.Size, f.SHA256, f.WriteTime, f.DataChunks, f.MappingValue)
+		0, f.Size, f.SHA256, f.WriteTime, f.PrefixID, f.DataChunks,
+		f.MappingValue)
 	for _, loc := range f.Locations {
 		p.Value = tuple.MustAppend(p.Value, loc)
 	}
@@ -53,7 +55,7 @@ func (f *File) fromPair(p kvl.Pair) error {
 
 	var version int
 	left, err := tuple.UnpackIntoPartial(p.Value, &version, &f.Size, &f.SHA256,
-		&f.WriteTime, &f.DataChunks, &f.MappingValue)
+		&f.WriteTime, &f.PrefixID, &f.DataChunks, &f.MappingValue)
 	if version != 0 {
 		return ErrUnknownMetaVersion
 	}

@@ -2,7 +2,6 @@ package storedir
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"hash/fnv"
@@ -174,105 +173,90 @@ func (ds *Directory) Stat(key string) (*store.Stat, error) {
 	return st, nil
 }
 
-func (ds *Directory) Set(key string, data []byte) error {
-	return ds.SetWith256(key, data, sha256.Sum256(data))
-}
-
-func (ds *Directory) SetWith256(key string, data []byte, sha [32]byte) error {
-	h := fnv.New64a()
-	h.Write(sha[:])
-	h.Write(data)
-	fnvHash := h.Sum(nil)
-
+func (ds *Directory) CAS(key string, from, to store.CASV) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	return ds.lockedSet(key, data, sha, fnvHash)
-}
+	if !from.Any {
+		if from.Present {
+			fh, err := os.Open(ds.keyToFilename(key))
+			if err != nil {
+				if os.IsNotExist(err) {
+					return store.ErrCASFailure
+				}
+				return err
+			}
 
-func (ds *Directory) CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte) error {
-	h := fnv.New64a()
-	h.Write(newH[:])
-	h.Write(data)
-	fnvHash := h.Sum(nil)
+			var sha [32]byte
+			_, err = fh.ReadAt(sha[:], 8)
+			fh.Close()
+			if err != nil {
+				return err
+			}
 
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-
-	fh, err := os.Open(ds.keyToFilename(key))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return store.ErrNotFound
+			if sha != from.SHA256 {
+				return store.ErrCASFailure
+			}
+		} else {
+			_, err := os.Stat(ds.keyToFilename(key))
+			if !os.IsNotExist(err) {
+				if err != nil {
+					return err
+				}
+				return store.ErrCASFailure
+			}
 		}
-		return err
-	}
-	defer fh.Close()
-
-	var haveSHA [32]byte
-	_, err = fh.ReadAt(haveSHA[:], 8)
-	if err != nil {
-		return err
 	}
 
-	if haveSHA != oldH {
-		return store.ErrCASFailure
+	if to.Present {
+		h := fnv.New64a()
+		h.Write(to.SHA256[:])
+		h.Write(to.Data)
+		var fnvHash [8]byte
+		h.Sum(fnvHash[:0])
+
+		fh, err := ioutil.TempFile(filepath.Join(ds.Dir, "data"), ".set_tmp_")
+		if err != nil {
+			return err
+		}
+		tmpname := fh.Name()
+
+		for _, slice := range [][]byte{fnvHash[:], to.SHA256[:], to.Data} {
+			_, err = fh.Write(slice)
+			if err != nil {
+				os.Remove(tmpname)
+				fh.Close()
+				return err
+			}
+		}
+
+		err = fh.Close()
+		if err != nil {
+			os.Remove(tmpname)
+			return err
+		}
+
+		err = os.Rename(tmpname, ds.keyToFilename(key))
+		if err != nil {
+			os.Remove(tmpname)
+			return err
+		}
+
+		return nil
+	} else {
+		err := os.Remove(ds.keyToFilename(key))
+		if err != nil {
+			if os.IsNotExist(err) {
+				if from.Any || !from.Present {
+					return nil
+				} else {
+					return store.ErrCASFailure
+				}
+			}
+			return err
+		}
+		return nil
 	}
-
-	return ds.lockedSet(key, data, newH, fnvHash)
-}
-
-func (ds *Directory) lockedSet(key string, data []byte, sha [32]byte, fnvHash []byte) error {
-	fh, err := ioutil.TempFile(filepath.Join(ds.Dir, "data"), ".set_tmp_")
-	if err != nil {
-		return err
-	}
-	tmpname := fh.Name()
-
-	_, err = fh.Write(fnvHash)
-	if err != nil {
-		os.Remove(tmpname)
-		fh.Close()
-		return err
-	}
-
-	_, err = fh.Write(sha[:])
-	if err != nil {
-		os.Remove(tmpname)
-		fh.Close()
-		return err
-	}
-
-	_, err = fh.Write(data)
-	if err != nil {
-		os.Remove(tmpname)
-		fh.Close()
-		return err
-	}
-
-	err = fh.Close()
-	if err != nil {
-		os.Remove(tmpname)
-		return err
-	}
-
-	err = os.Rename(tmpname, ds.keyToFilename(key))
-	if err != nil {
-		os.Remove(tmpname)
-		return err
-	}
-
-	return nil
-}
-
-func (ds *Directory) Delete(key string) error {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-
-	err := os.Remove(ds.keyToFilename(key))
-	if os.IsNotExist(err) {
-		return store.ErrNotFound
-	}
-	return err
 }
 
 func (ds *Directory) List(afterKey string, limit int) ([]string, error) {

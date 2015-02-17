@@ -2,20 +2,34 @@
 package uuid
 
 import (
-	"crypto/rand"
+	crand "crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 )
 
 var ErrBadFormat = errors.New("bad format for UUID")
 
-func Gen4() [16]byte {
-	var ret [16]byte
-	_, err := rand.Read(ret[:])
+var rng *rand.Rand
+
+func init() {
+	var buf [8]byte
+	_, err := crand.Read(buf[:])
 	if err != nil {
 		panic(err)
+	}
+	seed := int64(binary.BigEndian.Uint64(buf[:]))
+	source := rand.NewSource(seed)
+	rng = rand.New(source)
+}
+
+func Gen4() [16]byte {
+	var ret [16]byte
+	for i := 0; i < 4; i++ {
+		binary.BigEndian.PutUint32(ret[i*4:], rng.Uint32())
 	}
 	ret[6] = (ret[6] & 0x0F) | 0x40
 	ret[8] = (ret[8] & 0x3F) | 0x40

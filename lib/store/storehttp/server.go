@@ -3,6 +3,7 @@ package storehttp
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/uuid"
 )
+
+var errBadIfMatchFormat = errors.New("bad format for if-match header value")
 
 // MaxFileSize is the maximum size to accept in a Server request.
 const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
@@ -33,9 +36,10 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 // The X-Content-SHA256 header is used to verify the hash of PUT'd content
 // and is sent in responses.
 //
-// If an If-Match header is present on a PUT request, the server will return 409
+// If an If-Match header is present on a PUT request, the server will return 412
 // if the existing value does not have the given ETag/SHA256, and will
-// atomically swap if it does.
+// atomically swap if it does. The special ETag "nonexistent" will only match
+// nonexistent values.
 type Server struct {
 	store store.Store
 }
@@ -43,6 +47,30 @@ type Server struct {
 // NewServer creates a Server out of a Store256.
 func NewServer(s store.Store) *Server {
 	return &Server{s}
+}
+
+func parseIfMatch(ifMatch string) (store.CASV, error) {
+	ifMatch = strings.Trim(ifMatch, `" `)
+
+	switch ifMatch {
+	case "":
+		return store.AnyV, nil
+	case "nonexistent":
+		return store.MissingV, nil
+	default:
+		casBytes, err := hex.DecodeString(ifMatch)
+		if err != nil || len(casBytes) != 32 {
+			return store.CASV{}, errBadIfMatchFormat
+		}
+
+		var cas [32]byte
+		copy(cas[:], casBytes)
+
+		return store.CASV{
+			Present: true,
+			SHA256:  cas,
+		}, nil
+	}
 }
 
 func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +109,10 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+
+		// The race between this Get and the above Stat is benign; we might
+		// miss an opportunity to cache, but we'll never return an incorrect
+		// result.
 
 		data, hash, err := h.store.Get(obj)
 		if err != nil {
@@ -164,49 +196,74 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if casString := r.Header.Get("If-Match"); casString != "" {
-			casString = strings.Trim(casString, `" `)
+		from, err := parseIfMatch(r.Header.Get("If-Match"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
-			casBytes, err := hex.DecodeString(casString)
-			if err != nil || len(casBytes) != 32 {
-				http.Error(w, "bad format for if-match",
-					http.StatusBadRequest)
+		err = h.store.CAS(obj, from, store.CASV{
+			Present: true,
+			SHA256:  haveHash,
+			Data:    data,
+		})
+		if err != nil {
+			if err == store.ErrCASFailure {
+				http.Error(w, err.Error(), http.StatusPreconditionFailed)
 				return
 			}
-
-			var cas [32]byte
-			copy(cas[:], casBytes)
-
-			err = h.store.CASWith256(obj, cas, data, haveHash)
-			if err != nil {
-				if err == store.ErrCASFailure {
-					http.Error(w, err.Error(), http.StatusConflict)
-					return
-				}
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-		} else {
-			// no CAS
-			err = h.store.SetWith256(obj, data, haveHash)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 
 	case "DELETE":
-		err := h.store.Delete(obj)
-		if err != nil {
-			if err == store.ErrNotFound {
-				http.Error(w, "not found", http.StatusNotFound)
+		doRetry := true
+		for {
+			doRetry = false
+
+			from, err := parseIfMatch(r.Header.Get("If-Match"))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+
+			if from.Any {
+				// TODO: make the CAS interface rich enough to handle this
+				// without Stat
+				st, err := h.store.Stat(obj)
+				if err != nil {
+					if err == store.ErrNotFound {
+						http.Error(w, "not found", http.StatusNotFound)
+						return
+					}
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+
+				from = store.CASV{Present: true, SHA256: st.SHA256}
+				doRetry = true
+			}
+
+			err = h.store.CAS(obj, from,
+				store.CASV{Present: false})
+			if err != nil {
+				if err == store.ErrCASFailure {
+					if doRetry {
+						continue
+					} else {
+						http.Error(w, err.Error(),
+							http.StatusPreconditionFailed)
+						return
+					}
+				}
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
 
 	default:
 		w.Header().Set("Allow", "GET, HEAD, PUT, DELETE")

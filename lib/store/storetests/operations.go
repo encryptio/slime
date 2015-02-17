@@ -25,15 +25,24 @@ func ShouldList(t *testing.T, s store.Store, after string, limit int, expect []s
 	}
 }
 
-func ShouldFullList(t *testing.T, s store.Store, expect []string) {
-	ShouldList(t, s, "", 0, expect)
+func ShouldCASError(t *testing.T, s store.Store, key string, from, to store.CASV, wantErr error) {
+	err := s.CAS(key, from, to)
+	if err != wantErr {
+		t.Errorf("CAS(%#v, %v, %v) returned error %v, but wanted %v",
+			key, from, to, err, wantErr)
+	}
 }
 
-func ShouldSet(t *testing.T, s store.Store, key string, data []byte) {
-	err := s.Set(key, data)
-	if err != nil {
-		t.Errorf("Set(%#v, %#v) returned unexpected error %v", key, data, err)
-	}
+func ShouldCAS(t *testing.T, s store.Store, key string, from, to store.CASV) {
+	ShouldCASError(t, s, key, from, to, nil)
+}
+
+func ShouldCASFail(t *testing.T, s store.Store, key string, from, to store.CASV) {
+	ShouldCASError(t, s, key, from, to, store.ErrCASFailure)
+}
+
+func ShouldFullList(t *testing.T, s store.Store, expect []string) {
+	ShouldList(t, s, "", 0, expect)
 }
 
 func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
@@ -63,20 +72,6 @@ func ShouldGetMiss(t *testing.T, s store.Store, key string) {
 	ShouldGetError(t, s, key, store.ErrNotFound)
 }
 
-func ShouldDelete(t *testing.T, s store.Store, key string) {
-	err := s.Delete(key)
-	if err != nil {
-		t.Errorf("Delete(%#v) returned unexpected error %v", key, err)
-	}
-}
-
-func ShouldDeleteMiss(t *testing.T, s store.Store, key string) {
-	err := s.Delete(key)
-	if err != store.ErrNotFound {
-		t.Errorf("Delete(%#v) = %v, but wanted %v", key, err, store.ErrNotFound)
-	}
-}
-
 func ShouldFreeSpace(t *testing.T, s store.Store) {
 	free, err := s.FreeSpace()
 	if err != nil {
@@ -99,30 +94,10 @@ func ShouldStat(t *testing.T, s store.Store, key string, stat *store.Stat) {
 	}
 }
 
-func ShouldSetWith256(t *testing.T, s store.Store, key string, data []byte, sha [32]byte) {
-	err := s.SetWith256(key, data, sha)
-	if err != nil {
-		t.Errorf("SetWith256(%#v, %#v, %#v) returned unexpected error %v",
-			key, data, sha, err)
+func ShouldStatMiss(t *testing.T, s store.Store, key string) {
+	st, err := s.Stat(key)
+	if err != store.ErrNotFound {
+		t.Errorf("Stat(%#v) returned (%v, %v), but wanted %v",
+			key, st, err, store.ErrNotFound)
 	}
-}
-
-func ShouldCASWith256(t *testing.T, s store.Store, key string, oldH [32]byte, data []byte, newH [32]byte) {
-	err := s.CASWith256(key, oldH, data, newH)
-	if err != nil {
-		t.Errorf("CASWith256(%#v, %#v, %#v, %#v) returned unexpected error %v",
-			key, oldH, data, newH, err)
-	}
-}
-
-func ShouldCASWith256Error(t *testing.T, s store.Store, key string, oldH [32]byte, data []byte, newH [32]byte, wantErr error) {
-	err := s.CASWith256(key, oldH, data, newH)
-	if err != wantErr {
-		t.Errorf("CASWith256(%#v, %#v, %#v, %#v) returned %v, but wanted %v",
-			key, oldH, data, newH, err, wantErr)
-	}
-}
-
-func ShouldCASWith256Fail(t *testing.T, s store.Store, key string, oldH [32]byte, data []byte, newH [32]byte) {
-	ShouldCASWith256Error(t, s, key, oldH, data, newH, store.ErrCASFailure)
 }

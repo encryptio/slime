@@ -1,7 +1,6 @@
 package storetests
 
 import (
-	"crypto/sha256"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -13,8 +12,7 @@ import (
 func TestStore(t *testing.T, s store.Store) {
 	TestStoreBasics(t, s)
 	TestStoreList(t, s)
-	TestStoreCAS(t, s)
-	TestStoreCASRace(t, s)
+	TestStoreCASCountRace(t, s)
 }
 
 func TestStoreBasics(t *testing.T, s store.Store) {
@@ -22,78 +20,58 @@ func TestStoreBasics(t *testing.T, s store.Store) {
 
 	ShouldFullList(t, s, nil)
 	ShouldGetMiss(t, s, "hello")
-	ShouldSet(t, s, "hello", []byte("world"))
+	ShouldCAS(t, s, "hello", store.MissingV, store.MissingV)
+	ShouldGetMiss(t, s, "hello")
+	ShouldCAS(t, s, "hello", store.MissingV, store.DataV([]byte("world")))
 	ShouldGet(t, s, "hello", []byte("world"))
+	ShouldCAS(t, s, "a", store.AnyV, store.MissingV)
 	ShouldFullList(t, s, []string{"hello"})
-	ShouldSet(t, s, "a", []byte("a"))
-	ShouldSet(t, s, "empty", nil)
-	ShouldFullList(t, s, []string{"a", "empty", "hello"})
-	ShouldGet(t, s, "a", []byte("a"))
+	ShouldCAS(t, s, "b", store.AnyV, store.DataV([]byte("beta")))
+	ShouldCAS(t, s, "b", store.AnyV, store.DataV([]byte("other")))
+	ShouldGet(t, s, "b", []byte("other"))
+	ShouldFullList(t, s, []string{"b", "hello"})
+	ShouldCASFail(t, s, "b", store.MissingV, store.MissingV)
+	ShouldCAS(t, s, "hello", store.AnyV, store.MissingV)
+	ShouldFullList(t, s, []string{"b"})
+	ShouldCAS(t, s, "empty", store.AnyV, store.DataV(nil))
 	ShouldGet(t, s, "empty", nil)
-	ShouldGet(t, s, "hello", []byte("world"))
-	ShouldDeleteMiss(t, s, "b")
-	ShouldDelete(t, s, "a")
-	ShouldDeleteMiss(t, s, "a")
-	ShouldGetMiss(t, s, "a")
-	ShouldFullList(t, s, []string{"empty", "hello"})
-	ShouldDelete(t, s, "empty")
-	ShouldDelete(t, s, "hello")
+	ShouldCAS(t, s, "empty", store.DataV(nil), store.DataV([]byte("one")))
+	ShouldCAS(t, s, "empty", store.DataV([]byte("one")), store.DataV([]byte("two")))
+	ShouldGet(t, s, "empty", []byte("two"))
+
+	ShouldCAS(t, s, "b", store.AnyV, store.MissingV)
+	ShouldCAS(t, s, "empty", store.AnyV, store.MissingV)
 	ShouldFullList(t, s, nil)
+
+	ShouldFreeSpace(t, s)
 }
 
 func TestStoreList(t *testing.T, s store.Store) {
 	t.Logf("TestStoreList()")
 
 	ShouldFullList(t, s, nil)
-	ShouldSet(t, s, "a", []byte("a"))
-	ShouldSet(t, s, "x", []byte("x"))
-	ShouldSet(t, s, "z", []byte("z"))
-	ShouldSet(t, s, "c", []byte("c"))
-	ShouldSet(t, s, "b", []byte("b"))
-	ShouldSet(t, s, "y", []byte("y"))
+	ShouldCAS(t, s, "a", store.MissingV, store.DataV([]byte("a")))
+	ShouldCAS(t, s, "x", store.MissingV, store.DataV([]byte("x")))
+	ShouldCAS(t, s, "z", store.MissingV, store.DataV([]byte("z")))
+	ShouldCAS(t, s, "c", store.MissingV, store.DataV([]byte("c")))
+	ShouldCAS(t, s, "b", store.MissingV, store.DataV([]byte("b")))
+	ShouldCAS(t, s, "y", store.MissingV, store.DataV([]byte("y")))
 	ShouldList(t, s, "", 1, []string{"a"})
 	ShouldList(t, s, "", 3, []string{"a", "b", "c"})
 	ShouldList(t, s, "a", 3, []string{"b", "c", "x"})
 	ShouldList(t, s, "c", 5, []string{"x", "y", "z"})
 	ShouldList(t, s, "z", 3, nil)
-	ShouldDelete(t, s, "a")
-	ShouldDelete(t, s, "b")
-	ShouldDelete(t, s, "c")
-	ShouldDelete(t, s, "x")
-	ShouldDelete(t, s, "y")
-	ShouldDelete(t, s, "z")
-	ShouldFullList(t, s, nil)
-
-	ShouldFreeSpace(t, s)
-}
-
-func TestStoreCAS(t *testing.T, s store.Store) {
-	t.Logf("TestStoreCAS()")
-
-	ShouldFullList(t, s, nil)
-
-	a := []byte("a")
-	b := []byte("b")
-	c := []byte("c")
-	aSHA := sha256.Sum256(a)
-	bSHA := sha256.Sum256(b)
-	cSHA := sha256.Sum256(c)
-
-	ShouldSetWith256(t, s, "1", a, aSHA)
-	ShouldGet(t, s, "1", a)
-	ShouldCASWith256(t, s, "1", aSHA, b, bSHA)
-	ShouldGet(t, s, "1", b)
-	ShouldCASWith256Fail(t, s, "1", aSHA, c, cSHA)
-	ShouldGet(t, s, "1", b)
-	ShouldCASWith256(t, s, "1", bSHA, b, bSHA)
-	ShouldGet(t, s, "1", b)
-	ShouldDelete(t, s, "1")
-
+	ShouldCAS(t, s, "a", store.AnyV, store.MissingV)
+	ShouldCAS(t, s, "b", store.AnyV, store.MissingV)
+	ShouldCAS(t, s, "c", store.AnyV, store.MissingV)
+	ShouldCAS(t, s, "x", store.AnyV, store.MissingV)
+	ShouldCAS(t, s, "y", store.AnyV, store.MissingV)
+	ShouldCAS(t, s, "z", store.AnyV, store.MissingV)
 	ShouldFullList(t, s, nil)
 }
 
-func TestStoreCASRace(t *testing.T, s store.Store) {
-	t.Logf("TestStoreCASRace()")
+func TestStoreCASCountRace(t *testing.T, s store.Store) {
+	t.Logf("TestStoreCASCountRace()")
 
 	const (
 		goroutines = 5
@@ -102,23 +80,25 @@ func TestStoreCASRace(t *testing.T, s store.Store) {
 
 	ShouldFullList(t, s, nil)
 
-	ShouldSet(t, s, "key", []byte("0"))
+	ShouldCAS(t, s, "key", store.AnyV, store.DataV([]byte("0")))
 
 	errs := make(chan error)
 	casFailures := uint64(0)
 	for i := 0; i < goroutines; i++ {
-		go func() {
+		go func(i int) {
 			for j := 0; j < iterations; j++ {
 				for {
 					time.Sleep(time.Millisecond)
 					data, oldsha, err := s.Get("key")
 					if err != nil {
+						t.Logf("Routine %v: Couldn't get key: %v", i, err)
 						errs <- err
 						return
 					}
 
 					num, err := strconv.ParseInt(string(data), 10, 64)
 					if err != nil {
+						t.Logf("Routine %v: Couldn't parse int: %v", i, err)
 						errs <- err
 						return
 					}
@@ -126,23 +106,28 @@ func TestStoreCASRace(t *testing.T, s store.Store) {
 					num++
 
 					data = strconv.AppendInt(data[:0], num, 10)
-					newsha := sha256.Sum256(data)
 
-					err = s.CASWith256("key", oldsha, data, newsha)
+					err = s.CAS("key",
+						store.CASV{Present: true, SHA256: oldsha},
+						store.DataV(data))
 					if err != nil {
 						if err == store.ErrCASFailure {
 							atomic.AddUint64(&casFailures, 1)
 							continue
 						}
+						t.Logf("Routine %v: Couldn't cas: %v", i, err)
 						errs <- err
 						return
 					}
+
+					t.Logf("routine %v iteration %v succeeded in casing to %v",
+						i, j, num)
 
 					break
 				}
 			}
 			errs <- nil
-		}()
+		}(i)
 	}
 	for i := 0; i < goroutines; i++ {
 		err := <-errs
@@ -154,6 +139,5 @@ func TestStoreCASRace(t *testing.T, s store.Store) {
 	t.Logf("%v cas failures", casFailures)
 
 	ShouldGet(t, s, "key", []byte(strconv.FormatInt(goroutines*iterations, 10)))
-
-	ShouldDelete(t, s, "key")
+	ShouldCAS(t, s, "key", store.AnyV, store.MissingV)
 }

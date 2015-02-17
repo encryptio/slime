@@ -12,6 +12,7 @@ import (
 	"git.encryptio.com/slime/lib/rs"
 	"git.encryptio.com/slime/lib/rs/gf"
 	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/uuid"
 
 	"git.encryptio.com/kvl"
 )
@@ -23,9 +24,7 @@ var (
 )
 
 func localKeyFor(file *meta.File, idx int) string {
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%v %x %v",
-		file.Path, file.SHA256, file.Size)))
-	return fmt.Sprintf("%x %v", hash, idx)
+	return fmt.Sprintf("%x %x %v", file.PrefixID[:], file.SHA256[:8], idx)
 }
 
 func (m *Multi) UUID() [16]byte {
@@ -36,9 +35,7 @@ func (m *Multi) Name() string {
 	return "multi"
 }
 
-func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
-	var h [32]byte
-
+func (m *Multi) getFile(key string) (*meta.File, error) {
 	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -56,17 +53,46 @@ func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 		return f, nil
 	})
 	if err != nil {
-		return nil, h, err
+		return nil, err
 	}
-
 	if ret == nil {
-		return nil, h, store.ErrNotFound
+		return nil, err
 	}
+	return ret.(*meta.File), nil
+}
 
-	f := ret.(*meta.File)
+func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
+	var zeroes [32]byte
 
-	copy(h[:], f.SHA256[:])
+	for {
+		f, err := m.getFile(key)
+		if err != nil {
+			return nil, zeroes, err
+		}
 
+		if f == nil {
+			return nil, zeroes, store.ErrNotFound
+		}
+
+		data, err := m.reconstruct(f)
+		if err != nil {
+			f2, err2 := m.getFile(key)
+			if err2 != nil {
+				return nil, zeroes, err2
+			}
+			if f2 == nil || f2.PrefixID != f.PrefixID {
+				// someone wrote to this file and removed some pieces as we
+				// were reading it; retry the read.
+				continue
+			}
+			return nil, zeroes, err
+		}
+
+		return data, f.SHA256, err
+	}
+}
+
+func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
 	chunkData := make([][]byte, len(f.Locations))
 	for i := range chunkData {
 		st := m.finder.StoreFor(f.Locations[i])
@@ -89,7 +115,7 @@ func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 	}
 
 	if len(chunks) < int(f.DataChunks) {
-		return nil, h, ErrInsufficientChunks
+		return nil, ErrInsufficientChunks
 	}
 
 	chunks = chunks[:int(f.DataChunks)]
@@ -108,10 +134,10 @@ func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 	hasher.Sum(have[:0])
 
 	if have != f.SHA256 {
-		return nil, h, ErrBadHash
+		return nil, ErrBadHash
 	}
 
-	return data, h, nil
+	return data, nil
 }
 
 func (m *Multi) Stat(key string) (*store.Stat, error) {
@@ -173,50 +199,49 @@ func splitVector(data []uint32, count int) [][]uint32 {
 	return parts
 }
 
-func (m *Multi) Set(key string, data []byte) error {
-	return m.SetWith256(key, data, sha256.Sum256(data))
-}
+func (m *Multi) CAS(key string, from, to store.CASV) error {
+	var file *meta.File
+	if to.Present {
+		// pessimistically check before doing work
+		_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			layer, err := meta.Open(ctx)
+			if err != nil {
+				return nil, err
+			}
 
-func (m *Multi) SetWith256(key string, data []byte, h [32]byte) error {
-	file, err := m.writeChunks(key, data, h)
-	if err != nil {
-		return err
+			oldFile, err := layer.GetFile(key)
+			if err != nil {
+				return nil, err
+			}
+
+			if !from.Any {
+				if from.Present {
+					if oldFile == nil {
+						return nil, store.ErrCASFailure
+					}
+					if oldFile.SHA256 != from.SHA256 {
+						return nil, store.ErrCASFailure
+					}
+				} else {
+					if oldFile != nil {
+						return nil, store.ErrCASFailure
+					}
+				}
+			}
+
+			return nil, nil
+		})
+		if err != nil {
+			return err
+		}
+
+		file, err = m.writeChunks(key, to.Data, to.SHA256)
+		if err != nil {
+			return err
+		}
 	}
 
 	var oldFile *meta.File
-	_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
-		layer, err := meta.Open(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		oldFile, err = layer.GetFile(key)
-		if err != nil {
-			return nil, err
-		}
-
-		err = layer.SetFile(file)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	if oldFile != nil {
-		m.deleteOldChunks(oldFile, file)
-	}
-
-	return nil
-}
-
-func (m *Multi) CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte) error {
-	var oldFile *meta.File
-
-	// pessimistically check before doing work
 	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -228,74 +253,67 @@ func (m *Multi) CASWith256(key string, oldH [32]byte, data []byte, newH [32]byte
 			return nil, err
 		}
 
+		if !from.Any {
+			if from.Present {
+				if oldFile == nil {
+					return nil, store.ErrCASFailure
+				}
+				if oldFile.SHA256 != from.SHA256 {
+					return nil, store.ErrCASFailure
+				}
+			} else {
+				if oldFile != nil {
+					return nil, store.ErrCASFailure
+				}
+			}
+		}
+
+		if to.Present {
+			err = layer.SetFile(file)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			if from.Present || from.Any {
+				err = layer.RemoveFilePath(key)
+				if err == kvl.ErrNotFound {
+					if !from.Any {
+						// internal inconsistency
+						return nil, store.ErrCASFailure
+					}
+				} else if err != nil {
+					return nil, err
+				}
+			}
+		}
+
 		return nil, nil
 	})
 	if err != nil {
-		return err
-	}
-	if oldFile == nil || oldFile.SHA256 != oldH {
-		return store.ErrCASFailure
-	}
-
-	// write data
-	file, err := m.writeChunks(key, data, newH)
-	if err != nil {
+		m.deleteChunks(file)
 		return err
 	}
 
-	// and then do the actual swap
-	_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
-		layer, err := meta.Open(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		oldFile, err = layer.GetFile(key)
-		if err != nil {
-			return nil, err
-		}
-
-		if oldFile == nil || oldFile.SHA256 != oldH {
-			return nil, store.ErrCASFailure
-		}
-
-		err = layer.SetFile(file)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	m.deleteOldChunks(oldFile, file)
+	m.deleteChunks(oldFile)
 
 	return nil
 }
 
-func (m *Multi) deleteOldChunks(oldFile, newFile *meta.File) error {
+func (m *Multi) deleteChunks(file *meta.File) error {
+	if file == nil {
+		return nil
+	}
+
 	storesMap := m.finder.Stores()
 
 	// remove chunks on old stores that are not shared by the new write
-	for i, loc := range oldFile.Locations {
-		if newFile != nil &&
-			oldFile.Path == newFile.Path &&
-			oldFile.SHA256 == newFile.SHA256 &&
-			oldFile.Size == newFile.Size &&
-			len(newFile.Locations) > i &&
-			newFile.Locations[i] == loc {
-			// this is a shared key between the old and new writes, keep it
-			continue
-		}
-
-		localKey := localKeyFor(oldFile, i)
+	for i, loc := range file.Locations {
+		localKey := localKeyFor(file, i)
 
 		st := storesMap[loc]
 		if st != nil {
 			// TODO: log err
-			st.Delete(localKey)
+			st.CAS(localKey, store.AnyV, store.MissingV)
 		} else {
 			// TODO: log delete skip
 		}
@@ -372,6 +390,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 		Path:         key,
 		Size:         uint64(len(data)),
 		WriteTime:    uint64(time.Now().Unix()),
+		PrefixID:     uuid.Gen4(),
 		DataChunks:   uint16(conf.Need),
 		MappingValue: mapping,
 		SHA256:       sha,
@@ -394,7 +413,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 			st := stores[storeIdx]
 			storeIdx++
 
-			err := st.Set(localKey, partData)
+			err := st.CAS(localKey, store.AnyV, store.DataV(partData))
 			if err != nil {
 				// TODO: log
 				continue
@@ -406,41 +425,6 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 	}
 
 	return file, nil
-}
-
-func (m *Multi) Delete(key string) error {
-	var oldFile *meta.File
-	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
-		layer, err := meta.Open(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		oldFile, err = layer.GetFile(key)
-		if err != nil {
-			return nil, err
-		}
-
-		if oldFile != nil {
-			err = layer.RemoveFilePath(oldFile.Path)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return nil, nil
-	})
-	if err != nil {
-		return err
-	}
-
-	if oldFile == nil {
-		return store.ErrNotFound
-	}
-
-	m.deleteOldChunks(oldFile, nil)
-
-	return err
 }
 
 func (m *Multi) List(after string, limit int) ([]string, error) {
