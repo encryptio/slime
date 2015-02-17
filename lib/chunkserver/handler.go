@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/store/storedir"
+	"git.encryptio.com/slime/lib/store/storehttp"
 	"git.encryptio.com/slime/lib/uuid"
 )
 
@@ -28,8 +29,8 @@ type Handler struct {
 
 type loadedDir struct {
 	dir     string
-	handler *store.Server
-	store   *store.Directory
+	handler *storehttp.Server
+	store   *storedir.Directory
 	stop    chan struct{}
 }
 
@@ -160,7 +161,7 @@ func (h *Handler) scanLoop() {
 					h.c.L.Unlock()
 				}
 			} else {
-				ds, err := store.OpenDirectory(dir)
+				ds, err := storedir.OpenDirectory(dir)
 				if err != nil {
 					log.Printf("Couldn't open directory store %v: %v", dir, err)
 					continue
@@ -168,7 +169,7 @@ func (h *Handler) scanLoop() {
 
 				ldir = loadedDir{
 					dir:     dir,
-					handler: store.NewServer(ds),
+					handler: storehttp.NewServer(ds),
 					store:   ds,
 					stop:    make(chan struct{}),
 				}

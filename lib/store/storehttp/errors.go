@@ -1,4 +1,4 @@
-package store
+package storehttp
 
 import (
 	"errors"

@@ -13,6 +13,7 @@ import (
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/store/storehttp"
 	"git.encryptio.com/slime/lib/uuid"
 )
 
@@ -159,7 +160,7 @@ func (f *Finder) Scan(url string) error {
 		st, found := f.stores[id]
 		f.mu.Unlock()
 		if !found {
-			st, err = store.NewClient(url + "/" + uuid.Fmt(id) + "/")
+			st, err = storehttp.NewClient(url + "/" + uuid.Fmt(id) + "/")
 			if err != nil {
 				return err
 			}

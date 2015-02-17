@@ -1,15 +1,17 @@
-package store
+package storehttp
 
 import (
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"git.encryptio.com/slime/lib/store/storedir"
+	"git.encryptio.com/slime/lib/store/storetests"
 	"git.encryptio.com/slime/lib/uuid"
 )
 
 func TestHTTPBasics(t *testing.T) {
-	ds, tmpDir := makeDirectory(t)
+	ds, tmpDir := storedir.MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
 	srv := httptest.NewServer(NewServer(ds))
@@ -20,7 +22,7 @@ func TestHTTPBasics(t *testing.T) {
 		t.Fatalf("Couldn't initialize client: %v", err)
 	}
 
-	testStoreBasics(t, client)
+	storetests.TestStoreBasics(t, client)
 
 	if client.UUID() != ds.UUID() {
 		t.Errorf("client UUID %v does not match directory UUID %v",

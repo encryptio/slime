@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"git.encryptio.com/slime/lib/meta"
-	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/multi"
+	"git.encryptio.com/slime/lib/store/storehttp"
 	"git.encryptio.com/slime/lib/uuid"
 
 	"git.encryptio.com/kvl"
@@ -17,7 +17,7 @@ import (
 
 type Handler struct {
 	db         kvl.DB
-	dataServer *store.Server
+	dataServer *storehttp.Server
 	multi      *multi.Multi
 	finder     *multi.Finder
 }
@@ -36,7 +36,7 @@ func New(db kvl.DB) (*Handler, error) {
 
 	return &Handler{
 		db:         db,
-		dataServer: store.NewServer(multi),
+		dataServer: storehttp.NewServer(multi),
 		multi:      multi,
 		finder:     finder,
 	}, nil

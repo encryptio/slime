@@ -1,11 +1,12 @@
-package store
+package storedir
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"git.encryptio.com/slime/lib/store/storetests"
 )
 
 func shouldHashcheck(t *testing.T, ds *Directory, good, bad int64) {
@@ -49,51 +50,30 @@ func shouldFileExist(t *testing.T, filename string) {
 	}
 }
 
-func makeDirectory(t *testing.T) (*Directory, string) {
-	tmpDir, err := ioutil.TempDir("", "slime_test_")
-	if err != nil {
-		t.Fatalf("Couldn't create temporary directory: %v", err)
-	}
-
-	err = CreateDirectory(tmpDir)
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatalf("CreateDirectory returned unexpected error %v", err)
-	}
-
-	ds, err := OpenDirectory(tmpDir)
-	if err != nil {
-		os.RemoveAll(tmpDir)
-		t.Fatalf("OpenDirectory returned unexpected error %v", err)
-	}
-
-	return ds, tmpDir
-}
-
 func TestDirectoryBasics(t *testing.T) {
-	ds, tmpDir := makeDirectory(t)
+	ds, tmpDir := MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
-	testStoreBasics(t, ds)
+	storetests.TestStoreBasics(t, ds)
 	shouldHashcheck(t, ds, 0, 0)
 }
 
 func TestDirectoryCorruption(t *testing.T) {
-	ds, tmpDir := makeDirectory(t)
+	ds, tmpDir := MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 
-	shouldSet(t, ds, "hello", []byte("world"))
+	storetests.ShouldSet(t, ds, "hello", []byte("world"))
 	shouldHashcheck(t, ds, 1, 0)
 	shouldCorrupt(t, filepath.Join(tmpDir, "data", "aGVsbG8="))
-	shouldGetError(t, ds, "hello", ErrCorruptObject)
-	shouldGetMiss(t, ds, "hello")
+	storetests.ShouldGetError(t, ds, "hello", ErrCorruptObject)
+	storetests.ShouldGetMiss(t, ds, "hello")
 	shouldFileExist(t, filepath.Join(tmpDir, "quarantine", "aGVsbG8="))
 
-	shouldSet(t, ds, "other", []byte("werld"))
+	storetests.ShouldSet(t, ds, "other", []byte("werld"))
 	shouldHashcheck(t, ds, 1, 0)
 	shouldCorrupt(t, filepath.Join(tmpDir, "data", "b3RoZXI="))
 	shouldHashcheck(t, ds, 0, 1)
-	shouldGetMiss(t, ds, "other")
+	storetests.ShouldGetMiss(t, ds, "other")
 	shouldHashcheck(t, ds, 0, 0)
 	shouldFileExist(t, filepath.Join(tmpDir, "quarantine", "b3RoZXI="))
 }

@@ -8,6 +8,7 @@ import (
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/meta"
+	"git.encryptio.com/slime/lib/store/storedir"
 
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/backend/ram"
@@ -16,7 +17,7 @@ import (
 func TestFinderScan(t *testing.T) {
 	db := ram.New()
 
-	ds, tmpPath := makeDirectory(t)
+	ds, tmpPath := storedir.MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpPath)
 
 	cs, err := chunkserver.New([]string{tmpPath}, 0, 0)

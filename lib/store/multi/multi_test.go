@@ -9,14 +9,14 @@ import (
 	"testing"
 
 	"git.encryptio.com/slime/lib/chunkserver"
-	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/store/storedir"
 
 	"git.encryptio.com/kvl/backend/ram"
 )
 
-func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*store.Directory, func()) {
+func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*storedir.Directory, func()) {
 	var killers []*killHandler
-	var dirstores []*store.Directory
+	var dirstores []*storedir.Directory
 
 	var servers []*httptest.Server
 	var chunkServers []*chunkserver.Handler
@@ -43,7 +43,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 	}
 
 	for i := 0; i < serverCount; i++ {
-		dirstore, tmpPath := makeDirectory(t)
+		dirstore, tmpPath := storedir.MakeTestingDirectory(t)
 		tmpPaths = append(tmpPaths, tmpPath)
 		dirstores = append(dirstores, dirstore)
 

@@ -1,4 +1,4 @@
-package store
+package storehttp
 
 import (
 	"bufio"
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"git.encryptio.com/slime/lib/httputil"
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/uuid"
 )
 
@@ -67,7 +68,7 @@ func (cc *Client) GetWith256(key string) ([]byte, [32]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, h, ErrNotFound
+		return nil, h, store.ErrNotFound
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -141,7 +142,7 @@ func (cc *Client) CASWith256(key string, oldH [32]byte, data []byte, newH [32]by
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusConflict {
-		return ErrCASFailure
+		return store.ErrCASFailure
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -159,7 +160,7 @@ func (cc *Client) Delete(key string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return ErrNotFound
+		return store.ErrNotFound
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -230,7 +231,7 @@ func (cc *Client) FreeSpace() (int64, error) {
 	return strconv.ParseInt(string(data), 10, 64)
 }
 
-func (cc *Client) Stat(key string) (*Stat, error) {
+func (cc *Client) Stat(key string) (*store.Stat, error) {
 	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil)
 	if err != nil {
 		return nil, err
@@ -238,14 +239,14 @@ func (cc *Client) Stat(key string) (*Stat, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, ErrNotFound
+		return nil, store.ErrNotFound
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, httputil.ReadResponseAsError(resp)
 	}
 
-	st := &Stat{}
+	st := &store.Stat{}
 
 	if sha := resp.Header.Get("x-content-sha256"); sha != "" {
 		shaBytes, err := hex.DecodeString(sha)

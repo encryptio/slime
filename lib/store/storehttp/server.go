@@ -1,4 +1,4 @@
-package store
+package storehttp
 
 import (
 	"crypto/sha256"
@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/uuid"
 )
 
@@ -36,11 +37,11 @@ const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
 // if the existing value does not have the given ETag/SHA256, and will
 // atomically swap if it does.
 type Server struct {
-	store Store
+	store store.Store
 }
 
 // NewServer creates a Server out of a Store256.
-func NewServer(s Store) *Server {
+func NewServer(s store.Store) *Server {
 	return &Server{s}
 }
 
@@ -57,7 +58,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if theirEtags := r.Header.Get("if-none-match"); theirEtags != "" {
 			st, err := h.store.Stat(obj)
 			if err != nil {
-				if err == ErrNotFound {
+				if err == store.ErrNotFound {
 					http.Error(w, "not found", http.StatusNotFound)
 					return
 				}
@@ -83,7 +84,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		data, hash, err := h.store.GetWith256(obj)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == store.ErrNotFound {
 				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}
@@ -103,7 +104,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "HEAD":
 		st, err := h.store.Stat(obj)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == store.ErrNotFound {
 				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}
@@ -178,7 +179,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			err = h.store.CASWith256(obj, cas, data, haveHash)
 			if err != nil {
-				if err == ErrCASFailure {
+				if err == store.ErrCASFailure {
 					http.Error(w, err.Error(), http.StatusConflict)
 					return
 				}
@@ -198,7 +199,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "DELETE":
 		err := h.store.Delete(obj)
 		if err != nil {
-			if err == ErrNotFound {
+			if err == store.ErrNotFound {
 				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}

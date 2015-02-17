@@ -12,7 +12,7 @@ import (
 	"git.encryptio.com/slime/lib/httputil"
 	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/proxyserver"
-	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/store/storedir"
 
 	"git.encryptio.com/kvl/backend/psql"
 )
@@ -46,7 +46,7 @@ func fmtDir() {
 		os.Exit(1)
 	}
 
-	err := store.CreateDirectory(os.Args[1])
+	err := storedir.CreateDirectory(os.Args[1])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)

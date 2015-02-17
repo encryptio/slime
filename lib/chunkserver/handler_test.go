@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"testing"
 
-	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/store/storedir"
 )
 
 func shouldRespond(t *testing.T, handler http.Handler, method, url string, requestBody string, code int, responseBody string) {
@@ -67,7 +67,7 @@ func TestHandlerBasics(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpdir)
 
-	err = store.CreateDirectory(tmpdir)
+	err = storedir.CreateDirectory(tmpdir)
 	if err != nil {
 		t.Fatalf("Couldn't initialize directory store in %v: %v", tmpdir, err)
 	}

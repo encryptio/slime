@@ -1,4 +1,4 @@
-package store
+package storedir
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/uuid"
 )
 
@@ -117,7 +118,7 @@ func (ds *Directory) GetWith256(key string) ([]byte, [32]byte, error) {
 	fh, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, h, ErrNotFound
+			return nil, h, store.ErrNotFound
 		}
 		return nil, h, err
 	}
@@ -152,17 +153,17 @@ func (ds *Directory) GetWith256(key string) ([]byte, [32]byte, error) {
 	return data, h, nil
 }
 
-func (ds *Directory) Stat(key string) (*Stat, error) {
+func (ds *Directory) Stat(key string) (*store.Stat, error) {
 	fh, err := os.Open(ds.keyToFilename(key))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, ErrNotFound
+			return nil, store.ErrNotFound
 		}
 		return nil, err
 	}
 	defer fh.Close()
 
-	st := &Stat{}
+	st := &store.Stat{}
 
 	_, err = fh.ReadAt(st.SHA256[:], 8)
 	if err != nil {
@@ -206,7 +207,7 @@ func (ds *Directory) CASWith256(key string, oldH [32]byte, data []byte, newH [32
 	fh, err := os.Open(ds.keyToFilename(key))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ErrNotFound
+			return store.ErrNotFound
 		}
 		return err
 	}
@@ -219,7 +220,7 @@ func (ds *Directory) CASWith256(key string, oldH [32]byte, data []byte, newH [32
 	}
 
 	if haveSHA != oldH {
-		return ErrCASFailure
+		return store.ErrCASFailure
 	}
 
 	return ds.lockedSet(key, data, newH, fnvHash)
@@ -274,7 +275,7 @@ func (ds *Directory) Delete(key string) error {
 
 	err := os.Remove(ds.keyToFilename(key))
 	if os.IsNotExist(err) {
-		return ErrNotFound
+		return store.ErrNotFound
 	}
 	return err
 }
@@ -339,7 +340,7 @@ func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-ch
 
 		for _, key := range keys {
 			data, err := ds.Get(key)
-			if err != nil && err != ErrNotFound {
+			if err != nil && err != store.ErrNotFound {
 				bad++
 			} else {
 				good++

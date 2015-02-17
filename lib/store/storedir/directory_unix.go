@@ -1,6 +1,6 @@
 // +build !windows
 
-package store
+package storedir
 
 import (
 	"path/filepath"
