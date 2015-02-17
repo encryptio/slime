@@ -165,7 +165,7 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 	}
 
 	if rebuild {
-		data, hash, err := m.GetWith256(file.Path)
+		data, hash, err := m.Get(file.Path)
 		if err != nil {
 			m.SaveMessagef("scan on %v: couldn't get for rebuild: %v", file.Path, err)
 			return

@@ -140,7 +140,7 @@ func TestMultiRecovery(t *testing.T) {
 				value = append(value, []byte(key)...)
 			}
 
-			gotVal, err := multi.Get(key)
+			gotVal, _, err := multi.Get(key)
 			if err != nil {
 				t.Fatalf("Couldn't get %v from multi after failing underneath redundancy level: %v", key, err)
 			}
@@ -208,7 +208,7 @@ func TestMultiDuplicates(t *testing.T) {
 	}
 
 	for i := 0; i < 50; i++ {
-		got, err := multi.Get(strconv.FormatInt(int64(i), 10))
+		got, _, err := multi.Get(strconv.FormatInt(int64(i), 10))
 		if err != nil {
 			t.Fatalf("Couldn't Get key %v: %v", i, err)
 		}
@@ -225,7 +225,7 @@ func TestMultiDuplicates(t *testing.T) {
 	}
 
 	for i := 25; i < 50; i++ {
-		got, err := multi.Get(strconv.FormatInt(int64(i), 10))
+		got, _, err := multi.Get(strconv.FormatInt(int64(i), 10))
 		if err != nil {
 			t.Fatalf("Couldn't Get key %v after removal of lower half: %v", i, err)
 		}
@@ -260,7 +260,7 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	killers[2].killed = true
 
 	for i := 0; i < 10; i++ {
-		got, err := multi.Get(strconv.FormatInt(int64(i), 10))
+		got, _, err := multi.Get(strconv.FormatInt(int64(i), 10))
 		if err != nil {
 			t.Fatalf("Couldn't get key %v: %v", i, err)
 		}

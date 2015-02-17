@@ -82,7 +82,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		data, hash, err := h.store.GetWith256(obj)
+		data, hash, err := h.store.Get(obj)
 		if err != nil {
 			if err == store.ErrNotFound {
 				http.Error(w, "not found", http.StatusNotFound)

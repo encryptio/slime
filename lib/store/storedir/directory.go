@@ -105,12 +105,7 @@ func (ds *Directory) StillValid() bool {
 	return thatUUID == ds.uuid
 }
 
-func (ds *Directory) Get(key string) ([]byte, error) {
-	d, _, err := ds.GetWith256(key)
-	return d, err
-}
-
-func (ds *Directory) GetWith256(key string) ([]byte, [32]byte, error) {
+func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
 	var h [32]byte
 
 	path := ds.keyToFilename(key)
@@ -339,7 +334,7 @@ func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-ch
 		}
 
 		for _, key := range keys {
-			data, err := ds.Get(key)
+			data, _, err := ds.Get(key)
 			if err != nil && err != store.ErrNotFound {
 				bad++
 			} else {

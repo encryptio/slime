@@ -2,6 +2,7 @@ package storetests
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"reflect"
 	"testing"
@@ -36,19 +37,22 @@ func ShouldSet(t *testing.T, s store.Store, key string, data []byte) {
 }
 
 func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
-	got, err := s.Get(key)
+	got, gothash, err := s.Get(key)
 	if err != nil {
 		t.Errorf("Get(%#v) returned unexpected error %v", key, err)
 		return
 	}
 
-	if !bytes.Equal(got, data) {
-		t.Errorf("Get(%#v) = %#v, but wanted %#v", key, got, data)
+	wantHash := sha256.Sum256(data)
+
+	if !bytes.Equal(got, data) || gothash != wantHash {
+		t.Errorf("Get(%#v) = (%#v, %#v), but wanted (%#v, %#v)",
+			key, got, hex.EncodeToString(gothash[:]), data, hex.EncodeToString(wantHash[:]))
 	}
 }
 
 func ShouldGetError(t *testing.T, s store.Store, key string, wantErr error) {
-	got, err := s.Get(key)
+	got, _, err := s.Get(key)
 	if err != wantErr {
 		t.Errorf("Get(%#v) = (%#v, %v), but wanted err = %v",
 			key, got, err, wantErr)
@@ -92,19 +96,6 @@ func ShouldStat(t *testing.T, s store.Store, key string, stat *store.Stat) {
 	}
 	if !reflect.DeepEqual(st, stat) {
 		t.Errorf("Stat(%#v) = %#v, but wanted %#v", key, st, stat)
-	}
-}
-
-func ShouldGetWith256(t *testing.T, s store.Store, key string, data []byte, sha [32]byte) {
-	got, gothash, err := s.GetWith256(key)
-	if err != nil {
-		t.Errorf("GetWith256(%#v) returned unexpected error %v", key, err)
-		return
-	}
-
-	if !bytes.Equal(got, data) || gothash != sha {
-		t.Errorf("GetWith256(%#v) = (%#v, %#v), but wanted (%#v, %#v)",
-			key, got, hex.EncodeToString(gothash[:]), data, hex.EncodeToString(sha[:]))
 	}
 }
 

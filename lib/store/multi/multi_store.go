@@ -36,12 +36,7 @@ func (m *Multi) Name() string {
 	return "multi"
 }
 
-func (m *Multi) Get(key string) ([]byte, error) {
-	d, _, err := m.GetWith256(key)
-	return d, err
-}
-
-func (m *Multi) GetWith256(key string) ([]byte, [32]byte, error) {
+func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 	var h [32]byte
 
 	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
@@ -77,7 +72,7 @@ func (m *Multi) GetWith256(key string) ([]byte, [32]byte, error) {
 		st := m.finder.StoreFor(f.Locations[i])
 		if st != nil {
 			localKey := localKeyFor(f, i)
-			chunkData[i], _ = st.Get(localKey)
+			chunkData[i], _, _ = st.Get(localKey)
 		}
 	}
 

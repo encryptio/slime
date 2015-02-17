@@ -30,9 +30,9 @@ type Store interface {
 	UUID() [16]byte
 	Name() string
 
-	// Get retrieves the value for the given key, or ErrNotFound if the key does
-	// not exist.
-	Get(key string) ([]byte, error)
+	// Get retrieves the value for the given key and its SHA256 hash, or
+	// ErrNotFound if the key does not exist.
+	Get(key string) ([]byte, [32]byte, error)
 
 	// Set adds or replaces the value for the given key.
 	Set(key string, data []byte) error
@@ -51,9 +51,6 @@ type Store interface {
 
 	// Stat returns a bit of info about the key given.
 	Stat(key string) (*Stat, error)
-
-	// GetWith256 is like Get, but also returns the SHA256 of the content.
-	GetWith256(key string) ([]byte, [32]byte, error)
 
 	// SetWith256 is like Set, but passes in the (already-verified) SHA256 of
 	// the content.

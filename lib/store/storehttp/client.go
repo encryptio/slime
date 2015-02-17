@@ -53,12 +53,7 @@ func (cc *Client) Name() string {
 	return cc.name
 }
 
-func (cc *Client) Get(key string) ([]byte, error) {
-	d, _, err := cc.GetWith256(key)
-	return d, err
-}
-
-func (cc *Client) GetWith256(key string) ([]byte, [32]byte, error) {
+func (cc *Client) Get(key string) ([]byte, [32]byte, error) {
 	var h [32]byte
 
 	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil)

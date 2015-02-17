@@ -111,7 +111,7 @@ func TestStoreCASRace(t *testing.T, s store.Store) {
 			for j := 0; j < iterations; j++ {
 				for {
 					time.Sleep(time.Millisecond)
-					data, oldsha, err := s.GetWith256("key")
+					data, oldsha, err := s.Get("key")
 					if err != nil {
 						errs <- err
 						return
