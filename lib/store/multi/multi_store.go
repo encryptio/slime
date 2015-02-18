@@ -26,7 +26,7 @@ var (
 )
 
 func localKeyFor(file *meta.File, idx int) string {
-	return fmt.Sprintf("%x_%x_%v",
+	return fmt.Sprintf("%v_%x_%v",
 		uuid.Fmt(file.PrefixID), file.SHA256[:8], idx)
 }
 
