@@ -273,3 +273,36 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 		}
 	}
 }
+
+func TestMultiCanReplaceDeadKeys(t *testing.T) {
+	killers, multi, _, done := prepareMultiTest(t, 7, 8, 8)
+	defer done()
+
+	err := multi.CAS("a", store.MissingV, store.DataV([]byte("hello")))
+	if err != nil {
+		t.Fatalf("Couldn't write key: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		killers[i].killed = true
+	}
+
+	err = multi.SetRedundancy(4, 5)
+	if err != nil {
+		t.Fatalf("Couldn't adjust redundancy: %v", err)
+	}
+
+	err = multi.CAS("a", store.DataV([]byte("hello")), store.DataV([]byte("there")))
+	if err != nil {
+		t.Fatalf("Couldn't replace key: %v", err)
+	}
+
+	for i := 3; i < 6; i++ {
+		killers[i].killed = true
+	}
+
+	err = multi.CAS("a", store.DataV([]byte("there")), store.MissingV)
+	if err != nil {
+		t.Fatalf("Couldn't delete key: %v", err)
+	}
+}
