@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"git.encryptio.com/slime/lib/retry"
 	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/uuid"
 )
@@ -219,7 +220,8 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	case "DELETE":
 		doRetry := true
-		for {
+		retr := retry.New(15)
+		for retr.Next() {
 			doRetry = false
 
 			from, err := parseIfMatch(r.Header.Get("If-Match"))
@@ -264,6 +266,8 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+
+		http.Error(w, "too many retries", http.StatusInternalServerError)
 
 	default:
 		w.Header().Set("Allow", "GET, HEAD, PUT, DELETE")

@@ -1,11 +1,13 @@
 package storetests
 
 import (
+	"fmt"
 	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"git.encryptio.com/slime/lib/retry"
 	"git.encryptio.com/slime/lib/store"
 )
 
@@ -87,7 +89,9 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 	for i := 0; i < goroutines; i++ {
 		go func(i int) {
 			for j := 0; j < iterations; j++ {
-				for {
+				done := false
+				r := retry.New(10)
+				for r.Next() {
 					time.Sleep(time.Millisecond)
 					data, oldsha, err := s.Get("key")
 					if err != nil {
@@ -123,7 +127,12 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 					t.Logf("routine %v iteration %v succeeded in casing to %v",
 						i, j, num)
 
+					done = true
 					break
+				}
+				if !done {
+					errs <- fmt.Errorf("too many retries")
+					return
 				}
 			}
 			errs <- nil

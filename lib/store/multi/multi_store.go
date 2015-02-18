@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"git.encryptio.com/slime/lib/meta"
+	"git.encryptio.com/slime/lib/retry"
 	"git.encryptio.com/slime/lib/rs"
 	"git.encryptio.com/slime/lib/rs/gf"
 	"git.encryptio.com/slime/lib/store"
@@ -21,6 +22,7 @@ var (
 	ErrInsufficientStores = errors.New("not enough stores to match redundancy level")
 	ErrInsufficientChunks = errors.New("not enough chunks available")
 	ErrBadHash            = errors.New("bad checksum after reconstruction")
+	ErrTooManyRetries     = errors.New("too many retries")
 )
 
 func localKeyFor(file *meta.File, idx int) string {
@@ -65,7 +67,8 @@ func (m *Multi) getFile(key string) (*meta.File, error) {
 func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 	var zeroes [32]byte
 
-	for {
+	r := retry.New(5)
+	for r.Next() {
 		f, err := m.getFile(key)
 		if err != nil {
 			return nil, zeroes, err
@@ -91,6 +94,8 @@ func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 
 		return data, f.SHA256, err
 	}
+
+	return nil, zeroes, ErrTooManyRetries
 }
 
 func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
