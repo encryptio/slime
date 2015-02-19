@@ -198,3 +198,76 @@ func TestLayerFileGetByLocation(t *testing.T) {
 		t.Errorf("Couldn't run transaction: %v", err)
 	}
 }
+
+func TestLayerFileList(t *testing.T) {
+	db := ram.New()
+
+	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		l, err := Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for c := 'a'; c <= 'z'; c++ {
+			f := File{
+				Path:         string(c),
+				Size:         1,
+				SHA256:       sha256.Sum256([]byte{byte(c)}),
+				WriteTime:    uint64(time.Now().Unix()),
+				PrefixID:     uuid.Gen4(),
+				DataChunks:   1,
+				MappingValue: 0,
+				Locations:    [][16]byte{uuid.Gen4()},
+			}
+
+			err := l.SetFile(&f)
+			if err != nil {
+				t.Errorf("Couldn't SetFile: %v", err)
+				return nil, err
+			}
+		}
+
+		tests := []struct {
+			After string
+			Limit int
+			Paths []string
+		}{
+			{"", 2, []string{"a", "b"}},
+			{"a", 4, []string{"b", "c", "d", "e"}},
+			{"azz", 3, []string{"b", "c", "d"}},
+			{"q", 0, []string{"r", "s", "t", "u", "v", "w", "x", "y", "z"}},
+			{"w", 6, []string{"x", "y", "z"}},
+		}
+
+		for _, test := range tests {
+			fs, err := l.ListFiles(test.After, test.Limit)
+			if err != nil {
+				t.Errorf("Couldn't ListFiles(%#v, %v): %v",
+					test.After, test.Limit, err)
+				continue
+			}
+
+			bad := false
+			if len(fs) != len(test.Paths) {
+				bad = true
+			} else {
+				for i, f := range fs {
+					if f.Path != test.Paths[i] {
+						bad = true
+						break
+					}
+				}
+			}
+
+			if bad {
+				t.Errorf("ListFiles(%#v, %v) returned %#v, but wanted paths %v",
+					test.After, test.Limit, fs, test.Paths)
+			}
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		t.Errorf("Couldn't run transaction: %v", err)
+	}
+}
