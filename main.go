@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"git.encryptio.com/slime/lib/chunkserver"
@@ -147,6 +148,7 @@ func dbReindex() {
 
 func main() {
 	initRandom()
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	if len(os.Args) < 2 {
 		help()
