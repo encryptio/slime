@@ -134,11 +134,7 @@ func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
 	}
 	data = data[:int(f.Size)]
 
-	hasher := sha256.New()
-	hasher.Write(data)
-	var have [32]byte
-	hasher.Sum(have[:0])
-
+	have := sha256.Sum256(data)
 	if have != f.SHA256 {
 		return nil, ErrBadHash
 	}
