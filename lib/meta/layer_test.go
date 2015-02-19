@@ -56,7 +56,7 @@ func TestLayerConfig(t *testing.T) {
 	}
 }
 
-func TestLayerFileGetSet(t *testing.T) {
+func TestLayerFileGetSetRemove(t *testing.T) {
 	db := ram.New()
 
 	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
@@ -101,6 +101,32 @@ func TestLayerFileGetSet(t *testing.T) {
 
 		if f != nil {
 			t.Errorf("GetFile(nonexistent) returned %#v, but wanted nil", f)
+		}
+
+		err = l.RemoveFilePath("nonexistent")
+		if err != kvl.ErrNotFound {
+			t.Errorf("RemoveFilePath(nonexistent) returned %v, but wanted %v",
+				err, kvl.ErrNotFound)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		err = l.RemoveFilePath("path to a")
+		if err != nil {
+			t.Errorf("Couldn't RemoveFilePath(path to a): %v",
+				err)
+			return nil, err
+		}
+
+		f, err = l.GetFile("path to a")
+		if err != nil {
+			t.Errorf("Couldn't GetFile(path to a): %v", err)
+			return nil, err
+		}
+
+		if f != nil {
+			t.Errorf("GetFile(path to a) returned %#v, but wnated nil", f)
 		}
 
 		return nil, nil
