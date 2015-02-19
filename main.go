@@ -1,9 +1,12 @@
 package main
 
 import (
+	crand "crypto/rand"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -16,6 +19,16 @@ import (
 
 	"git.encryptio.com/kvl/backend/psql"
 )
+
+func initRandom() {
+	var buf [8]byte
+	_, err := crand.Read(buf[:])
+	if err != nil {
+		panic(err)
+	}
+
+	rand.Seed(int64(binary.BigEndian.Uint64(buf[:])))
+}
 
 func help() {
 	fmt.Fprintf(os.Stderr, "Usage: %v command [args]\n", os.Args[0])
@@ -133,6 +146,8 @@ func dbReindex() {
 }
 
 func main() {
+	initRandom()
+
 	if len(os.Args) < 2 {
 		help()
 		os.Exit(1)
