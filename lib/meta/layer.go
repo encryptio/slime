@@ -71,6 +71,40 @@ func (l *Layer) RemoveFilePath(path string) error {
 	return l.inner.Delete(fileKey(path))
 }
 
+func (l *Layer) GetFilesByLocation(id [16]byte, count int) ([]File, error) {
+	var rang kvl.RangeQuery
+	rang.Low, rang.High = keys.PrefixRange(tuple.MustAppend(nil,
+		"file", "location", id))
+	rang.Limit = count
+
+	ps, err := l.index.Range(rang)
+	if err != nil {
+		return nil, err
+	}
+
+	fs := make([]File, 0, len(ps))
+
+	for _, p := range ps {
+		var typ, detail, path string
+		var loc [16]byte
+		err := tuple.UnpackInto(p.Key, &typ, &detail, &loc, &path)
+		if err != nil {
+			return nil, err
+		}
+
+		f, err := l.GetFile(path)
+		if err != nil {
+			return nil, err
+		}
+
+		if f != nil {
+			fs = append(fs, *f)
+		}
+	}
+
+	return fs, nil
+}
+
 func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
 	if limit < 0 {
 		return nil, ErrBadArgument
