@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"git.encryptio.com/slime/lib/meta"
@@ -306,20 +307,21 @@ func (m *Multi) deleteChunks(file *meta.File) error {
 		return nil
 	}
 
-	storesMap := m.finder.Stores()
-
-	// remove chunks on old stores that are not shared by the new write
+	var wg sync.WaitGroup
 	for i, loc := range file.Locations {
-		localKey := localKeyFor(file, i)
-
-		st := storesMap[loc]
-		if st != nil {
-			// TODO: log err
-			st.CAS(localKey, store.AnyV, store.MissingV)
-		} else {
-			// TODO: log delete skip
-		}
+		wg.Add(1)
+		go func(localKey string, loc [16]byte) {
+			defer wg.Done()
+			st := m.finder.StoreFor(loc)
+			if st != nil {
+				// TODO: log err
+				st.CAS(localKey, store.AnyV, store.MissingV)
+			} else {
+				// TODO: log delete skip
+			}
+		}(localKeyFor(file, i), loc)
 	}
+	wg.Wait()
 
 	return nil
 }
