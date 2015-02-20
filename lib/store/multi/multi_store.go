@@ -489,7 +489,9 @@ func (m *Multi) FreeSpace() (int64, error) {
 	fillable := frees[len(frees)-conf.Total]
 
 	// removing parity amount
-	free := fillable / int64(conf.Total) * int64(conf.Need)
+	freePerDrive := fillable / int64(conf.Total) * int64(conf.Need)
+
+	free := freePerDrive * int64(conf.Need)
 
 	return free, nil
 }
