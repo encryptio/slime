@@ -15,6 +15,8 @@ type Multi struct {
 	finder *Finder
 	uuid   [16]byte
 
+	freeMapChannel chan map[[16]byte]int64
+
 	stop chan struct{}
 
 	mu     sync.Mutex
@@ -23,9 +25,10 @@ type Multi struct {
 
 func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 	m := &Multi{
-		db:     db,
-		finder: finder,
-		stop:   make(chan struct{}),
+		db:             db,
+		finder:         finder,
+		stop:           make(chan struct{}),
+		freeMapChannel: make(chan map[[16]byte]int64),
 	}
 
 	err := m.loadUUID()
@@ -41,6 +44,7 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 	go m.loadConfigLoop(loadConfigInterval)
 	go m.scrubLoop()
 	go m.rebalanceLoop()
+	go m.freeMapLoop()
 
 	return m, nil
 }

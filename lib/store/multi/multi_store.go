@@ -24,6 +24,8 @@ var (
 	ErrInsufficientChunks = errors.New("not enough chunks available")
 	ErrBadHash            = errors.New("bad checksum after reconstruction")
 	ErrTooManyRetries     = errors.New("too many retries")
+
+	freeMapRebuildInterval = time.Second * 30
 )
 
 func localKeyFor(file *meta.File, idx int) string {
@@ -326,6 +328,42 @@ func (m *Multi) deleteChunks(file *meta.File) error {
 	return nil
 }
 
+func (m *Multi) freeMapLoop() {
+	for {
+		stores := m.finder.Stores()
+		freeMap := make(map[[16]byte]int64, len(stores))
+		created := time.Now()
+		for id, st := range stores {
+			free, err := st.FreeSpace()
+			if err != nil {
+				freeMap[id] = free
+			}
+		}
+
+		dur := jitterDuration(freeMapRebuildInterval)
+
+		for time.Now().Sub(created) < dur {
+			select {
+			case <-m.stop:
+				return
+			case m.freeMapChannel <- freeMap:
+			}
+		}
+	}
+}
+
+func (m *Multi) getStoreWeights() map[[16]byte]int64 {
+	free := <-m.freeMapChannel
+	storesMap := m.finder.Stores()
+
+	weights := make(map[[16]byte]int64, len(storesMap))
+	for id := range storesMap {
+		weights[id] = 10000000000 + free[id]
+	}
+
+	return weights
+}
+
 func (m *Multi) orderTargets() ([]store.Store, error) {
 	m.mu.Lock()
 	conf := m.config
@@ -358,15 +396,31 @@ func (m *Multi) orderTargets() ([]store.Store, error) {
 		return nil, ErrInsufficientStores
 	}
 
-	// TODO: better ordering of stores based on allocation preferences
+	weights := m.getStoreWeights()
+
 	stores := make([]store.Store, 0, len(storesMap))
-	for _, v := range storesMap {
-		stores = append(stores, v)
-	}
-	// shuffle stores
-	for i := range stores {
-		j := rand.Intn(i + 1)
-		stores[i], stores[j] = stores[j], stores[i]
+	for len(weights) > 0 {
+		totalWeight := int64(0)
+		for _, w := range weights {
+			totalWeight += w
+		}
+
+		r := rand.Int63n(totalWeight)
+		var chosenID [16]byte
+		for id, w := range weights {
+			if r <= w {
+				chosenID = id
+				break
+			}
+			r -= w
+		}
+
+		st := storesMap[chosenID]
+		if st != nil {
+			stores = append(stores, st)
+		}
+
+		delete(weights, chosenID)
 	}
 
 	return stores, nil
