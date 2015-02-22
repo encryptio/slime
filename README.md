@@ -25,12 +25,12 @@ Create a few storage directories:
     $ slime fmt-dir /tmp/slime-2
     $ slime fmt-dir /tmp/slime-3
 
-Start the chunk server:
+Start the chunk server (it will listen on port 17941 by default):
 
     $ slime chunk-server /tmp/slime-{1,2,3}
     <command will not return>
 
-Start the proxy server:
+Start the proxy server (it will listen on port 17942 by default):
 
     $ export SLIME_PGDSN="user=slime dbname=slime password=secret sslmode=disable"
     $ slime proxy-server
@@ -66,6 +66,9 @@ file.
 For example, if you have your redundancy set to 3 of 5 and you lose a drive,
 all files can still be recovered, even if there's a drive with an unexpected
 bad or bitrotted block.
+
+The storage required for data is `total/need` times that of the actual data
+(plus a few bytes per file for tracking.)
 
 GET /redundancy on the proxy to get the current redundancy level (JSON
 formatted), and POST to the same path with a similar object to adjust the
