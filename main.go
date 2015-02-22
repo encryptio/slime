@@ -76,6 +76,9 @@ func chunkServer() {
 	sleepByte := flag.Duration("sleep-byte", 200*time.Nanosecond,
 		"Sleep per byte checked")
 
+	parallel := flag.Int("parallel", 10,
+		"max number of requests to handle in parallel")
+
 	logEnabled := flag.Bool("log", true,
 		"enable access logging")
 
@@ -94,6 +97,10 @@ func chunkServer() {
 		log.Fatalf("Couldn't initialize handler: %v", err)
 	}
 
+	if *parallel > 0 {
+		h = httputil.NewLimitParallelism(*parallel, h)
+	}
+
 	if *logEnabled {
 		h = httputil.LogHttpRequests(h)
 	}
@@ -106,6 +113,8 @@ func proxyServer() {
 		"Address and port to serve on")
 	logEnabled := flag.Bool("log", true,
 		"enable access logging")
+	parallel := flag.Int("parallel", 4,
+		"max number of requests to handle in parallel")
 	flag.Parse()
 
 	db, err := psql.Open(os.Getenv("SLIME_PGDSN"))
@@ -121,6 +130,10 @@ func proxyServer() {
 	h, err = proxyserver.New(db)
 	if err != nil {
 		log.Fatalf("Couldn't initialize handler: %v", err)
+	}
+
+	if *parallel > 0 {
+		h = httputil.NewLimitParallelism(*parallel, h)
 	}
 
 	if *logEnabled {
