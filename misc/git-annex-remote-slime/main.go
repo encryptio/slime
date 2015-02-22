@@ -132,7 +132,30 @@ func store(key, file string) {
 		return
 	}
 
-	req, err := http.NewRequest("PUT", keyURL(key),
+	req, err := http.NewRequest("HEAD", keyURL(key), nil)
+	if err != nil {
+		log.Printf("Couldn't create request for %s: %v",
+			keyURL(key), err)
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("Couldn't HEAD %v: %v", req.URL, err)
+		return
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if oldSHA := resp.Header.Get("X-Content-SHA256"); oldSHA != "" {
+			if strings.ToLower(oldSHA) == hex.EncodeToString(sha) {
+				ok = true
+				return
+			}
+		}
+	}
+
+	req, err = http.NewRequest("PUT", keyURL(key),
 		&positionPrinter{rdr: fh})
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v",
@@ -142,7 +165,7 @@ func store(key, file string) {
 	req.Header.Set("X-Content-SHA256", hex.EncodeToString(sha))
 	req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		log.Printf("Couldn't PUT to %v: %v", req.URL, err)
 		return
