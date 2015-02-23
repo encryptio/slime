@@ -71,7 +71,7 @@ func (m *Multi) getFile(key string) (*meta.File, error) {
 func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 	var zeroes [32]byte
 
-	r := retry.New(5)
+	r := retry.New(10)
 	for r.Next() {
 		f, err := m.getFile(key)
 		if err != nil {

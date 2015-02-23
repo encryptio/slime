@@ -220,7 +220,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	case "DELETE":
 		doRetry := true
-		retr := retry.New(5)
+		retr := retry.New(10)
 		for retr.Next() {
 			doRetry = false
 
