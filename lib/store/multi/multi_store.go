@@ -26,6 +26,7 @@ var (
 	ErrTooManyRetries     = errors.New("too many retries")
 
 	freeMapRebuildInterval = time.Second * 30
+	dataOnlyTimeout        = time.Second * 5
 )
 
 func localKeyFor(file *meta.File, idx int) string {
@@ -101,15 +102,82 @@ func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
 	return nil, zeroes, ErrTooManyRetries
 }
 
-func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
+func (m *Multi) getChunkData(f *meta.File) [][]byte {
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
+	// TODO: figure out how to cancel Get requests to avoid blocking on stuff
+	// we've already given up on
+
 	chunkData := make([][]byte, len(f.Locations))
-	for i := range chunkData {
+
+	type chunkResult struct {
+		index int
+		data  []byte
+	}
+
+	// NB: buffer size is to avoid deadlocks between defer wg.Wait() and extra
+	// parity results
+	results := make(chan chunkResult, len(f.Locations)-int(f.DataChunks))
+
+	work := func(i int) {
 		st := m.finder.StoreFor(f.Locations[i])
+		var data []byte
 		if st != nil {
 			localKey := localKeyFor(f, i)
-			chunkData[i], _, _ = st.Get(localKey)
+			data, _, _ = st.Get(localKey)
+			// TODO: log err?
+		}
+		results <- chunkResult{i, data}
+		wg.Done()
+	}
+
+	// try to get data only at first
+	for i := 0; i < int(f.DataChunks); i++ {
+		wg.Add(1)
+		go work(i)
+	}
+
+	timer := time.NewTimer(dataOnlyTimeout)
+	timeoutChan := timer.C
+	defer timer.Stop()
+
+	returned := 0
+	got := 0
+	for {
+		select {
+		case res := <-results:
+			returned++
+			if res.data != nil {
+				got++
+				chunkData[res.index] = res.data
+			} else {
+				if timeoutChan != nil {
+					// failed to get one of the data chunks, go get the parity
+					timeoutChan = nil
+					for i := int(f.DataChunks); i < len(f.Locations); i++ {
+						wg.Add(1)
+						go work(i)
+					}
+				}
+			}
+
+			if got >= int(f.DataChunks) || returned == len(f.Locations) {
+				return chunkData
+			}
+		case <-timeoutChan:
+			// data was too slow returning, go get the parity
+			timeoutChan = nil
+			for i := int(f.DataChunks); i < len(f.Locations); i++ {
+				wg.Add(1)
+				go work(i)
+			}
 		}
 	}
+}
+
+func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
+	chunkData := m.getChunkData(f)
 
 	rawDataAvailable := false
 	for i := 0; i < int(f.DataChunks); i++ {
