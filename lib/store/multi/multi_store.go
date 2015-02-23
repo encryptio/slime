@@ -111,31 +111,47 @@ func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
 		}
 	}
 
-	indicies := make([]int, 0, len(chunkData))
-	chunks := make([][]uint32, 0, len(chunkData))
-	for i, data := range chunkData {
-		if data == nil {
-			continue
+	rawDataAvailable := false
+	for i := 0; i < int(f.DataChunks); i++ {
+		if chunkData[i] == nil {
+			rawDataAvailable = false
+			break
 		}
-		chunk := gf.MapToGFWith(data, f.MappingValue)
-
-		indicies = append(indicies, i)
-		chunks = append(chunks, chunk)
 	}
 
-	if len(chunks) < int(f.DataChunks) {
-		return nil, ErrInsufficientChunks
-	}
+	data := make([]byte, 0, int(f.Size)+16)
+	if rawDataAvailable {
+		// fast path: chunkData[0..f.DataChunks-1] are non-nil
+		for i := 0; i < int(f.DataChunks); i++ {
+			data = append(data, chunkData[i]...)
+		}
+		data = data[:int(f.Size)]
+	} else {
+		indicies := make([]int, 0, len(chunkData))
+		chunks := make([][]uint32, 0, len(chunkData))
+		for i, data := range chunkData {
+			if data == nil {
+				continue
+			}
+			chunk := gf.MapToGFWith(data, f.MappingValue)
 
-	chunks = chunks[:int(f.DataChunks)]
-	indicies = indicies[:int(f.DataChunks)]
+			indicies = append(indicies, i)
+			chunks = append(chunks, chunk)
+		}
 
-	dataVecs := rs.RecoverData(chunks, indicies)
-	var data []byte
-	for _, vec := range dataVecs {
-		data = append(data, gf.MapFromGF(f.MappingValue, vec)...)
+		if len(chunks) < int(f.DataChunks) {
+			return nil, ErrInsufficientChunks
+		}
+
+		chunks = chunks[:int(f.DataChunks)]
+		indicies = indicies[:int(f.DataChunks)]
+
+		dataVecs := rs.RecoverData(chunks, indicies)
+		for _, vec := range dataVecs {
+			data = append(data, gf.MapFromGF(f.MappingValue, vec)...)
+		}
+		data = data[:int(f.Size)]
 	}
-	data = data[:int(f.Size)]
 
 	have := sha256.Sum256(data)
 	if have != f.SHA256 {
