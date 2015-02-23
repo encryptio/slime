@@ -538,32 +538,53 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 		SHA256:       sha,
 	}
 
-	file.Locations = make([][16]byte, 0, len(parityParts))
-	storeIdx := 0
+	storeCh := make(chan store.Store, len(stores))
+	for _, st := range stores {
+		storeCh <- st
+	}
+	close(storeCh)
+
+	file.Locations = make([][16]byte, len(parts))
+	errs := make(chan error)
 	for i, part := range parts {
-		// TODO: parallelize writes
+		go func(i int, part []uint32) {
+			data := gf.MapFromGF(mapping, part)
+			localKey := localKeyFor(file, i)
+			dataV := store.DataV(data)
+			for st := range storeCh {
+				err := st.CAS(localKey, store.AnyV, dataV)
+				if err != nil {
+					// TODO: log
+					continue
+				}
 
-		partData := gf.MapFromGF(mapping, part)
-		localKey := localKeyFor(file, i)
-
-		for {
-			if storeIdx >= len(stores) {
-				// TODO: cleanup chunks we wrote in earlier iterations
-				return nil, ErrInsufficientStores
+				file.Locations[i] = st.UUID()
+				errs <- nil
+				return
 			}
+			errs <- ErrInsufficientStores
+		}(i, part)
+	}
 
-			st := stores[storeIdx]
-			storeIdx++
-
-			err := st.CAS(localKey, store.AnyV, store.DataV(partData))
-			if err != nil {
-				// TODO: log
-				continue
-			}
-
-			file.Locations = append(file.Locations, st.UUID())
-			break
+	var theError error
+	for range parts {
+		err := <-errs
+		if err != nil && theError == nil {
+			theError = err
 		}
+	}
+
+	if theError != nil {
+		// attempt to clean up any parts we wrote
+		for i := range parts {
+			st := m.finder.StoreFor(file.Locations[i])
+			if st != nil {
+				localKey := localKeyFor(file, i)
+				st.CAS(localKey, store.AnyV, store.MissingV)
+			}
+		}
+
+		return nil, theError
 	}
 
 	return file, nil
