@@ -143,11 +143,13 @@ func TestMultiRecovery(t *testing.T) {
 
 			gotVal, _, err := multi.Get(key)
 			if err != nil {
-				t.Fatalf("Couldn't get %v from multi after failing underneath redundancy level: %v", key, err)
+				t.Fatalf("Couldn't get %v from multi after failing underneath redundancy level: %v",
+					key, err)
 			}
 
 			if !bytes.Equal(value, gotVal) {
-				t.Fatalf("Value for %v is incorrect (got %#v, wanted %#v)", gotVal, value)
+				t.Fatalf("Value for %v is incorrect (got %#v, wanted %#v)",
+					key, gotVal, value)
 			}
 		}
 	}
@@ -166,7 +168,7 @@ func TestMultiScrub(t *testing.T) {
 
 	names, err := dirstores[0].List("", 1)
 	if err != nil {
-		t.Fatalf("Couldn't list first dirstore: %v")
+		t.Fatalf("Couldn't list first dirstore: %v", err)
 	}
 	if len(names) != 1 {
 		t.Fatalf("Didn't get a name from dirstore")
