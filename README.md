@@ -5,6 +5,14 @@ redundancy.
 *WARNING*: It is not ready for large scale production use. Play with it, but
 be prepared to run into bugs that may destroy data in slime.
 
+Dependencies
+------------
+
+slime requires Go 1.4 to build, and Go tip to run its test suite.
+
+PostgreSQL must be 9.1 or later; true serializability was implemented in that
+version.
+
 Quickstart
 ----------
 
