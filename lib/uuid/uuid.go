@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 )
 
 var ErrBadFormat = errors.New("bad format for UUID")
 
 var rng *rand.Rand
+var rngMu sync.Mutex
 
 func init() {
 	var buf [8]byte
@@ -28,9 +30,11 @@ func init() {
 
 func Gen4() [16]byte {
 	var ret [16]byte
+	rngMu.Lock()
 	for i := 0; i < 4; i++ {
 		binary.BigEndian.PutUint32(ret[i*4:], rng.Uint32())
 	}
+	rngMu.Unlock()
 	ret[6] = (ret[6] & 0x0F) | 0x40
 	ret[8] = (ret[8] & 0x3F) | 0x40
 	return ret
