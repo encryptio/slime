@@ -630,27 +630,25 @@ func (m *Multi) FreeSpace() (int64, error) {
 	m.mu.Unlock()
 
 	var frees []int64
-	for _, st := range m.finder.Stores() {
+	stores := m.finder.Stores()
+	for _, st := range stores {
 		free, err := st.FreeSpace()
-		if err == nil && free > 0 {
+		if err == nil {
 			frees = append(frees, free)
 		}
 	}
+	sort.Sort(sort.Reverse(int64Slice(frees)))
 
-	sort.Sort(int64Slice(frees))
+	var free int64
+	for len(frees) >= conf.Total {
+		removing := frees[len(frees)-1]
+		for i := 0; i < conf.Total; i++ {
+			frees[len(frees)-1-i] -= removing
+		}
+		frees = frees[:len(frees)-1]
 
-	if len(frees) < conf.Total {
-		return 0, nil
+		free += removing * int64(conf.Need)
 	}
-
-	// the minimum of the highest conf.Total free spaces is the
-	// space we can fill, including parity
-	fillable := frees[len(frees)-conf.Total]
-
-	// removing parity amount
-	freePerDrive := fillable / int64(conf.Total) * int64(conf.Need)
-
-	free := freePerDrive * int64(conf.Need)
 
 	return free, nil
 }
