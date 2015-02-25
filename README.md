@@ -153,3 +153,33 @@ Use the standard PostgreSQL utilties to do this, but be sure to specify
 other transactions the proxy is currently running:
 
     $ pg_dump -Fc --serializable-deferrable -f slime.pgdump slime
+
+Consistency Model
+-----------------
+
+Slime requires a serializable metadata database, but inherits that database's
+availability model for metadata, meaning it can only support CP distributed
+databases in terms of the CAP theorem. Non-distributed serializable databases
+such as (vanilla) PostgreSQL work, but are, of course, not partition tolerant.
+
+Data (contents) stored by slime follows a very different model. Assuming the
+metadata server is accessible by a particular proxy, then:
+
+- Reads are possible on an item when the required number of chunk servers
+  containing data chunks on each item is greater than or equal to the configured
+  redundancy's "need" level.
+- Writes are possible when the number of chunk servers connected (and with
+  enough free space) is greater than or equal to the configured redundancy's
+  "need" level.
+- Deletes are always possible.
+
+Note that writes are not "sticky"; writing data to a pre-existing item does not
+mean the data is stored in the same location. Even if a particular proxy can't
+read data at an item, that does not mean it can't serve highly-consistent writes
+to that item.
+
+One possible consequence of the differing availability models for data and
+metadata is that two proxy servers with different connections to chunk servers
+may be able to successfully write to the chunk servers _and_ successfully update
+the metadata store, and thus will see each other's writes in metadata, but may
+not be able to actually read the contents that the other proxy writes.
