@@ -167,7 +167,9 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		data, err := ioutil.ReadAll(io.LimitReader(r.Body, MaxFileSize+1))
+		hash := sha256.New()
+		tee := io.TeeReader(io.LimitReader(r.Body, MaxFileSize+1), hash)
+		data, err := ioutil.ReadAll(tee)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -178,7 +180,8 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		haveHash := sha256.Sum256(data)
+		var haveHash [32]byte
+		hash.Sum(haveHash[:0])
 
 		if want := r.Header.Get("X-Content-SHA256"); want != "" {
 			wantBytes, err := hex.DecodeString(want)
