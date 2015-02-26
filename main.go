@@ -76,7 +76,7 @@ func chunkServer() {
 	sleepByte := flag.Duration("sleep-byte", 200*time.Nanosecond,
 		"Sleep per byte checked")
 
-	parallel := flag.Int("parallel", 10,
+	parallel := flag.Int("parallel", 50,
 		"max number of requests to handle in parallel")
 
 	logEnabled := flag.Bool("log", true,
@@ -113,7 +113,7 @@ func proxyServer() {
 		"Address and port to serve on")
 	logEnabled := flag.Bool("log", true,
 		"enable access logging")
-	parallel := flag.Int("parallel", 4,
+	parallel := flag.Int("parallel", 50,
 		"max number of requests to handle in parallel")
 	flag.Parse()
 
