@@ -2,11 +2,26 @@ package httputil
 
 import (
 	"bufio"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"time"
 )
+
+type stattingReadCloser struct {
+	io.ReadCloser
+	bytes int
+	time  time.Duration
+}
+
+func (s *stattingReadCloser) Read(p []byte) (int, error) {
+	started := time.Now()
+	read, err := s.ReadCloser.Read(p)
+	s.time += time.Now().Sub(started)
+	s.bytes += read
+	return read, err
+}
 
 type logRecord struct {
 	http.ResponseWriter
@@ -15,10 +30,15 @@ type logRecord struct {
 	code     int
 	reqUrl   string
 	hijacked bool
+
+	time time.Duration
 }
 
 func (r *logRecord) Write(p []byte) (int, error) {
+	started := time.Now()
 	written, err := r.ResponseWriter.Write(p)
+	r.time += time.Now().Sub(started)
+
 	r.bytes += written
 	return written, err
 }
@@ -43,6 +63,9 @@ func (r hijackableLogRecord) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 func LogHttpRequests(inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		src := &stattingReadCloser{ReadCloser: req.Body}
+		req.Body = src
+
 		record := &logRecord{
 			ResponseWriter: w,
 			code:           200,
@@ -52,13 +75,15 @@ func LogHttpRequests(inner http.Handler) http.Handler {
 		started := time.Now()
 		defer func() {
 			if record.hijacked {
-				log.Printf("%s %s %s -> Connection Hijacked for %v",
+				log.Printf("%s %s %s -> Connection Hijacked in %v",
 					req.RemoteAddr, req.Method, record.reqUrl,
 					time.Now().Sub(started))
 			} else {
-				log.Printf("%s %s %s -> %d, %d bytes in %v",
+				log.Printf("%s %s %s -> %d, read %d in %v, wrote %d in %v, total time %v",
 					req.RemoteAddr, req.Method, record.reqUrl, record.code,
-					record.bytes, time.Now().Sub(started))
+					src.bytes, src.time,
+					record.bytes, record.time,
+					time.Now().Sub(started))
 			}
 		}()
 
