@@ -138,10 +138,10 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		st, err := h.store.Stat(obj)
 		if err != nil {
 			if err == store.ErrNotFound {
-				http.Error(w, "not found", http.StatusNotFound)
+				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
