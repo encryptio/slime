@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -91,6 +92,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, "not found", http.StatusNotFound)
 					return
 				}
+				log.Printf("Couldn't Stat(%#v): %v", obj, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -121,6 +123,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}
+			log.Printf("Couldn't Get(%#v): %v", obj, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -141,6 +144,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
+			log.Printf("Couldn't Stat(%#v): %v", obj, err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -171,6 +175,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tee := io.TeeReader(io.LimitReader(r.Body, MaxFileSize+1), hash)
 		data, err := ioutil.ReadAll(tee)
 		if err != nil {
+			log.Printf("Couldn't read object body in PUT: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -216,6 +221,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusPreconditionFailed)
 				return
 			}
+			log.Printf("Couldn't CAS(%#v): %v", obj, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -243,6 +249,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						http.Error(w, "not found", http.StatusNotFound)
 						return
 					}
+					log.Printf("Couldn't Stat(%#v): %v", obj, err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -263,6 +270,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 				}
+				log.Printf("Couldn't CAS(%#v): %v", obj, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -319,6 +327,7 @@ func (h *Server) serveList(w http.ResponseWriter, r *http.Request) {
 
 	names, err := h.store.List(after, limit)
 	if err != nil {
+		log.Printf("Couldn't List(): %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
