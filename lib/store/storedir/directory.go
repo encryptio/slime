@@ -307,39 +307,90 @@ func (ds *Directory) Name() string {
 func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
 	after := ""
 	for {
-		keys, err := ds.List(after, 1000)
-		if err != nil {
-			log.Printf("Couldn't list in %v for hash check: %v", ds.Dir, err)
+		var goodStep, badStep int64
+		goodStep, badStep, after = ds.hashstep(after, perFileWait, perByteWait, stop)
+		good += goodStep
+		bad += badStep
+
+		if after == "" {
 			return
 		}
-
-		if len(keys) == 0 {
-			return
-		}
-
-		for _, key := range keys {
-			data, _, err := ds.Get(key)
-			if err != nil && err != store.ErrNotFound {
-				bad++
-			} else {
-				good++
-			}
-
-			wait := perFileWait + time.Duration(len(data))*perByteWait
-			data = nil // free memory before sleep
-			if wait > 0 {
-				time.Sleep(wait)
-			}
-
-			select {
-			case <-stop:
-				return
-			default:
-			}
-		}
-
-		after = keys[len(keys)-1]
 	}
+}
+
+func (ds *Directory) HashcheckIncremental(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
+	statePath := filepath.Join(ds.Dir, "hashcheck-at")
+	after := ""
+
+	fh, err := os.Open(statePath)
+	if err == nil {
+		data, err := ioutil.ReadAll(fh)
+		fh.Close()
+		if err != nil {
+			log.Printf("Couldn't read from %v: %v", statePath, err)
+			return
+		}
+		after = string(data)
+	} else if !os.IsNotExist(err) {
+		log.Printf("Couldn't open %v: %v", statePath, err)
+		return
+	}
+
+	good, bad, after = ds.hashstep(after, perFileWait, perByteWait, stop)
+
+	fh, err = os.Create(statePath)
+	if err != nil {
+		log.Printf("Couldn't create %v: %v", statePath, err)
+		return
+	}
+	defer fh.Close()
+
+	_, err = fh.Write([]byte(after))
+	if err != nil {
+		log.Printf("Couldn't write to %v: %v", statePath, err)
+	}
+
+	return
+}
+
+func (ds *Directory) hashstep(afterIn string, perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64, after string) {
+	after = afterIn
+
+	keys, err := ds.List(after, 100)
+	if err != nil {
+		log.Printf("Couldn't list in %v for hash check: %v", ds.Dir, err)
+		return
+	}
+
+	if len(keys) == 0 {
+		after = ""
+		return
+	}
+
+	for _, key := range keys {
+		data, _, err := ds.Get(key)
+		if err != nil && err != store.ErrNotFound {
+			bad++
+		} else {
+			good++
+		}
+
+		wait := perFileWait + time.Duration(len(data))*perByteWait
+		data = nil // free memory before sleep
+		if wait > 0 {
+			time.Sleep(wait)
+		}
+
+		after = key
+
+		select {
+		case <-stop:
+			return
+		default:
+		}
+	}
+
+	return
 }
 
 func (ds *Directory) quarantine(key string) {

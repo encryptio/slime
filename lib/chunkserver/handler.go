@@ -193,14 +193,14 @@ func (h *Handler) scanLoop() {
 
 func (h *Handler) repeatHashcheck(ldir loadedDir) {
 	for {
-		good, bad := ldir.store.Hashcheck(h.sleepPerFile, h.sleepPerByte, ldir.stop)
+		_, bad := ldir.store.HashcheckIncremental(h.sleepPerFile, h.sleepPerByte, ldir.stop)
 		if bad != 0 {
-			log.Printf("Finished hash check on %v: %v good, %v bad\n",
-				uuid.Fmt(ldir.store.UUID()), good, bad)
+			log.Printf("Found %v bad items hash check on %v\n",
+				bad, uuid.Fmt(ldir.store.UUID()))
 		}
 
 		select {
-		case <-time.After(60 * time.Second):
+		case <-time.After(5 * time.Second):
 		case <-ldir.stop:
 			return
 		}
