@@ -73,7 +73,7 @@ func chunkServer() {
 
 	sleepFile := flag.Duration("sleep-file", 50*time.Millisecond,
 		"Sleep per file checked")
-	sleepByte := flag.Duration("sleep-byte", 200*time.Nanosecond,
+	sleepByte := flag.Duration("sleep-byte", 600*time.Nanosecond,
 		"Sleep per byte checked")
 
 	parallel := flag.Int("parallel", 50,
