@@ -19,7 +19,7 @@ import (
 var errBadIfMatchFormat = errors.New("bad format for if-match header value")
 
 // MaxFileSize is the maximum size to accept in a Server request.
-const MaxFileSize = 1024 * 1024 * 1024 * 64 // 64MiB
+const MaxFileSize = 1024 * 1024 * 64 // 64MiB
 
 // A Server is an http.Handler which serves a Store with the standard HTTP
 // interface, suitable for use by Client.
