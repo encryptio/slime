@@ -2,6 +2,9 @@ package meta
 
 import (
 	"errors"
+	"fmt"
+
+	"git.encryptio.com/slime/lib/uuid"
 
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/tuple"
@@ -76,13 +79,17 @@ func (f *File) fromPair(p kvl.Pair) error {
 func (f *File) indexPairs() []kvl.Pair {
 	ret := make([]kvl.Pair, 0, len(f.Locations))
 
-	for _, loc := range f.Locations {
-		key, err := tuple.Append(nil, "file", "location", loc, f.Path)
-		if err != nil {
-			panic(err)
-		}
+	for idx, loc := range f.Locations {
+		localKey := fmt.Sprintf("%v_%x_%v",
+			uuid.Fmt(f.PrefixID), f.SHA256[:8], idx)
 
-		ret = append(ret, kvl.Pair{key, nil})
+		ret = append(ret, kvl.Pair{
+			tuple.MustAppend(nil, "file", "location", loc, f.Path),
+			nil,
+		}, kvl.Pair{
+			tuple.MustAppend(nil, "locationlist", loc, localKey),
+			nil,
+		})
 	}
 
 	return ret

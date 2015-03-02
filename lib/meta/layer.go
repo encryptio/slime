@@ -105,6 +105,33 @@ func (l *Layer) GetFilesByLocation(id [16]byte, count int) ([]File, error) {
 	return fs, nil
 }
 
+func (l *Layer) GetLocationContents(id [16]byte, after string, count int) ([]string, error) {
+	var rang kvl.RangeQuery
+	rang.Low = keys.LexNext(tuple.MustAppend(nil, "locationlist", id, after))
+	rang.High = keys.PrefixNext(tuple.MustAppend(nil, "locationlist", id))
+	rang.Limit = count
+
+	ps, err := l.index.Range(rang)
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(ps))
+
+	for _, p := range ps {
+		var typ, name string
+		var loc [16]byte
+		err := tuple.UnpackInto(p.Key, &typ, &loc, &name)
+		if err != nil {
+			return nil, err
+		}
+
+		names = append(names, name)
+	}
+
+	return names, nil
+}
+
 func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
 	if limit < 0 {
 		return nil, ErrBadArgument

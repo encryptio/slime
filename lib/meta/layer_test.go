@@ -2,7 +2,9 @@ package meta
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -288,6 +290,117 @@ func TestLayerFileList(t *testing.T) {
 			if bad {
 				t.Errorf("ListFiles(%#v, %v) returned %#v, but wanted paths %v",
 					test.After, test.Limit, fs, test.Paths)
+			}
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		t.Errorf("Couldn't run transaction: %v", err)
+	}
+}
+
+func TestLayerLocationContents(t *testing.T) {
+	db := ram.New()
+
+	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		l, err := Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		locA := uuid.Gen4()
+		locB := uuid.Gen4()
+		locC := uuid.Gen4()
+
+		files := []File{
+			{
+				Path:         "file-a",
+				Size:         1,
+				SHA256:       sha256.Sum256([]byte{'a'}),
+				WriteTime:    uint64(time.Now().Unix()),
+				PrefixID:     uuid.Gen4(),
+				DataChunks:   2,
+				MappingValue: 0,
+				Locations:    [][16]byte{locA, locB, locC},
+			},
+			{
+				Path:         "file-b",
+				Size:         1,
+				SHA256:       sha256.Sum256([]byte{'b'}),
+				WriteTime:    uint64(time.Now().Unix()),
+				PrefixID:     uuid.Gen4(),
+				DataChunks:   2,
+				MappingValue: 0,
+				Locations:    [][16]byte{locB, locA, locC},
+			},
+			{
+				Path:         "file-c",
+				Size:         1,
+				SHA256:       sha256.Sum256([]byte{'c'}),
+				WriteTime:    uint64(time.Now().Unix()),
+				PrefixID:     uuid.Gen4(),
+				DataChunks:   2,
+				MappingValue: 0,
+				Locations:    [][16]byte{locC, locA},
+			},
+		}
+
+		for _, file := range files {
+			err := l.SetFile(&file)
+			if err != nil {
+				t.Errorf("Couldn't SetFile: %v", err)
+				return nil, err
+			}
+		}
+
+		localKeyFor := func(file File, idx int) string {
+			return fmt.Sprintf("%v_%x_%v",
+				uuid.Fmt(file.PrefixID), file.SHA256[:8], idx)
+		}
+
+		tests := []struct {
+			ID      [16]byte
+			Entries []string
+		}{
+			{
+				ID: locA,
+				Entries: []string{
+					localKeyFor(files[0], 0),
+					localKeyFor(files[1], 1),
+					localKeyFor(files[2], 1),
+				},
+			},
+			{
+				ID: locB,
+				Entries: []string{
+					localKeyFor(files[0], 1),
+					localKeyFor(files[1], 0),
+				},
+			},
+			{
+				ID: locC,
+				Entries: []string{
+					localKeyFor(files[0], 2),
+					localKeyFor(files[1], 2),
+					localKeyFor(files[2], 0),
+				},
+			},
+		}
+
+		for _, test := range tests {
+			sort.Strings(test.Entries)
+
+			names, err := l.GetLocationContents(test.ID, "", 0)
+			if err != nil {
+				t.Errorf("Couldn't GetLocationContents(%#v, \"\", 0): %v",
+					uuid.Fmt(test.ID), err)
+				return nil, err
+			}
+
+			if !reflect.DeepEqual(names, test.Entries) {
+				t.Errorf("GetLocationContents(%#v, \"\", 0) returned %#v, wanted %#v",
+					uuid.Fmt(test.ID), names, test.Entries)
 			}
 		}
 
