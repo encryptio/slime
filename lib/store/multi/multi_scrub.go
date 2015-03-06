@@ -160,14 +160,14 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 
 	if len(messages) > 0 {
 		for _, msg := range messages {
-			m.SaveMessagef("scan on %v: %v", file.Path, msg)
+			log.Printf("scan on %v: %v", file.Path, msg)
 		}
 	}
 
 	if rebuild {
 		data, hash, err := m.Get(file.Path)
 		if err != nil {
-			m.SaveMessagef("scan on %v: couldn't get for rebuild: %v", file.Path, err)
+			log.Printf("scan on %v: couldn't get for rebuild: %v", file.Path, err)
 			return
 		}
 
@@ -175,9 +175,10 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 			store.CASV{Present: true, SHA256: hash},
 			store.CASV{Present: true, SHA256: hash, Data: data})
 		if err != nil {
-			m.SaveMessagef("scan on %v: couldn't cas for rebuild: %v", file.Path, err)
+			log.Printf("scan on %v: couldn't cas for rebuild: %v", file.Path, err)
+			return
 		}
 
-		m.SaveMessagef("scan on %v: successfully rebuilt", file.Path)
+		log.Printf("scan on %v: successfully rebuilt", file.Path)
 	}
 }

@@ -96,7 +96,7 @@ func (m *Multi) rebalanceStep() error {
 		for _, f := range files {
 			did, err := m.rebalanceFile(f, stores, frees)
 			if err != nil {
-				m.SaveMessagef("Failed to rebalance %v: %v", f.Path, err)
+				log.Printf("Failed to rebalance %v: %v", f.Path, err)
 			}
 			if did {
 				moved++
@@ -233,14 +233,14 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 
 	err = minS.CAS(localKey, setCASV, store.MissingV)
 	if err != nil {
-		m.SaveMessagef("Couldn't remove rebalanced chunk from old location %v: %v",
+		log.Printf("Couldn't remove rebalanced chunk from old location %v: %v",
 			uuid.Fmt(maxS.UUID()), err)
 	}
 
 	frees[minS.UUID()] += int64(len(data))
 	frees[maxS.UUID()] -= int64(len(data))
 
-	m.SaveMessagef("Rebalanced a chunk of %v from %v to %v",
+	log.Printf("Rebalanced a chunk of %v from %v to %v",
 		f.Path, uuid.Fmt(minS.UUID()), uuid.Fmt(maxS.UUID()))
 
 	return true, nil
