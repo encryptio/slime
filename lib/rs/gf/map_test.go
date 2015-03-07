@@ -90,7 +90,7 @@ func TestMapTricky(t *testing.T) {
 		for i := 0; i < len(gotv); i++ {
 			if gotv[i] >= MaxVal {
 				t.Errorf("MapToGF(%v) = %v,%v, but element %v is %v, which is over %v",
-					test, gotn, gotv, i, gotv[i], MaxVal)
+					test, gotn, gotv, i, gotv[i], uint32(MaxVal))
 				continue
 			}
 		}

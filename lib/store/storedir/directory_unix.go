@@ -16,5 +16,5 @@ func (ds *Directory) FreeSpace() (int64, error) {
 	}
 
 	// TODO: figure out and properly handle overflow
-	return int64(s.Bavail) * s.Bsize, nil
+	return int64(s.Bavail) * int64(s.Bsize), nil
 }
