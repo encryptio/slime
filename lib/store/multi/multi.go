@@ -44,7 +44,6 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 	go m.loadConfigLoop(loadConfigInterval)
 	go m.scrubLoop()
 	go m.rebalanceLoop()
-	go m.freeMapLoop()
 
 	return m, nil
 }

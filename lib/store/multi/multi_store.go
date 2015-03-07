@@ -25,8 +25,7 @@ var (
 	ErrBadHash            = errors.New("bad checksum after reconstruction")
 	ErrTooManyRetries     = errors.New("too many retries")
 
-	freeMapRebuildInterval = time.Second * 30
-	dataOnlyTimeout        = time.Second * 5
+	dataOnlyTimeout = time.Second * 5
 )
 
 func localKeyFor(file *meta.File, idx int) string {
@@ -412,32 +411,8 @@ func (m *Multi) deleteChunks(file *meta.File) error {
 	return nil
 }
 
-func (m *Multi) freeMapLoop() {
-	for {
-		stores := m.finder.Stores()
-		freeMap := make(map[[16]byte]int64, len(stores))
-		created := time.Now()
-		for id, st := range stores {
-			free, err := st.FreeSpace()
-			if err != nil {
-				freeMap[id] = free
-			}
-		}
-
-		dur := jitterDuration(freeMapRebuildInterval)
-
-		for time.Now().Sub(created) < dur {
-			select {
-			case <-m.stop:
-				return
-			case m.freeMapChannel <- freeMap:
-			}
-		}
-	}
-}
-
 func (m *Multi) getStoreWeights() map[[16]byte]int64 {
-	free := <-m.freeMapChannel
+	free := m.finder.FreeMap()
 	storesMap := m.finder.Stores()
 
 	weights := make(map[[16]byte]int64, len(storesMap))

@@ -18,7 +18,13 @@ import (
 )
 
 var ScanInterval = time.Minute * 5
-var TestIntervalBetween = time.Second * 10
+var TestIntervalBetween = time.Second * 5
+
+type finderEntry struct {
+	st        store.Store
+	free      int64
+	lastCheck time.Time
+}
 
 // A Finder keeps track of all currently reachable meta.Locations and their
 // store.Stores.
@@ -30,7 +36,7 @@ type Finder struct {
 	scanDone chan struct{}
 
 	mu     sync.Mutex
-	stores map[[16]byte]store.Store
+	stores map[[16]byte]finderEntry
 }
 
 func NewFinder(db kvl.DB) (*Finder, error) {
@@ -40,7 +46,7 @@ func NewFinder(db kvl.DB) (*Finder, error) {
 			Timeout: time.Second * 15,
 		},
 		stop:     make(chan struct{}),
-		stores:   make(map[[16]byte]store.Store, 16),
+		stores:   make(map[[16]byte]finderEntry, 16),
 		scanDone: make(chan struct{}),
 	}
 
@@ -66,7 +72,7 @@ func (f *Finder) Stores() map[[16]byte]store.Store {
 	f.mu.Lock()
 	ret := make(map[[16]byte]store.Store, len(f.stores))
 	for k, v := range f.stores {
-		ret[k] = v
+		ret[k] = v.st
 	}
 	f.mu.Unlock()
 	return ret
@@ -74,7 +80,17 @@ func (f *Finder) Stores() map[[16]byte]store.Store {
 
 func (f *Finder) StoreFor(uuid [16]byte) store.Store {
 	f.mu.Lock()
-	ret := f.stores[uuid]
+	ret := f.stores[uuid].st
+	f.mu.Unlock()
+	return ret
+}
+
+func (f *Finder) FreeMap() map[[16]byte]int64 {
+	f.mu.Lock()
+	ret := make(map[[16]byte]int64, len(f.stores))
+	for k, v := range f.stores {
+		ret[k] = v.free
+	}
 	f.mu.Unlock()
 	return ret
 }
@@ -157,20 +173,31 @@ func (f *Finder) Scan(url string) error {
 		}
 
 		f.mu.Lock()
-		st, found := f.stores[id]
+		e, found := f.stores[id]
 		f.mu.Unlock()
 		if !found {
-			st, err = storehttp.NewClient(url + "/" + uuid.Fmt(id) + "/")
+			st, err := storehttp.NewClient(url + "/" + uuid.Fmt(id) + "/")
 			if err != nil {
 				return err
 			}
 
+			free, err := st.FreeSpace()
+			if err != nil {
+				return err
+			}
+
+			e = finderEntry{
+				st:        st,
+				free:      free,
+				lastCheck: time.Now(),
+			}
+
 			f.mu.Lock()
-			f.stores[id] = st
+			f.stores[id] = e
 			f.mu.Unlock()
 		}
 
-		f.markActive(url, st.Name(), id)
+		f.markActive(url, e.st.Name(), id)
 		if err != nil {
 			return err
 		}
@@ -226,12 +253,21 @@ func (f *Finder) testLoop() {
 
 func (f *Finder) test(wait time.Duration) {
 	for id, store := range f.Stores() {
-		_, err := store.FreeSpace()
+		free, err := store.FreeSpace()
 		if err != nil {
 			f.mu.Lock()
 			delete(f.stores, id)
 			f.mu.Unlock()
 		}
+
+		f.mu.Lock()
+		e, ok := f.stores[id]
+		if ok {
+			e.free = free
+			e.lastCheck = time.Now()
+			f.stores[id] = e
+		}
+		f.mu.Unlock()
 
 		select {
 		case <-f.stop:
