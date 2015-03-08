@@ -16,5 +16,17 @@ gotestworks() {
     return $?
 }
 
+glockfileupdated() {
+    glock save -n git.encryptio.com/slime > .glockfile-tmp
+    diff .glockfile-tmp GLOCKFILE || {
+        rm .glockfile-tmp
+        echo >&2 "GLOCKFILE not up to date"
+        return 1
+    }
+    rm .glockfile-tmp
+    return 0
+}
+
 gofmtidempotent || exit 1
 gotestworks || exit 1
+glockfileupdated || exit 1
