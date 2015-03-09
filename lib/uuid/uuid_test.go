@@ -18,3 +18,16 @@ func TestUUIDTwoWay(t *testing.T) {
 		t.Fatalf("UUID after Parse(Fmt()) was not the same as original UUID")
 	}
 }
+
+func TestUUIDGenRace(t *testing.T) {
+	c := make(chan struct{})
+	for i := 0; i < 2; i++ {
+		go func() {
+			Gen4()
+			c <- struct{}{}
+		}()
+	}
+	for i := 0; i < 2; i++ {
+		<-c
+	}
+}
