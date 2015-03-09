@@ -158,10 +158,8 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 			file.DataChunks, len(file.Locations), conf.Need, conf.Total))
 	}
 
-	if len(messages) > 0 {
-		for _, msg := range messages {
-			log.Printf("scan on %v: %v", file.Path, msg)
-		}
+	for _, msg := range messages {
+		log.Printf("scan on %v: %v", file.Path, msg)
 	}
 
 	if rebuild {
