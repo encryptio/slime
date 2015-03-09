@@ -63,7 +63,7 @@ func TestParityData(t *testing.T) {
 }
 
 func TestParityRecovery(t *testing.T) {
-	for i := 1; i < 200; i++ {
+	for i := 1; i < 10; i++ {
 		data := make([][]uint32, rand.Intn(20))
 		if len(data) == 0 {
 			continue

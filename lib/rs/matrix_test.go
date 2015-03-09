@@ -158,10 +158,7 @@ func testParityMatrixNonSingularPart(t *testing.T, d, p int) {
 }
 
 func TestParityMatrixNonSingular(t *testing.T) {
-	size := 8
-	if testing.Short() {
-		size = 5
-	}
+	size := 6
 
 	for d := 1; d <= size; d++ {
 		for p := 0; p <= size; p++ {

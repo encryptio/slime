@@ -73,8 +73,8 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 	t.Logf("TestStoreCASCountRace()")
 
 	const (
-		goroutines = 5
-		iterations = 25
+		goroutines = 4
+		iterations = 15
 	)
 
 	ShouldFullList(t, s, nil)

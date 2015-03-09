@@ -6,7 +6,7 @@ import (
 )
 
 func TestMInverseRaise(t *testing.T) {
-	for i := 1; i <= 100000; i++ {
+	for i := 1; i <= 1000; i++ {
 		v := uint32(0)
 		for v >= MaxVal || v == 0 {
 			v = rand.Uint32()
