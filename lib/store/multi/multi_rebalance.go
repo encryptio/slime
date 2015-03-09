@@ -55,6 +55,12 @@ func (m *Multi) rebalanceStep() error {
 
 	moved := 0
 	scanned := 0
+	defer func() {
+		if moved > 0 {
+			log.Printf("Rebalanced %v chunks out of %v scanned", moved, scanned)
+		}
+	}()
+
 	for moved < rebalanceFileCount && scanned < rebalanceMaxScan {
 		ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 			l, err := meta.Open(ctx)
