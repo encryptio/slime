@@ -402,6 +402,34 @@ func TestLayerLocationContents(t *testing.T) {
 				t.Errorf("GetLocationContents(%#v, \"\", 0) returned %#v, wanted %#v",
 					uuid.Fmt(test.ID), names, test.Entries)
 			}
+
+			names = nil
+			after := ""
+			for {
+				localNames, err := l.GetLocationContents(test.ID, after, 1)
+				if err != nil {
+					t.Errorf("Couldn't GetLocationContents(%#v, %#v, %v): %v",
+						uuid.Fmt(test.ID), after, 1, err)
+					return nil, err
+				}
+
+				if len(localNames) > 1 {
+					t.Errorf("GetLocationContents(%#v, %#v, %v) = %#v, too many results",
+						uuid.Fmt(test.ID), after, 1, localNames)
+				}
+
+				if len(localNames) == 0 {
+					break
+				}
+
+				names = append(names, localNames...)
+				after = localNames[0]
+			}
+
+			if !reflect.DeepEqual(names, test.Entries) {
+				t.Errorf("GetLocationContents one by one returned %#v, wanted %#v",
+					uuid.Fmt(test.ID), names, test.Entries)
+			}
 		}
 
 		return nil, nil

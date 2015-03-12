@@ -132,7 +132,9 @@ func (l *Layer) GetLocationContents(id [16]byte, after string, count int) ([]str
 	var rang kvl.RangeQuery
 	rang.Low = keys.LexNext(tuple.MustAppend(nil, "locationlist", id, after))
 	rang.High = keys.PrefixNext(tuple.MustAppend(nil, "locationlist", id))
-	rang.Limit = count
+	if count > 0 {
+		rang.Limit = count + 1
+	}
 
 	ps, err := l.index.Range(rang)
 	if err != nil {
@@ -149,7 +151,12 @@ func (l *Layer) GetLocationContents(id [16]byte, after string, count int) ([]str
 			return nil, err
 		}
 
-		names = append(names, name)
+		if name > after {
+			names = append(names, name)
+			if count > 0 && len(names) >= count {
+				break
+			}
+		}
 	}
 
 	return names, nil
