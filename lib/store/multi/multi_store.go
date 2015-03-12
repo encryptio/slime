@@ -298,8 +298,10 @@ func splitVector(data []uint32, count int) [][]uint32 {
 
 func (m *Multi) CAS(key string, from, to store.CASV) error {
 	var file *meta.File
+	prefixid := uuid.Gen4()
+
 	if to.Present {
-		// pessimistically check before doing work
+		// check before doing work; additionally, add a WAL entry
 		_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 			layer, err := meta.Open(ctx)
 			if err != nil {
@@ -326,13 +328,18 @@ func (m *Multi) CAS(key string, from, to store.CASV) error {
 				}
 			}
 
+			err = layer.WALMark(prefixid)
+			if err != nil {
+				return nil, err
+			}
+
 			return nil, nil
 		})
 		if err != nil {
 			return err
 		}
 
-		file, err = m.writeChunks(key, to.Data, to.SHA256)
+		file, err = m.writeChunks(key, to.Data, to.SHA256, prefixid)
 		if err != nil {
 			return err
 		}
@@ -367,6 +374,11 @@ func (m *Multi) CAS(key string, from, to store.CASV) error {
 
 		if to.Present {
 			err = layer.SetFile(file)
+			if err != nil {
+				return nil, err
+			}
+
+			err = layer.WALClear(prefixid)
 			if err != nil {
 				return nil, err
 			}
@@ -494,7 +506,7 @@ func (m *Multi) orderTargets() ([]store.Store, error) {
 	return stores, nil
 }
 
-func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, error) {
+func (m *Multi) writeChunks(key string, data []byte, sha [32]byte, prefixid [16]byte) (*meta.File, error) {
 	m.mu.Lock()
 	conf := m.config
 	m.mu.Unlock()
@@ -516,7 +528,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte) (*meta.File, 
 		Path:         key,
 		Size:         uint64(len(data)),
 		WriteTime:    uint64(time.Now().Unix()),
-		PrefixID:     uuid.Gen4(),
+		PrefixID:     prefixid,
 		DataChunks:   uint16(conf.Need),
 		MappingValue: mapping,
 		SHA256:       sha,

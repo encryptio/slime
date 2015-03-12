@@ -202,11 +202,47 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		haveFilesMap[f] = struct{}{}
 	}
 
-	var extra []string
 	for _, have := range haveFiles {
 		if _, ok := wantFilesMap[have]; !ok {
-			extra = append(extra, have)
-			log.Printf("extra chunk %v on %v", have, uuid.Fmt(thisLoc.UUID))
+			pid, err := prefixIDFromLocalKey(have)
+			if err != nil {
+				log.Printf("Couldn't figure out PrefixID from localKey(%#v): %v",
+					have, err)
+				continue
+			}
+
+			ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+				layer, err := meta.Open(ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				return layer.WALCheck(pid)
+			})
+			if err != nil {
+				log.Printf("Couldn't check WAL for PrefixID %v: %v",
+					uuid.Fmt(pid), err)
+				continue
+			}
+
+			inWAL := ret.(bool)
+
+			if inWAL {
+				log.Printf("extraneous chunk %v on %v, but is in WAL, skipping",
+					have, uuid.Fmt(thisLoc.UUID))
+				continue
+			}
+
+			log.Printf("would delete extraneous chunk %v on %v",
+				have, uuid.Fmt(thisLoc.UUID))
+			/*
+				err = st.CAS(have, store.AnyV, store.MissingV)
+				if err != nil {
+					log.Printf("Couldn't delete extraneous chunk %v from %v: %v",
+						have, uuid.Fmt(thisLoc.UUID), err)
+					continue
+				}
+			*/
 		}
 	}
 

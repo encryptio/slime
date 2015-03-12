@@ -3,6 +3,7 @@ package meta
 import (
 	"errors"
 	"log"
+	"time"
 
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/index"
@@ -43,6 +44,28 @@ func (l *Layer) GetConfig(key string) ([]byte, error) {
 
 func (l *Layer) SetConfig(key string, data []byte) error {
 	return l.inner.Set(kvl.Pair{tuple.MustAppend(nil, "config", key), data})
+}
+
+func (l *Layer) WALMark(id [16]byte) error {
+	return l.inner.Set(kvl.Pair{
+		tuple.MustAppend(nil, "wal", id),
+		tuple.MustAppend(nil, time.Now().Unix()),
+	})
+}
+
+func (l *Layer) WALClear(id [16]byte) error {
+	return l.inner.Delete(tuple.MustAppend(nil, "wal", id))
+}
+
+func (l *Layer) WALCheck(id [16]byte) (bool, error) {
+	_, err := l.inner.Get(tuple.MustAppend(nil, "wal", id))
+	if err != nil {
+		if err == kvl.ErrNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (l *Layer) GetFile(path string) (*File, error) {
