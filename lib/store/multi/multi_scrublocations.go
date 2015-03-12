@@ -202,6 +202,20 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		haveFilesMap[f] = struct{}{}
 	}
 
+	checkHaveFiles := make([]string, 0, len(haveFiles))
+	for _, f := range haveFiles {
+		if len(wantFiles) < scrubLocationsCount || f <= wantFiles[len(wantFiles)-1] {
+			checkHaveFiles = append(checkHaveFiles, f)
+		}
+	}
+
+	checkWantFiles := make([]string, 0, len(wantFiles))
+	for _, f := range wantFiles {
+		if len(haveFiles) < scrubLocationsCount || f <= haveFiles[len(haveFiles)-1] {
+			checkWantFiles = append(checkWantFiles, f)
+		}
+	}
+
 	log.Printf("scrubLocation %v: from %v", uuid.Fmt(thisLoc.UUID), from)
 	if len(wantFiles) > 0 {
 		log.Printf("scrubLocation %v: want %v files (%#v-%#v)",
@@ -219,8 +233,24 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		log.Printf("scrubLocation %v: have no files",
 			uuid.Fmt(thisLoc.UUID))
 	}
+	if len(checkWantFiles) > 0 {
+		log.Printf("scrubLocation %v: checkWant %v files (%#v-%#v)",
+			uuid.Fmt(thisLoc.UUID),
+			len(checkWantFiles), checkWantFiles[0], checkWantFiles[len(checkWantFiles)-1])
+	} else {
+		log.Printf("scrubLocation %v: checkWant no files",
+			uuid.Fmt(thisLoc.UUID))
+	}
+	if len(checkHaveFiles) > 0 {
+		log.Printf("scrubLocation %v: checkHave %v files (%#v-%#v)",
+			uuid.Fmt(thisLoc.UUID),
+			len(checkHaveFiles), checkHaveFiles[0], checkHaveFiles[len(checkHaveFiles)-1])
+	} else {
+		log.Printf("scrubLocation %v: checkHave no files",
+			uuid.Fmt(thisLoc.UUID))
+	}
 
-	for _, have := range haveFiles {
+	for _, have := range checkHaveFiles {
 		if _, ok := wantFilesMap[have]; !ok {
 			pid, err := prefixIDFromLocalKey(have)
 			if err != nil {
@@ -264,7 +294,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		}
 	}
 
-	for _, want := range wantFiles {
+	for _, want := range checkWantFiles {
 		if _, ok := haveFilesMap[want]; !ok {
 			log.Printf("missing chunk %v on %v", want, uuid.Fmt(thisLoc.UUID))
 
