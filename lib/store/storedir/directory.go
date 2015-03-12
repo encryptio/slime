@@ -281,6 +281,11 @@ func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
 		if str > afterKey {
 			decodedNames = append(decodedNames, str)
 		}
+
+		if limit > 0 && len(decodedNames) > limit*2+50 {
+			sort.Strings(decodedNames)
+			decodedNames = decodedNames[:limit]
+		}
 	}
 
 	sort.Strings(decodedNames)
