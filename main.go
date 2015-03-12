@@ -163,6 +163,8 @@ func main() {
 	initRandom()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
+	log.SetFlags(log.Lshortfile)
+
 	if len(os.Args) < 2 {
 		help()
 		os.Exit(1)
