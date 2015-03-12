@@ -92,5 +92,10 @@ func (f *File) indexPairs() []kvl.Pair {
 		})
 	}
 
+	ret = append(ret, kvl.Pair{
+		tuple.MustAppend(nil, "file", "prefix", f.PrefixID),
+		[]byte(f.Path),
+	})
+
 	return ret
 }

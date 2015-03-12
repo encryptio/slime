@@ -132,6 +132,14 @@ func (l *Layer) GetLocationContents(id [16]byte, after string, count int) ([]str
 	return names, nil
 }
 
+func (l *Layer) PathForPrefixID(id [16]byte) (string, error) {
+	p, err := l.index.Get(tuple.MustAppend(nil, "file", "prefix", id))
+	if err != nil {
+		return "", err
+	}
+	return string(p.Value), nil
+}
+
 func (l *Layer) ListFiles(after string, limit int) ([]File, error) {
 	if limit < 0 {
 		return nil, ErrBadArgument
