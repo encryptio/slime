@@ -257,13 +257,27 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 				continue
 			}
 
-			ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			var inWAL bool
+			var path string
+			_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 				layer, err := meta.Open(ctx)
 				if err != nil {
 					return nil, err
 				}
 
-				return layer.PathForPrefixID(pid)
+				inWAL, err = layer.WALCheck(pid)
+				if err != nil {
+					return nil, err
+				}
+
+				if !inWAL {
+					path, err = layer.PathForPrefixID(pid)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				return nil, nil
 			})
 			if err != nil {
 				log.Printf("Couldn't get path for PrefixID %v: %v",
@@ -271,7 +285,10 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 				continue
 			}
 
-			path := ret.(string)
+			if inWAL {
+				log.Printf("skipping rebuild of %v, prefix in WAL", path)
+				continue
+			}
 
 			err = m.rebuild(path)
 			if err != nil {

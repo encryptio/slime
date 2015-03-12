@@ -178,6 +178,31 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 
 	// we should move chunk minI on minS to maxS
 
+	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		l, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		err = l.WALMark(f.PrefixID)
+		return nil, err
+	})
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		// TODO: how to handle errors here?
+		m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			l, err := meta.Open(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			err = l.WALClear(f.PrefixID)
+			return nil, err
+		})
+	}()
+
 	localKey := localKeyFor(&f, minI)
 	data, hash, err := minS.Get(localKey)
 	if err != nil {
