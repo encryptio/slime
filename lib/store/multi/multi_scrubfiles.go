@@ -13,16 +13,16 @@ import (
 )
 
 var (
-	scrubWait      = time.Second * 15
-	scrubFileCount = 50
+	scrubFilesWait  = time.Second * 15
+	scrubFilesCount = 50
 )
 
-func (m *Multi) scrubAll() {
+func (m *Multi) scrubFilesAll() {
 	endpoints := 0
 	for {
-		done, err := m.scrubStep()
+		done, err := m.scrubFilesStep()
 		if err != nil {
-			log.Printf("Couldn't scrubStep in scrubAll: %v", err)
+			log.Printf("Couldn't scrubFilesStep in scrubFilesAll: %v", err)
 			return
 		}
 		if done {
@@ -34,21 +34,21 @@ func (m *Multi) scrubAll() {
 	}
 }
 
-func (m *Multi) scrubLoop() {
+func (m *Multi) scrubFilesLoop() {
 	for {
 		select {
 		case <-m.stop:
 			return
-		case <-time.After(jitterDuration(scrubWait)):
-			_, err := m.scrubStep()
+		case <-time.After(jitterDuration(scrubFilesWait)):
+			_, err := m.scrubFilesStep()
 			if err != nil {
-				log.Printf("Couldn't run scrub step: %v", err)
+				log.Printf("Couldn't run scrubFilesStep: %v", err)
 			}
 		}
 	}
 }
 
-func (m *Multi) scrubStep() (bool, error) {
+func (m *Multi) scrubFilesStep() (bool, error) {
 	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -60,7 +60,7 @@ func (m *Multi) scrubStep() (bool, error) {
 			return nil, err
 		}
 
-		files, err := layer.ListFiles(string(startKey), scrubFileCount)
+		files, err := layer.ListFiles(string(startKey), scrubFilesCount)
 		if err != nil {
 			return nil, err
 		}
