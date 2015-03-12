@@ -43,6 +43,7 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 
 	go m.loadConfigLoop(loadConfigInterval)
 	go m.scrubFilesLoop()
+	go m.scrubLocationsLoop()
 	go m.rebalanceLoop()
 
 	return m, nil
@@ -62,4 +63,5 @@ func (m *Multi) Stop() {
 
 func (m *Multi) scrubAll() {
 	m.scrubFilesAll()
+	m.scrubLocationsAll()
 }

@@ -119,7 +119,7 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 
 	var messages []string
 	rebuild := false
-	for i, id := range file.Locations {
+	for _, id := range file.Locations {
 		loc, ok := allLocs[id]
 		if !ok {
 			rebuild = true
@@ -138,18 +138,6 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 			messages = append(messages, fmt.Sprintf("on %v, but it is not online (warning only)", uuid.Fmt(id)))
 			continue
 		}
-
-		localKey := localKeyFor(&file, i)
-		_, err := st.Stat(localKey)
-		if err != nil {
-			if err == store.ErrNotFound {
-				rebuild = true
-				messages = append(messages, fmt.Sprintf("missing from %v", uuid.Fmt(id)))
-				continue
-			}
-			messages = append(messages, fmt.Sprintf("on %v, but it returned %v (warning only)", uuid.Fmt(id), err))
-			continue
-		}
 	}
 
 	if len(file.Locations) != conf.Total || int(file.DataChunks) != conf.Need {
@@ -163,20 +151,28 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 	}
 
 	if rebuild {
-		data, hash, err := m.Get(file.Path)
+		err := m.rebuild(file.Path)
 		if err != nil {
-			log.Printf("scan on %v: couldn't get for rebuild: %v", file.Path, err)
-			return
-		}
-
-		err = m.CAS(file.Path,
-			store.CASV{Present: true, SHA256: hash},
-			store.CASV{Present: true, SHA256: hash, Data: data})
-		if err != nil {
-			log.Printf("scan on %v: couldn't cas for rebuild: %v", file.Path, err)
+			log.Printf("scan on %v: couldn't rebuild: %v", file.Path, err)
 			return
 		}
 
 		log.Printf("scan on %v: successfully rebuilt", file.Path)
 	}
+}
+
+func (m *Multi) rebuild(path string) error {
+	data, hash, err := m.Get(path)
+	if err != nil {
+		return err
+	}
+
+	err = m.CAS(path,
+		store.CASV{Present: true, SHA256: hash},
+		store.CASV{Present: true, SHA256: hash, Data: data})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,14 @@ var (
 func localKeyFor(file *meta.File, idx int) string {
 	return fmt.Sprintf("%v_%x_%v",
 		uuid.Fmt(file.PrefixID), file.SHA256[:8], idx)
+}
+
+func prefixIDFromLocalKey(key string) ([16]byte, error) {
+	parts := strings.SplitN(key, "_", 2)
+	if len(parts) != 2 {
+		return [16]byte{}, errors.New("not enough key components")
+	}
+	return uuid.Parse(parts[0])
 }
 
 func (m *Multi) UUID() [16]byte {
