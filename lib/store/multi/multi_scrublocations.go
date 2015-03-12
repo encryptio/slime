@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	scrubLocationsWait  = time.Second * 15
+	scrubLocationsWait  = time.Second * 10
 	scrubLocationsCount = 1000
 )
 

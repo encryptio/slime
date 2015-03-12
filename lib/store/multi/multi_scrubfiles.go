@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	scrubFilesWait  = time.Second * 15
-	scrubFilesCount = 50
+	scrubFilesWait  = time.Second * 5
+	scrubFilesCount = 100
 )
 
 func (m *Multi) scrubFilesAll() {
