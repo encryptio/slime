@@ -42,15 +42,27 @@ func (m *Multi) rebalanceLoop() {
 
 func (m *Multi) rebalanceStep() error {
 	stores := m.finder.Stores()
-	frees := make(map[[16]byte]int64, len(stores))
-	for k, st := range stores {
-		free, err := st.FreeSpace()
-		if err != nil {
-			log.Printf("Couldn't get free space on %v: %v", uuid.Fmt(st.UUID()), err)
-			continue
-		}
+	frees := m.finder.FreeMap()
 
-		frees[k] = free
+	// bail out early if there's no rebalancing possible
+	mostFree := int64(0)
+	leastFree := int64(0)
+	markedOne := false
+	for _, free := range frees {
+		if !markedOne {
+			markedOne = true
+			mostFree = free
+			leastFree = free
+		}
+		if free > mostFree {
+			mostFree = free
+		}
+		if free < leastFree {
+			leastFree = free
+		}
+	}
+	if mostFree-leastFree < rebalanceMinDifference {
+		return nil
 	}
 
 	moved := 0
