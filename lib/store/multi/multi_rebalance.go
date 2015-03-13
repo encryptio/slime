@@ -56,9 +56,7 @@ func (m *Multi) rebalanceStep() error {
 	moved := 0
 	scanned := 0
 	defer func() {
-		if moved > 0 {
-			log.Printf("Rebalanced %v chunks out of %v scanned", moved, scanned)
-		}
+		log.Printf("Rebalanced %v chunks out of %v scanned", moved, scanned)
 	}()
 
 	for moved < rebalanceFileCount && scanned < rebalanceMaxScan {
@@ -270,9 +268,6 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 
 	frees[minS.UUID()] += int64(len(data))
 	frees[maxS.UUID()] -= int64(len(data))
-
-	log.Printf("Rebalanced a chunk of %v from %v to %v",
-		f.Path, uuid.Fmt(minS.UUID()), uuid.Fmt(maxS.UUID()))
 
 	return true, nil
 }
