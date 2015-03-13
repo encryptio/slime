@@ -15,14 +15,14 @@ import (
 // TODO: tests for rebalancing (requires mocking/overriding FreeSpace())
 
 var (
-	rebalanceWait = time.Minute * 3
+	rebalanceWait = time.Second * 30
 
 	errModifiedDuringBalance = errors.New("file modified during balance")
 )
 
 const (
-	rebalanceFileCount     = 50
-	rebalanceMaxScan       = 500
+	rebalanceFileCount     = 10
+	rebalanceMaxScan       = 100
 	rebalanceMinDifference = 1024 * 1024 * 1024 // 1 GiB
 )
 
