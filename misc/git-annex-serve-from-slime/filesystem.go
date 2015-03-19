@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -194,8 +193,6 @@ func (f *File) readInfo() error {
 
 		file := parts[1]
 
-		log.Printf("mark")
-
 		if !strings.HasSuffix(file, f.key+".log.cnk") {
 			continue
 		}
@@ -294,8 +291,6 @@ func (f *File) Read(p []byte) (int, error) {
 }
 
 func (f *File) ReadAt(p []byte, off int64) (int, error) {
-	log.Printf("read %v offset %v len %v", f.name, off, len(p))
-
 	err := f.readInfo()
 	if err != nil {
 		return 0, err
@@ -367,8 +362,6 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 		return 0, err
 	}
 	defer resp.Body.Close()
-
-	log.Printf("GET %v returned %v", url, resp.StatusCode)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return 0, fmt.Errorf("unexpected http response %v",
