@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +43,10 @@ func (fs *FileSystem) Open(name string) (http.File, error) {
 type Dir struct {
 	name string
 	fs   *FileSystem
-	fh   *os.File
+
+	contentsRead bool
+	contents     []os.FileInfo
+	pos          int
 }
 
 func (d *Dir) Read(p []byte) (int, error) {
@@ -54,20 +58,42 @@ func (d *Dir) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (d *Dir) Readdir(count int) ([]os.FileInfo, error) {
-	if d.fh == nil {
-		var err error
-		d.fh, err = os.Open(*repo + "/" + d.name)
-		if err != nil {
-			return nil, err
-		}
+	err := d.readContents()
+	if err != nil {
+		return nil, err
 	}
 
-	var outInfo []os.FileInfo
-	for len(outInfo) < count {
-		want := count - len(outInfo)
-		fis, err := d.fh.Readdir(want)
+	if count > len(d.contents)-d.pos {
+		count = len(d.contents) - d.pos
+	}
+	if count == 0 {
+		return nil, nil
+	}
+
+	ret := d.contents[d.pos : d.pos+count]
+	d.pos += len(ret)
+
+	return ret, nil
+}
+
+func (d *Dir) readContents() error {
+	if d.contentsRead {
+		return nil
+	}
+
+	fh, err := os.Open(*repo + "/" + d.name)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	d.contents = nil
+	d.pos = 0
+
+	for {
+		fis, err := fh.Readdir(1000)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for _, fi := range fis {
@@ -76,32 +102,31 @@ func (d *Dir) Readdir(count int) ([]os.FileInfo, error) {
 			}
 
 			if fi.IsDir() {
-				outInfo = append(outInfo, &Dir{
+				d.contents = append(d.contents, &Dir{
 					name: d.name + "/" + fi.Name(),
 					fs:   d.fs,
 				})
 			} else {
-				outInfo = append(outInfo, &File{
-					fs:   d.fs,
+				d.contents = append(d.contents, &File{
 					name: d.name + "/" + fi.Name(),
+					fs:   d.fs,
 				})
 			}
 		}
 
-		if len(fis) < want {
+		if len(fis) < 1000 {
 			break
 		}
 	}
 
-	return outInfo, nil
+	sort.Sort(fileInfoByName(d.contents))
+
+	d.contentsRead = true
+
+	return nil
 }
 
 func (d *Dir) Close() error {
-	if d.fh != nil {
-		err := d.fh.Close()
-		d.fh = nil
-		return err
-	}
 	return nil
 }
 
