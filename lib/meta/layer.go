@@ -162,6 +162,17 @@ func (l *Layer) GetLocationContents(id [16]byte, after string, count int) ([]str
 	return names, nil
 }
 
+func (l *Layer) LocationShouldHave(id [16]byte, name string) (bool, error) {
+	_, err := l.index.Get(tuple.MustAppend(nil, "locationlist", id, name))
+	if err != nil {
+		if err == kvl.ErrNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (l *Layer) PathForPrefixID(id [16]byte) (string, error) {
 	p, err := l.index.Get(tuple.MustAppend(nil, "file", "prefix", id))
 	if err != nil {

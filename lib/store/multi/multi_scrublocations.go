@@ -231,7 +231,20 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 					return nil, err
 				}
 
-				return layer.WALCheck(pid)
+				found, err := layer.WALCheck(pid)
+				if err != nil {
+					return nil, err
+				}
+
+				if !found {
+					// check to see if the write finished
+					found, err = layer.LocationShouldHave(thisLoc.UUID, have)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				return found, nil
 			})
 			if err != nil {
 				log.Printf("Couldn't check WAL for PrefixID %v: %v",
