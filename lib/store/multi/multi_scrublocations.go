@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"git.encryptio.com/slime/lib/meta"
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/uuid"
 
 	"git.encryptio.com/kvl"
@@ -260,16 +261,14 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 				continue
 			}
 
-			log.Printf("would delete extraneous chunk %v on %v",
+			log.Printf("deleting extraneous chunk %v on %v",
 				have, uuid.Fmt(thisLoc.UUID))
-			/*
-				err = st.CAS(have, store.AnyV, store.MissingV)
-				if err != nil {
-					log.Printf("Couldn't delete extraneous chunk %v from %v: %v",
-						have, uuid.Fmt(thisLoc.UUID), err)
-					continue
-				}
-			*/
+			err = st.CAS(have, store.AnyV, store.MissingV)
+			if err != nil {
+				log.Printf("Couldn't delete extraneous chunk %v from %v: %v",
+					have, uuid.Fmt(thisLoc.UUID), err)
+				continue
+			}
 		}
 	}
 
