@@ -16,6 +16,45 @@ import (
 	"git.encryptio.com/kvl/backend/ram"
 )
 
+func mustCAS(t *testing.T, message string, st store.Store, key string, from, to store.CASV) {
+	err := st.CAS(key, from, to)
+	if err != nil {
+		t.Fatalf("Couldn't CAS(%#v) during %v: %v", key, message, err)
+	}
+}
+
+func mustGetMiss(t *testing.T, message string, st store.Store, key string) {
+	got, _, err := st.Get(key)
+	if err != store.ErrNotFound {
+		if err != nil {
+			t.Fatalf("Couldn't Get(%#v) during %v: %v", key, message, err)
+		}
+		t.Fatalf("Get(%#v) returned unexpected data %#v during %v, but wanted ErrNotFound",
+			key, string(got), message)
+	}
+}
+
+func mustListCount(t *testing.T, message string, st store.Store, count int) {
+	actualCount := 0
+
+	from := ""
+	for {
+		list, err := st.List(from, 100)
+		if err != nil {
+			t.Fatalf("Couldn't List(%#v, 100) during %v: %v", from, message, err)
+		}
+
+		actualCount += len(list)
+		if len(list) < 100 {
+			break
+		}
+	}
+
+	if actualCount != count {
+		t.Fatalf("List returned %v elements during %v but wanted %v", actualCount, message, count)
+	}
+}
+
 func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*storedir.Directory, func()) {
 	var killers []*killHandler
 	var dirstores []*storedir.Directory
@@ -307,4 +346,27 @@ func TestMultiCanReplaceDeadKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Couldn't delete key: %v", err)
 	}
+}
+
+func TestMultiScrubRemovesWeirdChunks(t *testing.T) {
+	_, multi, dirs, done := prepareMultiTest(t, 1, 1, 1)
+	defer done()
+
+	mustCAS(t, "write key", dirs[0], "a", store.MissingV, store.DataV([]byte("data")))
+	multi.scrubAll()
+	mustGetMiss(t, "after scrub", dirs[0], "a")
+}
+
+func TestMultiScrubRemovesUnreferencedChunks(t *testing.T) {
+	killers, multi, dirs, done := prepareMultiTest(t, 2, 3, 3)
+	defer done()
+
+	mustCAS(t, "write key", multi, "a", store.MissingV, store.DataV([]byte("data")))
+	killers[0].setKilled(true)
+	mustCAS(t, "remove key", multi, "a", store.DataV([]byte("data")), store.MissingV)
+	killers[0].setKilled(false)
+	mustListCount(t, "multi after remove", multi, 0)
+	mustListCount(t, "dirs[0] after remove", dirs[0], 1)
+	multi.scrubAll()
+	mustListCount(t, "dirs[0] after scrub", dirs[0], 0)
 }
