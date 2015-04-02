@@ -223,6 +223,14 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 			if err != nil {
 				log.Printf("Couldn't figure out PrefixID from localKey(%#v): %v",
 					have, err)
+
+				err = st.CAS(have, store.AnyV, store.MissingV)
+				if err != nil {
+					log.Printf("Couldn't delete extraneous chunk %v from %v: %v",
+						have, uuid.Fmt(thisLoc.UUID), err)
+					continue
+				}
+
 				continue
 			}
 
