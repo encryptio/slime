@@ -197,9 +197,9 @@ func TestMultiScrubRecreatesMissing(t *testing.T) {
 	_, multi, dirstores, done := prepareMultiTest(t, 2, 3, 3)
 	defer done()
 
-	data := "hello world! this is some test data."
+	data := []byte("hello world! this is some test data.")
 
-	mustCAS(t, "fill", multi, "key", store.MissingV, store.DataV([]byte(data)))
+	mustCAS(t, "fill", multi, "key", store.MissingV, store.DataV(data))
 
 	names, err := dirstores[0].List("", 1)
 	if err != nil {
@@ -233,18 +233,18 @@ func TestMultiDuplicateContent(t *testing.T) {
 	_, multi, _, done := prepareMultiTest(t, 1, 1, 1)
 	defer done()
 
-	data := "this is some test data"
+	data := []byte("this is some test data")
 
 	for i := 0; i < 10; i++ {
 		mustCAS(t, "fill", multi,
 			strconv.FormatInt(int64(i), 10),
-			store.MissingV, store.DataV([]byte(data)))
+			store.MissingV, store.DataV(data))
 	}
 
 	for i := 0; i < 10; i++ {
 		mustGet(t, "after fill", multi,
 			strconv.FormatInt(int64(i), 10),
-			[]byte(data))
+			data)
 	}
 
 	for i := 0; i < 5; i++ {
@@ -256,7 +256,7 @@ func TestMultiDuplicateContent(t *testing.T) {
 	for i := 5; i < 10; i++ {
 		mustGet(t, "after delete", multi,
 			strconv.FormatInt(int64(i), 10),
-			[]byte(data))
+			data)
 	}
 }
 
@@ -264,12 +264,12 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	killers, multi, _, done := prepareMultiTest(t, 2, 3, 5)
 	defer done()
 
-	data := "who knows where the wind goes"
+	data := []byte("who knows where the wind goes")
 
 	for i := 0; i < 10; i++ {
 		mustCAS(t, "fill", multi,
 			strconv.FormatInt(int64(i), 10),
-			store.MissingV, store.DataV([]byte(data)))
+			store.MissingV, store.DataV(data))
 	}
 
 	err := multi.SetRedundancy(2, 5)
@@ -286,7 +286,7 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		mustGet(t, "check", multi,
 			strconv.FormatInt(int64(i), 10),
-			[]byte(data))
+			data)
 	}
 }
 
