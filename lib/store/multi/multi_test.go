@@ -23,6 +23,17 @@ func mustCAS(t *testing.T, message string, st store.Store, key string, from, to 
 	}
 }
 
+func mustGet(t *testing.T, message string, st store.Store, key string, value []byte) {
+	got, _, err := st.Get(key)
+	if err != nil {
+		t.Fatalf("Couldn't Get(%#v) during %v: %v", key, message, err)
+	}
+
+	if !bytes.Equal(got, value) {
+		t.Fatalf("Get(%#v) returned %#v during %v, but wanted %#v", key, string(got), message, string(value))
+	}
+}
+
 func mustGetMiss(t *testing.T, message string, st store.Store, key string) {
 	got, _, err := st.Get(key)
 	if err != store.ErrNotFound {
@@ -156,10 +167,7 @@ func TestMultiRecovery(t *testing.T) {
 				value = append(value, []byte(key)...)
 			}
 
-			err := multi.CAS(key, store.MissingV, store.DataV(value))
-			if err != nil {
-				t.Fatalf("Couldn't write to multi: %v", err)
-			}
+			mustCAS(t, "fill multi", multi, key, store.MissingV, store.DataV(value))
 		}
 
 		for i := 0; i < total-3; i++ {
@@ -180,16 +188,7 @@ func TestMultiRecovery(t *testing.T) {
 				value = append(value, []byte(key)...)
 			}
 
-			gotVal, _, err := multi.Get(key)
-			if err != nil {
-				t.Fatalf("Couldn't get %v from multi after failing underneath redundancy level: %v",
-					key, err)
-			}
-
-			if !bytes.Equal(value, gotVal) {
-				t.Fatalf("Value for %v is incorrect (got %#v, wanted %#v)",
-					key, gotVal, value)
-			}
+			mustGet(t, "after failing underneath redundancy level", multi, key, value)
 		}
 	}
 }
@@ -200,10 +199,7 @@ func TestMultiScrub(t *testing.T) {
 
 	data := "hello world! this is some test data."
 
-	err := multi.CAS("key", store.MissingV, store.DataV([]byte(data)))
-	if err != nil {
-		t.Fatalf("Couldn't write to multi: %v", err)
-	}
+	mustCAS(t, "fill", multi, "key", store.MissingV, store.DataV([]byte(data)))
 
 	names, err := dirstores[0].List("", 1)
 	if err != nil {
@@ -213,10 +209,7 @@ func TestMultiScrub(t *testing.T) {
 		t.Fatalf("Didn't get a name from dirstore")
 	}
 
-	err = dirstores[0].CAS(names[0], store.AnyV, store.MissingV)
-	if err != nil {
-		t.Fatalf("Couldn't delete from dirstore: %v", err)
-	}
+	mustCAS(t, "kill", dirstores[0], names[0], store.AnyV, store.MissingV)
 
 	multi.scrubAll()
 
@@ -236,46 +229,34 @@ func TestMultiScrub(t *testing.T) {
 	}
 }
 
-func TestMultiDuplicates(t *testing.T) {
+func TestMultiDuplicateContent(t *testing.T) {
 	_, multi, _, done := prepareMultiTest(t, 3, 4, 5)
 	defer done()
 
 	data := "this is some test data"
 
 	for i := 0; i < 50; i++ {
-		err := multi.CAS(strconv.FormatInt(int64(i), 10),
+		mustCAS(t, "fill", multi,
+			strconv.FormatInt(int64(i), 10),
 			store.MissingV, store.DataV([]byte(data)))
-		if err != nil {
-			t.Fatalf("Couldn't add key %v: %v", i, err)
-		}
 	}
 
 	for i := 0; i < 50; i++ {
-		got, _, err := multi.Get(strconv.FormatInt(int64(i), 10))
-		if err != nil {
-			t.Fatalf("Couldn't Get key %v: %v", i, err)
-		}
-		if string(got) != data {
-			t.Fatalf("Got corrupt data on key %v: %v", i, got)
-		}
+		mustGet(t, "after fill", multi,
+			strconv.FormatInt(int64(i), 10),
+			[]byte(data))
 	}
 
 	for i := 0; i < 25; i++ {
-		err := multi.CAS(strconv.FormatInt(int64(i), 10),
+		mustCAS(t, "delete half", multi,
+			strconv.FormatInt(int64(i), 10),
 			store.AnyV, store.MissingV)
-		if err != nil {
-			t.Fatalf("Couldn't Delete %v: %v", i, err)
-		}
 	}
 
 	for i := 25; i < 50; i++ {
-		got, _, err := multi.Get(strconv.FormatInt(int64(i), 10))
-		if err != nil {
-			t.Fatalf("Couldn't Get key %v after removal of lower half: %v", i, err)
-		}
-		if string(got) != data {
-			t.Fatalf("Got corrupt data on key %v after removal of lower half: %v", i, got)
-		}
+		mustGet(t, "after delete", multi,
+			strconv.FormatInt(int64(i), 10),
+			[]byte(data))
 	}
 }
 
@@ -286,11 +267,9 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	data := "who knows where the wind goes"
 
 	for i := 0; i < 10; i++ {
-		err := multi.CAS(strconv.FormatInt(int64(i), 10),
+		mustCAS(t, "fill", multi,
+			strconv.FormatInt(int64(i), 10),
 			store.MissingV, store.DataV([]byte(data)))
-		if err != nil {
-			t.Fatalf("Couldn't add key %v: %v", i, err)
-		}
 	}
 
 	err := multi.SetRedundancy(2, 5)
@@ -305,13 +284,9 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	killers[2].setKilled(true)
 
 	for i := 0; i < 10; i++ {
-		got, _, err := multi.Get(strconv.FormatInt(int64(i), 10))
-		if err != nil {
-			t.Fatalf("Couldn't get key %v: %v", i, err)
-		}
-		if string(got) != data {
-			t.Fatalf("Got corrupt data on key %v: %v", i, got)
-		}
+		mustGet(t, "check", multi,
+			strconv.FormatInt(int64(i), 10),
+			[]byte(data))
 	}
 }
 
@@ -319,33 +294,24 @@ func TestMultiCanReplaceDeadKeys(t *testing.T) {
 	killers, multi, _, done := prepareMultiTest(t, 7, 8, 8)
 	defer done()
 
-	err := multi.CAS("a", store.MissingV, store.DataV([]byte("hello")))
-	if err != nil {
-		t.Fatalf("Couldn't write key: %v", err)
-	}
+	mustCAS(t, "initial write", multi, "a", store.MissingV, store.DataV([]byte("hello")))
 
 	for i := 0; i < 3; i++ {
 		killers[i].setKilled(true)
 	}
 
-	err = multi.SetRedundancy(4, 5)
+	err := multi.SetRedundancy(4, 5)
 	if err != nil {
 		t.Fatalf("Couldn't adjust redundancy: %v", err)
 	}
 
-	err = multi.CAS("a", store.DataV([]byte("hello")), store.DataV([]byte("there")))
-	if err != nil {
-		t.Fatalf("Couldn't replace key: %v", err)
-	}
+	mustCAS(t, "write after fail 1", multi, "a", store.DataV([]byte("hello")), store.DataV([]byte("there")))
 
 	for i := 3; i < 6; i++ {
 		killers[i].setKilled(true)
 	}
 
-	err = multi.CAS("a", store.DataV([]byte("there")), store.MissingV)
-	if err != nil {
-		t.Fatalf("Couldn't delete key: %v", err)
-	}
+	mustCAS(t, "write after fail 2", multi, "a", store.DataV([]byte("there")), store.MissingV)
 }
 
 func TestMultiScrubRemovesWeirdChunks(t *testing.T) {
