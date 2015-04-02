@@ -126,10 +126,10 @@ func TestMultiRecovery(t *testing.T) {
 		for i := 0; i < total-3; i++ {
 			for {
 				k := killers[rand.Intn(len(killers))]
-				if k.killed {
+				if k.isKilled() {
 					continue
 				}
-				k.killed = true
+				k.setKilled(true)
 				break
 			}
 		}
@@ -261,9 +261,9 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 
 	multi.scrubAll()
 
-	killers[0].killed = true
-	killers[1].killed = true
-	killers[2].killed = true
+	killers[0].setKilled(true)
+	killers[1].setKilled(true)
+	killers[2].setKilled(true)
 
 	for i := 0; i < 10; i++ {
 		got, _, err := multi.Get(strconv.FormatInt(int64(i), 10))
@@ -286,7 +286,7 @@ func TestMultiCanReplaceDeadKeys(t *testing.T) {
 	}
 
 	for i := 0; i < 3; i++ {
-		killers[i].killed = true
+		killers[i].setKilled(true)
 	}
 
 	err = multi.SetRedundancy(4, 5)
@@ -300,7 +300,7 @@ func TestMultiCanReplaceDeadKeys(t *testing.T) {
 	}
 
 	for i := 3; i < 6; i++ {
-		killers[i].killed = true
+		killers[i].setKilled(true)
 	}
 
 	err = multi.CAS("a", store.DataV([]byte("there")), store.MissingV)

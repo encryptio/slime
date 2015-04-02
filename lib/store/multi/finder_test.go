@@ -50,7 +50,7 @@ func TestFinderScan(t *testing.T) {
 	}
 
 	// kill the store and update the Finder
-	killer.killed = true
+	killer.setKilled(true)
 	f.test(0)
 
 	// should have been removed
@@ -82,7 +82,7 @@ func TestFinderScan(t *testing.T) {
 	}
 
 	// when the store comes back
-	killer.killed = false
+	killer.setKilled(false)
 	err = f.scanStart()
 	if err != nil {
 		t.Fatalf("Couldn't scanStart: %v", err)
