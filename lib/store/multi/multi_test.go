@@ -150,17 +150,17 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 }
 
 func TestMultiCommon(t *testing.T) {
-	_, multi, _, done := prepareMultiTest(t, 3, 4, 5)
+	_, multi, _, done := prepareMultiTest(t, 2, 3, 4)
 	defer done()
 	storetests.TestStore(t, multi)
 }
 
 func TestMultiRecovery(t *testing.T) {
-	for total := 4; total < 8; total++ {
-		killers, multi, _, done := prepareMultiTest(t, 3, total, 10)
+	for total := 4; total < 6; total++ {
+		killers, multi, _, done := prepareMultiTest(t, 3, total, 6)
 		defer done()
 
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 20; i++ {
 			key := strconv.FormatInt(int64(i), 10)
 			var value []byte
 			for j := 0; j < i; j++ {
@@ -181,7 +181,7 @@ func TestMultiRecovery(t *testing.T) {
 			}
 		}
 
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 20; i++ {
 			key := strconv.FormatInt(int64(i), 10)
 			var value []byte
 			for j := 0; j < i; j++ {
@@ -193,8 +193,8 @@ func TestMultiRecovery(t *testing.T) {
 	}
 }
 
-func TestMultiScrub(t *testing.T) {
-	_, multi, dirstores, done := prepareMultiTest(t, 3, 4, 4)
+func TestMultiScrubRecreatesMissing(t *testing.T) {
+	_, multi, dirstores, done := prepareMultiTest(t, 2, 3, 3)
 	defer done()
 
 	data := "hello world! this is some test data."
@@ -224,36 +224,36 @@ func TestMultiScrub(t *testing.T) {
 		}
 	}
 
-	if found != 4 {
+	if found != 3 {
 		t.Fatalf("scrubAll didn't recreate missing chunk")
 	}
 }
 
 func TestMultiDuplicateContent(t *testing.T) {
-	_, multi, _, done := prepareMultiTest(t, 3, 4, 5)
+	_, multi, _, done := prepareMultiTest(t, 1, 1, 1)
 	defer done()
 
 	data := "this is some test data"
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 10; i++ {
 		mustCAS(t, "fill", multi,
 			strconv.FormatInt(int64(i), 10),
 			store.MissingV, store.DataV([]byte(data)))
 	}
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 10; i++ {
 		mustGet(t, "after fill", multi,
 			strconv.FormatInt(int64(i), 10),
 			[]byte(data))
 	}
 
-	for i := 0; i < 25; i++ {
+	for i := 0; i < 5; i++ {
 		mustCAS(t, "delete half", multi,
 			strconv.FormatInt(int64(i), 10),
 			store.AnyV, store.MissingV)
 	}
 
-	for i := 25; i < 50; i++ {
+	for i := 5; i < 10; i++ {
 		mustGet(t, "after delete", multi,
 			strconv.FormatInt(int64(i), 10),
 			[]byte(data))
@@ -291,26 +291,19 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 }
 
 func TestMultiCanReplaceDeadKeys(t *testing.T) {
-	killers, multi, _, done := prepareMultiTest(t, 7, 8, 8)
+	killers, multi, _, done := prepareMultiTest(t, 3, 4, 4)
 	defer done()
 
 	mustCAS(t, "initial write", multi, "a", store.MissingV, store.DataV([]byte("hello")))
+	killers[0].setKilled(true)
 
-	for i := 0; i < 3; i++ {
-		killers[i].setKilled(true)
-	}
-
-	err := multi.SetRedundancy(4, 5)
+	err := multi.SetRedundancy(1, 2)
 	if err != nil {
 		t.Fatalf("Couldn't adjust redundancy: %v", err)
 	}
 
 	mustCAS(t, "write after fail 1", multi, "a", store.DataV([]byte("hello")), store.DataV([]byte("there")))
-
-	for i := 3; i < 6; i++ {
-		killers[i].setKilled(true)
-	}
-
+	killers[1].setKilled(true)
 	mustCAS(t, "write after fail 2", multi, "a", store.DataV([]byte("there")), store.MissingV)
 }
 
@@ -324,7 +317,7 @@ func TestMultiScrubRemovesWeirdChunks(t *testing.T) {
 }
 
 func TestMultiScrubRemovesUnreferencedChunks(t *testing.T) {
-	killers, multi, dirs, done := prepareMultiTest(t, 2, 3, 3)
+	killers, multi, dirs, done := prepareMultiTest(t, 1, 2, 2)
 	defer done()
 
 	mustCAS(t, "write key", multi, "a", store.MissingV, store.DataV([]byte("data")))
