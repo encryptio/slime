@@ -118,8 +118,6 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 						return
 					}
 
-					t.Logf("routine %v iteration %v succeeded in casing to %v",
-						i, j, num)
 					break
 				}
 			}
