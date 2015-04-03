@@ -111,9 +111,4 @@ type SometimesStore interface {
 	// is available. Note that there may be a delay between the store becoming
 	// available/unavailable and this method returning the correct value.
 	Available() bool
-
-	// MakeNotifyChan creates a channel of buffer size 1 which is written to when
-	// the availability of the store changes. When Close is called, these channels
-	// will be closed.
-	MakeNotifyChan() <-chan struct{}
 }
