@@ -17,9 +17,9 @@ import (
 var ScanInterval = 30 * time.Second
 
 type Handler struct {
-	dirs         []string
-	sleepPerFile time.Duration
-	sleepPerByte time.Duration
+	dirs        []string
+	perFileWait time.Duration
+	perByteWait time.Duration
 
 	stop chan struct{}
 
@@ -31,17 +31,16 @@ type loadedDir struct {
 	dir     string
 	handler *storehttp.Server
 	store   *storedir.Directory
-	stop    chan struct{}
 }
 
-func New(dirs []string, sleepPerFile, sleepPerByte time.Duration) (*Handler, error) {
+func New(dirs []string, perFileWait, perByteWait time.Duration) (*Handler, error) {
 	h := &Handler{
-		dirs:         dirs,
-		sleepPerFile: sleepPerFile,
-		sleepPerByte: sleepPerByte,
-		stop:         make(chan struct{}),
-		c:            sync.NewCond(&sync.Mutex{}),
-		loaded:       make(map[[16]byte]loadedDir, len(dirs)),
+		dirs:        dirs,
+		perFileWait: perFileWait,
+		perByteWait: perByteWait,
+		stop:        make(chan struct{}),
+		c:           sync.NewCond(&sync.Mutex{}),
+		loaded:      make(map[[16]byte]loadedDir, len(dirs)),
 	}
 
 	go h.scanLoop()
@@ -126,7 +125,7 @@ func (h *Handler) scanLoop() {
 		h.c.L.Lock()
 		for id, ldir := range h.loaded {
 			delete(h.loaded, id)
-			close(ldir.stop)
+			ldir.store.Close()
 		}
 		h.c.L.Unlock()
 	}()
@@ -156,12 +155,12 @@ func (h *Handler) scanLoop() {
 						dir, uuid.Fmt(ldir.store.UUID()))
 					h.c.L.Lock()
 					delete(h.loaded, ldir.store.UUID())
-					close(ldir.stop)
 					h.c.Broadcast()
 					h.c.L.Unlock()
+					ldir.store.Close()
 				}
 			} else {
-				ds, err := storedir.OpenDirectory(dir)
+				ds, err := storedir.OpenDirectory(dir, h.perFileWait, h.perByteWait)
 				if err != nil {
 					log.Printf("Couldn't open directory store %v: %v", dir, err)
 					continue
@@ -171,37 +170,18 @@ func (h *Handler) scanLoop() {
 					dir:     dir,
 					handler: storehttp.NewServer(ds),
 					store:   ds,
-					stop:    make(chan struct{}),
 				}
 
 				h.c.L.Lock()
 				h.loaded[ds.UUID()] = ldir
 				h.c.Broadcast()
 				h.c.L.Unlock()
-
-				go h.repeatHashcheck(ldir)
 			}
 		}
 
 		select {
 		case <-time.After(ScanInterval):
 		case <-h.stop:
-			return
-		}
-	}
-}
-
-func (h *Handler) repeatHashcheck(ldir loadedDir) {
-	for {
-		_, bad := ldir.store.HashcheckIncremental(h.sleepPerFile, h.sleepPerByte, ldir.stop)
-		if bad != 0 {
-			log.Printf("Found %v bad items hash check on %v\n",
-				bad, uuid.Fmt(ldir.store.UUID()))
-		}
-
-		select {
-		case <-time.After(5 * time.Second):
-		case <-ldir.stop:
 			return
 		}
 	}

@@ -22,9 +22,13 @@ var ErrCorruptObject = errors.New("object is corrupt")
 
 // A Directory is a Store which stores its data on a local filesystem.
 type Directory struct {
-	Dir  string
-	uuid [16]byte
-	name string
+	Dir         string
+	uuid        [16]byte
+	name        string
+	perFileWait time.Duration
+	perByteWait time.Duration
+
+	stop chan struct{}
 
 	// protects write operations into the directory, to make the multiple
 	// open calls during CAS operations work atomically
@@ -62,7 +66,7 @@ func CreateDirectory(dir string) error {
 }
 
 // OpenDirectory opens an existing directory store.
-func OpenDirectory(dir string) (*Directory, error) {
+func OpenDirectory(dir string, perFileWait, perByteWait time.Duration) (*Directory, error) {
 	data, err := ioutil.ReadFile(filepath.Join(dir, "uuid"))
 	if err != nil {
 		return nil, err
@@ -75,11 +79,18 @@ func OpenDirectory(dir string) (*Directory, error) {
 
 	host, _ := os.Hostname()
 
-	return &Directory{
-		Dir:  dir,
-		uuid: myUUID,
-		name: host + ":" + dir,
-	}, nil
+	ds := &Directory{
+		Dir:         dir,
+		uuid:        myUUID,
+		name:        host + ":" + dir,
+		stop:        make(chan struct{}),
+		perFileWait: perFileWait,
+		perByteWait: perByteWait,
+	}
+
+	go ds.hashcheckLoop()
+
+	return ds, nil
 }
 
 func (ds *Directory) encodeKey(key string) string {
@@ -105,7 +116,7 @@ func (ds *Directory) StillValid() bool {
 }
 
 func (ds *Directory) Close() error {
-	ds.Dir = "/CLOSED"
+	close(ds.stop)
 	return nil
 }
 
@@ -314,11 +325,11 @@ func (ds *Directory) Name() string {
 	return ds.name
 }
 
-func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
+func (ds *Directory) Hashcheck() (good, bad int64) {
 	after := ""
 	for {
 		var goodStep, badStep int64
-		goodStep, badStep, after = ds.hashstep(after, perFileWait, perByteWait, stop)
+		goodStep, badStep, after = ds.hashstepInner(after)
 		good += goodStep
 		bad += badStep
 
@@ -328,7 +339,23 @@ func (ds *Directory) Hashcheck(perFileWait, perByteWait time.Duration, stop <-ch
 	}
 }
 
-func (ds *Directory) HashcheckIncremental(perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64) {
+func (ds *Directory) hashcheckLoop() {
+	for {
+		_, bad := ds.hashstep()
+		if bad != 0 {
+			log.Printf("Found %v bad items hash check on %v\n",
+				bad, uuid.Fmt(ds.UUID()))
+		}
+
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ds.stop:
+			return
+		}
+	}
+}
+
+func (ds *Directory) hashstep() (good, bad int64) {
 	statePath := filepath.Join(ds.Dir, "hashcheck-at")
 	after := ""
 
@@ -346,7 +373,7 @@ func (ds *Directory) HashcheckIncremental(perFileWait, perByteWait time.Duration
 		return
 	}
 
-	good, bad, after = ds.hashstep(after, perFileWait, perByteWait, stop)
+	good, bad, after = ds.hashstepInner(after)
 
 	fh, err = os.Create(statePath)
 	if err != nil {
@@ -363,7 +390,7 @@ func (ds *Directory) HashcheckIncremental(perFileWait, perByteWait time.Duration
 	return
 }
 
-func (ds *Directory) hashstep(afterIn string, perFileWait, perByteWait time.Duration, stop <-chan struct{}) (good, bad int64, after string) {
+func (ds *Directory) hashstepInner(afterIn string) (good, bad int64, after string) {
 	after = afterIn
 
 	keys, err := ds.List(after, 100)
@@ -385,7 +412,7 @@ func (ds *Directory) hashstep(afterIn string, perFileWait, perByteWait time.Dura
 			good++
 		}
 
-		wait := perFileWait + time.Duration(len(data))*perByteWait
+		wait := ds.perFileWait + time.Duration(len(data))*ds.perByteWait
 		data = nil // free memory before sleep
 		if wait > 0 {
 			time.Sleep(wait)
@@ -394,7 +421,7 @@ func (ds *Directory) hashstep(afterIn string, perFileWait, perByteWait time.Dura
 		after = key
 
 		select {
-		case <-stop:
+		case <-ds.stop:
 			return
 		default:
 		}
