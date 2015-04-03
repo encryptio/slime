@@ -15,6 +15,10 @@ var (
 	// ErrCASFailure is returned from Store.CAS if the data stored at the key
 	// given did not match the "from" CASV.
 	ErrCASFailure = errors.New("cas failure")
+
+	// ErrUnavailable is returned from a SometimesStore when the store is
+	// unavailable.
+	ErrUnavailable = errors.New("unavailable")
 )
 
 type Stat struct {
@@ -89,4 +93,22 @@ func (v CASV) String() string {
 		return "casv(not present)"
 	}
 	return fmt.Sprintf("casv(sha256=%x, data=%#v)", v.SHA256, string(v.Data))
+}
+
+// A SometimesStore is a Store that may not be available at all times. When it
+// is available, the Store methods return normally. When it is not, store
+// operations will return ErrUnavailable. If a store is not Available, its Name
+// and UUID methods may return the zero value.
+type SometimesStore interface {
+	Store
+
+	// Available returns the most recent known information on whether the store
+	// is available. Note that there may be a delay between the store becoming
+	// available/unavailable and this method returning the correct value.
+	Available() bool
+
+	// MakeNotifyChan creates a channel of buffer size 1 which is written to when
+	// the availability of the store changes. When Close is called, these channels
+	// will be closed.
+	MakeNotifyChan() <-chan struct{}
 }
