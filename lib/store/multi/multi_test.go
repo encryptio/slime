@@ -87,7 +87,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 			srv.Close()
 		}
 		for _, cs := range chunkServers {
-			cs.Stop()
+			cs.Close()
 		}
 		for _, path := range tmpPaths {
 			os.RemoveAll(path)
@@ -99,7 +99,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		tmpPaths = append(tmpPaths, tmpPath)
 		dirstores = append(dirstores, dirstore)
 
-		cs, err := chunkserver.New([]string{tmpPath}, 0, 0)
+		cs, err := chunkserver.New([]store.Store{dirstore})
 		if err != nil {
 			done()
 			t.Fatalf("Couldn't create chunkserver: %v", err)

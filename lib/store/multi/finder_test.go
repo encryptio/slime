@@ -8,6 +8,7 @@ import (
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/meta"
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/storedir"
 
 	"git.encryptio.com/kvl"
@@ -20,13 +21,13 @@ func TestFinderScan(t *testing.T) {
 	ds, tmpPath := storedir.MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpPath)
 
-	cs, err := chunkserver.New([]string{tmpPath}, 0, 0)
+	cs, err := chunkserver.New([]store.Store{ds})
 	if err != nil {
 		t.Fatalf("Couldn't create chunkserver: %v", err)
 	}
-	defer cs.Stop()
+	defer cs.Close()
 
-	cs.WaitScanDone()
+	cs.WaitAllAvailable()
 
 	killer := &killHandler{inner: cs}
 	srv := httptest.NewServer(killer)

@@ -16,6 +16,7 @@ import (
 	"git.encryptio.com/slime/lib/httputil"
 	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/proxyserver"
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/storedir"
 
 	"git.encryptio.com/kvl/backend/psql"
@@ -90,9 +91,22 @@ func chunkServer() {
 		log.Fatalf("Must be given a list of directories to serve")
 	}
 
+	stores := make([]store.Store, len(dirs))
+	for i := range dirs {
+		dir := dirs[i]
+		construct := func() store.Store {
+			ds, err := storedir.OpenDirectory(dir, *sleepFile, *sleepByte)
+			if err != nil {
+				return nil
+			}
+			return ds
+		}
+		stores[i] = store.NewRetryStore(construct, time.Second*15)
+	}
+
 	var h http.Handler
 	var err error
-	h, err = chunkserver.New(dirs, *sleepFile, *sleepByte)
+	h, err = chunkserver.New(stores)
 	if err != nil {
 		log.Fatalf("Couldn't initialize handler: %v", err)
 	}

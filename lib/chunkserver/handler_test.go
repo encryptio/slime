@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"testing"
 
+	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/storedir"
 )
 
@@ -78,13 +79,19 @@ func TestHandlerBasics(t *testing.T) {
 	}
 	uuid := string(uuidBytes)
 
-	h, err := New([]string{tmpdir}, 0, 0)
+	ds, err := storedir.OpenDirectory(tmpdir, 0, 0)
+	if err != nil {
+		t.Fatalf("Couldn't OpenDirectory %v: %v", tmpdir, err)
+	}
+	defer ds.Close()
+
+	h, err := New([]store.Store{ds})
 	if err != nil {
 		t.Fatalf("Couldn't create Handler: %v", err)
 	}
-	defer h.Stop()
+	defer h.Close()
 
-	h.WaitScanDone()
+	h.WaitAllAvailable()
 
 	shouldRespond(t, h, "GET", "/", "",
 		200, "Howdy, slime chunk server here!\n")
@@ -119,21 +126,21 @@ func TestHandlerBasics(t *testing.T) {
 	shouldRespondInteger(t, h, "GET", "/"+uuid+"/?mode=free", 200)
 }
 
-func TestHandlerMultipleStopsDontPanic(t *testing.T) {
-	h, err := New(nil, 0, 0)
+func TestHandlerMultipleClosesDontPanic(t *testing.T) {
+	h, err := New(nil)
 	if err != nil {
 		t.Fatalf("Couldn't create Handler: %v", err)
 	}
-	h.Stop()
-	h.Stop()
+	h.Close()
+	h.Close()
 }
 
 func TestHandlerErrors(t *testing.T) {
-	h, err := New(nil, 0, 0)
+	h, err := New(nil)
 	if err != nil {
 		t.Fatalf("Couldn't create Handler: %v", err)
 	}
-	defer h.Stop()
+	defer h.Close()
 
 	shouldRespond(t, h, "GET", "/nonexistent", "", 400, "bad url\n")
 	shouldRespond(t, h, "GET", "/baduuid/", "", 400, "bad uuid\n")
