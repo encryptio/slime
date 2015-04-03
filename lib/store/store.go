@@ -62,6 +62,11 @@ type Store interface {
 	// value.) Otherwise, "to.Data" is written with the assumed-correct hash
 	// given in "to.SHA256."
 	CAS(key string, from, to CASV) error
+
+	// Close cleans up any resources for the Store. The behavior of the other
+	// methods is undefined as soon as Close has been called, regardless of
+	// its return value.
+	Close() error
 }
 
 var (

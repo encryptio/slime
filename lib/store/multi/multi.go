@@ -50,7 +50,7 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 	return m, nil
 }
 
-func (m *Multi) Stop() {
+func (m *Multi) Close() error {
 	m.mu.Lock()
 
 	select {
@@ -60,6 +60,8 @@ func (m *Multi) Stop() {
 	}
 
 	m.mu.Unlock()
+
+	return nil
 }
 
 func (m *Multi) scrubAll() {

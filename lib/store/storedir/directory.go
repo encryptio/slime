@@ -104,6 +104,11 @@ func (ds *Directory) StillValid() bool {
 	return thatUUID == ds.uuid
 }
 
+func (ds *Directory) Close() error {
+	ds.Dir = "/CLOSED"
+	return nil
+}
+
 func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
 	var h [32]byte
 

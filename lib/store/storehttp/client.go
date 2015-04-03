@@ -45,6 +45,21 @@ func NewClient(url string) (*Client, error) {
 	return c, nil
 }
 
+func (cc *Client) Close() error {
+	var rt http.RoundTripper
+	if cc.client.Transport == nil {
+		rt = http.DefaultTransport
+	} else {
+		rt = cc.client.Transport
+	}
+
+	if transport, ok := rt.(*http.Transport); ok {
+		transport.CloseIdleConnections()
+	}
+
+	return nil
+}
+
 func (cc *Client) UUID() [16]byte {
 	return cc.uuid
 }

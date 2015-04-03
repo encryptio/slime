@@ -43,7 +43,7 @@ func New(db kvl.DB) (*Handler, error) {
 }
 
 func (h *Handler) Stop() {
-	h.multi.Stop()
+	h.multi.Close()
 	h.finder.Stop()
 }
 

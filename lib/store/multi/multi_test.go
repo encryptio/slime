@@ -78,7 +78,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 
 	done := func() {
 		if multi != nil {
-			multi.Stop()
+			multi.Close()
 		}
 		if finder != nil {
 			finder.Stop()
