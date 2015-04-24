@@ -97,6 +97,7 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "bad method", http.StatusMethodNotAllowed)
+		return
 	}
 
 	redundancy.Need, redundancy.Total = h.multi.GetRedundancy()
