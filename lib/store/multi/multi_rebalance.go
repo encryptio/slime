@@ -114,13 +114,13 @@ func (m *Multi) rebalanceStep() error {
 			if err != nil {
 				log.Printf("Failed to rebalance %v: %v", f.Path, err)
 			}
+			scanned++
 			if did {
 				moved++
 				if moved >= rebalanceFileCount {
 					break
 				}
 			}
-			scanned++
 			if scanned >= rebalanceMaxScan {
 				break
 			}
