@@ -77,6 +77,7 @@ type Directory struct {
 	mu                         sync.RWMutex
 	splits                     []split
 	minSplitSize, maxSplitSize int
+	resplitIndex               int
 }
 
 // CreateDirectory initializes a new Directory at the given location, suitable

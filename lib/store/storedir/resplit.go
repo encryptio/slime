@@ -14,10 +14,10 @@ import (
 
 func (ds *Directory) resplitLoop() {
 	for {
-		ds.resplit()
+		ds.resplitStep()
 
 		select {
-		case <-time.After(30 * time.Minute):
+		case <-time.After(time.Minute):
 		case <-ds.stop:
 			return
 		}
@@ -25,37 +25,64 @@ func (ds *Directory) resplitLoop() {
 }
 
 func (ds *Directory) resplit() error {
-	ds.mu.RLock()
-	defer ds.mu.RUnlock()
-
-	for i := 0; i < len(ds.splits); i++ {
-		s := ds.splits[i]
-
-		fis, err := ioutil.ReadDir(filepath.Join(ds.Dir, "data", s.Name))
+	found := 0
+	for {
+		finished, err := ds.resplitStep()
 		if err != nil {
 			return err
 		}
-
-		if len(fis) < ds.minSplitSize {
-			ds.mu.RUnlock()
-			err := ds.resplitMerge(s.Name)
-			ds.mu.RLock()
-			if err != nil {
-				return err
-			}
-		}
-
-		if len(fis) > ds.maxSplitSize {
-			ds.mu.RUnlock()
-			err := ds.resplitSplit(s.Name)
-			ds.mu.RLock()
-			if err != nil {
-				return err
+		if finished {
+			found++
+			if found == 2 {
+				return nil
 			}
 		}
 	}
+}
 
-	return nil
+func (ds *Directory) resplitStep() (bool, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+
+	if len(ds.splits) == 0 {
+		return true, nil
+	}
+
+	if ds.resplitIndex >= len(ds.splits) {
+		ds.resplitIndex = 0
+	}
+
+	s := ds.splits[ds.resplitIndex]
+
+	fis, err := ioutil.ReadDir(filepath.Join(ds.Dir, "data", s.Name))
+	if err != nil {
+		return false, err
+	}
+
+	if len(fis) < ds.minSplitSize {
+		ds.mu.RUnlock()
+		err := ds.resplitMerge(s.Name)
+		ds.mu.RLock()
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if len(fis) > ds.maxSplitSize {
+		ds.mu.RUnlock()
+		err := ds.resplitSplit(s.Name)
+		ds.mu.RLock()
+		if err != nil {
+			return false, err
+		}
+	}
+
+	ds.resplitIndex++
+	if ds.resplitIndex >= len(ds.splits) {
+		ds.resplitIndex = 0
+	}
+
+	return ds.resplitIndex == 0, nil
 }
 
 func (ds *Directory) resplitMerge(name string) error {
