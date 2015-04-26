@@ -17,6 +17,7 @@ func (ds *Directory) FreeSpace() (int64, error) {
 		return 0, err
 	}
 
+	// TODO: this doesn't look like it's safe under garbage collection
 	var avail, total, free int64
 	r1, _, err := getDiskFreeSpaceExW.Call(
 		uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(dir))),

@@ -1,5 +1,35 @@
 package storedir
 
+// The directory structure used by storedir is:
+//
+// $DIR/
+//     uuid
+//     hashcheck-at
+//     quarantine/
+//         $ENCODEDKEY
+//         ...
+//     data/
+//         $SPLITNAME/
+//             $ENCODEDKEY
+//             ...
+//         ...
+//
+// The ENCODEDKEY is the base64 URL encoding of the key stored.
+//
+// The data is split, by key, into subdirectories of "data", each one of which
+// tries to tend towards a fixed number of keys. Each subdirectory handles a
+// contiguous subset of keys.
+//
+// Splits do not overlap their key ranges.
+//
+// Each key file has the following format:
+//     8-byte FNV-1a 64-byte hash of all of the following data (including sha)
+//     32-byte SHA256 of the data
+//     variable size data
+//
+// Key files that are found to violate their FNV hashes are moved into the
+// "quarantine" directory.
+
 import (
 	"bytes"
 	"encoding/base64"
@@ -11,6 +41,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +51,17 @@ import (
 
 var ErrCorruptObject = errors.New("object is corrupt")
 
+type split struct {
+	Name      string
+	Low, High string // inclusive
+}
+
+type splitsByLow []split
+
+func (l splitsByLow) Len() int           { return len(l) }
+func (l splitsByLow) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
+func (l splitsByLow) Less(i, j int) bool { return l[i].Low < l[j].Low }
+
 // A Directory is a Store which stores its data on a local filesystem.
 type Directory struct {
 	Dir         string
@@ -28,11 +70,13 @@ type Directory struct {
 	perFileWait time.Duration
 	perByteWait time.Duration
 
-	stop chan struct{}
+	stop   chan struct{}
+	stopWg *sync.WaitGroup
 
-	// protects write operations into the directory, to make the multiple
-	// open calls during CAS operations work atomically
-	mu sync.Mutex
+	// mu protects all operations in the directory as well as the fields below
+	mu                         sync.RWMutex
+	splits                     []split
+	minSplitSize, maxSplitSize int
 }
 
 // CreateDirectory initializes a new Directory at the given location, suitable
@@ -44,14 +88,14 @@ func CreateDirectory(dir string) error {
 		filepath.Join(dir, "quarantine"),
 	}
 	for _, d := range dirs {
-		err := os.Mkdir(d, 0755)
+		err := os.Mkdir(d, 0777)
 		if err != nil && !os.IsExist(err) {
 			return err
 		}
 	}
 
 	f, err := os.OpenFile(filepath.Join(dir, "uuid"),
-		os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		return err
 	}
@@ -80,28 +124,194 @@ func OpenDirectory(dir string, perFileWait, perByteWait time.Duration) (*Directo
 	host, _ := os.Hostname()
 
 	ds := &Directory{
-		Dir:         dir,
-		uuid:        myUUID,
-		name:        host + ":" + dir,
-		stop:        make(chan struct{}),
-		perFileWait: perFileWait,
-		perByteWait: perByteWait,
+		Dir:          dir,
+		uuid:         myUUID,
+		name:         host + ":" + dir,
+		stop:         make(chan struct{}),
+		stopWg:       &sync.WaitGroup{},
+		perFileWait:  perFileWait,
+		perByteWait:  perByteWait,
+		minSplitSize: 500,
+		maxSplitSize: 2000,
 	}
 
-	go ds.hashcheckLoop()
+	err = ds.loadSplitsAndRecover()
+	if err != nil {
+		return nil, err
+	}
+
+	ds.stopWg.Add(2)
+	go func() {
+		defer ds.stopWg.Done()
+		ds.hashcheckLoop()
+	}()
+	go func() {
+		defer ds.stopWg.Done()
+		ds.resplitLoop()
+	}()
 
 	return ds, nil
 }
 
-func (ds *Directory) encodeKey(key string) string {
-	return base64.URLEncoding.EncodeToString([]byte(key))
-}
+func (ds *Directory) loadSplitsAndRecover() error {
+	fis, err := ioutil.ReadDir(filepath.Join(ds.Dir, "data"))
+	if err != nil {
+		return err
+	}
 
-func (ds *Directory) keyToFilename(key string) string {
-	return filepath.Join(ds.Dir, "data", ds.encodeKey(key))
+	ds.splits = nil
+
+	var toMigrate []os.FileInfo
+	for _, fi := range fis {
+		if !fi.IsDir() {
+			// an older version of storedir stored keys directly in data/
+			// we need to migrate these files to a new split
+			toMigrate = append(toMigrate, fi)
+			continue
+		}
+
+		this := split{
+			Name: fi.Name(),
+		}
+
+		thisPath := filepath.Join(ds.Dir, "data", this.Name)
+
+		contents, err := ioutil.ReadDir(thisPath)
+		if err != nil {
+			return err
+		}
+
+		if len(contents) == 0 {
+			// no files were found, this directory is a leftover
+			err := os.Remove(thisPath)
+			if err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		foundOne := false
+		for _, content := range contents {
+			name := content.Name()
+
+			if strings.HasSuffix(name, ".old") || strings.HasSuffix(name, ".new") {
+				// an incomplete write, recover from it
+
+				baseName := strings.TrimSuffix(strings.TrimSuffix(name, ".old"), ".new")
+				basePath := filepath.Join(thisPath, baseName)
+
+				// remove .new files, if they exist
+				err := os.Remove(basePath + ".new")
+				if err != nil && !os.IsNotExist(err) {
+					return err
+				}
+
+				_, err = os.Stat(basePath)
+				if err != nil && !os.IsNotExist(err) {
+					return err
+				}
+
+				if err == nil {
+					// base file exists, it should take precedence. remove any .old files.
+					err := os.Remove(basePath + ".old")
+					if err != nil && !os.IsNotExist(err) {
+						return err
+					}
+				} else {
+					// base file does NOT exist, move any .old file into place.
+					err = os.Rename(basePath+".old", basePath)
+					if err != nil && !os.IsNotExist(err) {
+						return err
+					}
+				}
+
+				name = baseName // we've tried hard to make this exist, continue with it
+			}
+
+			keyBytes, err := base64.URLEncoding.DecodeString(name)
+			if err != nil {
+				log.Printf("Bad filename in storedir at %v", filepath.Join(thisPath, name))
+				continue
+			}
+
+			key := string(keyBytes)
+
+			if !foundOne {
+				this.Low = key
+				this.High = key
+				foundOne = true
+			}
+
+			if key < this.Low {
+				this.Low = key
+			}
+			if key > this.High {
+				this.High = key
+			}
+		}
+
+		if !foundOne {
+			// only bad filenames in this split, skip it
+			continue
+		}
+
+		ds.splits = append(ds.splits, this)
+	}
+
+	if len(toMigrate) > 0 {
+		log.Printf("Migrating %v files in %v to migration split dir", len(toMigrate), ds.Dir)
+
+		err := os.Mkdir(filepath.Join(ds.Dir, "data", "migration"), 0777)
+		if err != nil && !os.IsExist(err) {
+			return err
+		}
+
+		this := split{
+			Name: "migration",
+		}
+
+		foundOne := false
+		for _, fi := range toMigrate {
+			name := fi.Name()
+
+			keyBytes, err := base64.URLEncoding.DecodeString(name)
+			if err != nil {
+				log.Printf("Bad filename in storedir at %v", filepath.Join(ds.Dir, "data", name))
+				continue
+			}
+
+			key := string(keyBytes)
+
+			if !foundOne {
+				this.Low = key
+				this.High = key
+				foundOne = true
+			}
+
+			if key < this.Low {
+				this.Low = key
+			}
+			if key > this.High {
+				this.High = key
+			}
+		}
+
+		if foundOne {
+			// at least one non-bad filename was found, the split is valid
+			ds.splits = append(ds.splits, this)
+		}
+	}
+
+	sort.Sort(splitsByLow(ds.splits))
+
+	return nil
 }
 
 func (ds *Directory) StillValid() bool {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+
 	data, err := ioutil.ReadFile(filepath.Join(ds.Dir, "uuid"))
 	if err != nil {
 		return false
@@ -116,21 +326,54 @@ func (ds *Directory) StillValid() bool {
 }
 
 func (ds *Directory) Close() error {
-	close(ds.stop)
+	ds.mu.Lock()
+
+	select {
+	case <-ds.stop:
+		ds.mu.Unlock()
+	default:
+		close(ds.stop)
+		ds.mu.Unlock()
+		ds.stopWg.Wait()
+	}
+
 	return nil
 }
 
+func (ds *Directory) findAndOpen(key string) (*os.File, string, error) {
+	encodedKey := base64.URLEncoding.EncodeToString([]byte(key))
+
+	for _, s := range ds.splits {
+		if s.Low <= key && key <= s.High {
+			path := filepath.Join(ds.Dir, "data", s.Name, encodedKey)
+
+			fh, err := os.Open(path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return nil, "", err
+			}
+
+			return fh, path, nil
+		}
+	}
+
+	return nil, "", nil
+}
+
 func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+
 	var h [32]byte
 
-	path := ds.keyToFilename(key)
-
-	fh, err := os.Open(path)
+	fh, path, err := ds.findAndOpen(key)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, h, store.ErrNotFound
-		}
 		return nil, h, err
+	}
+	if fh == nil {
+		return nil, h, store.ErrNotFound
 	}
 	defer fh.Close()
 
@@ -156,7 +399,12 @@ func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
 	actualFNV := fnver.Sum(nil)
 
 	if !bytes.Equal(actualFNV, expectedFNV[:]) {
-		ds.quarantine(key)
+		// TODO: this relocking is fucked and racy
+		ds.mu.RUnlock()
+		ds.mu.Lock()
+		ds.quarantine(key, path)
+		ds.mu.Unlock()
+		ds.mu.RLock()
 		return nil, h, ErrCorruptObject
 	}
 
@@ -164,12 +412,20 @@ func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
 }
 
 func (ds *Directory) Stat(key string) (*store.Stat, error) {
-	fh, err := os.Open(ds.keyToFilename(key))
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+
+	st, _, err := ds.statUnlocked(key)
+	return st, err
+}
+
+func (ds *Directory) statUnlocked(key string) (*store.Stat, string, error) {
+	fh, path, err := ds.findAndOpen(key)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, store.ErrNotFound
-		}
-		return nil, err
+		return nil, "", err
+	}
+	if fh == nil {
+		return nil, "", store.ErrNotFound
 	}
 	defer fh.Close()
 
@@ -177,48 +433,34 @@ func (ds *Directory) Stat(key string) (*store.Stat, error) {
 
 	_, err = fh.ReadAt(st.SHA256[:], 8)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	fi, err := fh.Stat()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	st.Size = fi.Size() - 40
 
-	return st, nil
+	return st, path, nil
 }
 
 func (ds *Directory) CAS(key string, from, to store.CASV) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
+	stat, oldPath, err := ds.statUnlocked(key)
+	if err != nil && err != store.ErrNotFound {
+		return err
+	}
+
 	if !from.Any {
 		if from.Present {
-			fh, err := os.Open(ds.keyToFilename(key))
-			if err != nil {
-				if os.IsNotExist(err) {
-					return store.ErrCASFailure
-				}
-				return err
-			}
-
-			var sha [32]byte
-			_, err = fh.ReadAt(sha[:], 8)
-			fh.Close()
-			if err != nil {
-				return err
-			}
-
-			if sha != from.SHA256 {
+			if stat == nil || stat.SHA256 != from.SHA256 {
 				return store.ErrCASFailure
 			}
 		} else {
-			_, err := os.Stat(ds.keyToFilename(key))
-			if !os.IsNotExist(err) {
-				if err != nil {
-					return err
-				}
+			if stat != nil {
 				return store.ErrCASFailure
 			}
 		}
@@ -231,90 +473,189 @@ func (ds *Directory) CAS(key string, from, to store.CASV) error {
 		var fnvHash [8]byte
 		h.Sum(fnvHash[:0])
 
-		fh, err := ioutil.TempFile(filepath.Join(ds.Dir, "data"), ".set_tmp_")
+		path := oldPath
+
+		if path == "" {
+			// find a split for this data
+			s, err := ds.chooseSplit(key)
+			if err != nil {
+				return err
+			}
+
+			encodedKey := base64.URLEncoding.EncodeToString([]byte(key))
+			path = filepath.Join(ds.Dir, "data", s.Name, encodedKey)
+		}
+
+		// write a .new file
+		fh, err := os.Create(path + ".new")
 		if err != nil {
 			return err
 		}
-		tmpname := fh.Name()
 
 		for _, slice := range [][]byte{fnvHash[:], to.SHA256[:], to.Data} {
 			_, err = fh.Write(slice)
 			if err != nil {
-				os.Remove(tmpname)
 				fh.Close()
+				os.Remove(path + ".new")
 				return err
 			}
 		}
 
 		err = fh.Close()
 		if err != nil {
-			os.Remove(tmpname)
+			os.Remove(path + ".new")
 			return err
 		}
 
-		err = os.Rename(tmpname, ds.keyToFilename(key))
+		if oldPath != "" {
+			// move the old file out of the way
+
+			err = os.Rename(oldPath, oldPath+".old")
+			if err != nil {
+				os.Remove(path + ".new")
+				return err
+			}
+		}
+
+		// move the .new file to its resting place
+
+		err = os.Rename(path+".new", path)
 		if err != nil {
-			os.Remove(tmpname)
+			os.Remove(path + ".new")
+			if oldPath != "" {
+				os.Rename(path+".old", path)
+			}
 			return err
+		}
+
+		// clean up the old file
+		if oldPath != "" {
+			err = os.Remove(oldPath + ".old")
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
 	} else {
-		err := os.Remove(ds.keyToFilename(key))
-		if err != nil {
-			if os.IsNotExist(err) {
-				if from.Any || !from.Present {
-					return nil
-				} else {
-					return store.ErrCASFailure
-				}
-			}
-			return err
+		if oldPath == "" {
+			return nil
 		}
-		return nil
+
+		return os.Remove(oldPath)
 	}
 }
 
-func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
-	dh, err := os.Open(filepath.Join(ds.Dir, "data"))
-	if err != nil {
-		return nil, err
-	}
-	defer dh.Close()
+func (ds *Directory) chooseSplit(key string) (split, error) {
+	// if there are no splits, make one
+	if len(ds.splits) == 0 {
+		this := split{
+			Name: "first",
+			Low:  key,
+			High: key,
+		}
 
-	allNames, err := dh.Readdirnames(0)
-	if err != nil {
-		return nil, err
-	}
-
-	decodedNames := make([]string, 0, 100)
-	for _, name := range allNames {
-		dec, err := base64.URLEncoding.DecodeString(name)
+		err := os.Mkdir(filepath.Join(ds.Dir, "data", "first"), 0777)
 		if err != nil {
+			return split{}, err
+		}
+
+		ds.splits = append(ds.splits, this)
+
+		return this, nil
+	}
+
+	// see if it fits in an existing split
+	for _, s := range ds.splits {
+		if s.Low <= key && key <= s.High {
+			return s, nil
+		}
+	}
+
+	if key < ds.splits[0].Low {
+		// key is before the first split, extend that one
+		first := ds.splits[0]
+		first.Low = key
+		ds.splits[0] = first
+		return first, nil
+	}
+
+	if key > ds.splits[len(ds.splits)-1].High {
+		// key is after the last split, extend that one
+		last := ds.splits[len(ds.splits)-1]
+		last.High = key
+		ds.splits[len(ds.splits)-1] = last
+		return last, nil
+	}
+
+	// key is in one of the holes between splits
+
+	// find the last split that is before the key
+	idx := -1
+	for i, s := range ds.splits {
+		if s.Low > key {
+			break
+		}
+		idx = i
+	}
+
+	if idx == -1 {
+		// before all splits, already handled above
+		panic("not reached")
+	}
+
+	// idx points to the last split that is before the key, extend that split
+	// to include the new key
+	middle := ds.splits[idx]
+	if middle.High > key {
+		panic("not reached")
+	}
+	middle.High = key
+	ds.splits[idx] = middle
+	return middle, nil
+}
+
+func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
+	ret := make([]string, 0, 100)
+	for _, s := range ds.splits {
+		if s.High < afterKey {
 			continue
 		}
-		str := string(dec)
-		if str > afterKey {
-			decodedNames = append(decodedNames, str)
+
+		fis, err := ioutil.ReadDir(filepath.Join(ds.Dir, "data", s.Name))
+		if err != nil {
+			return nil, err
 		}
 
-		if limit > 0 && len(decodedNames) > limit*2+50 {
-			sort.Strings(decodedNames)
-			decodedNames = decodedNames[:limit]
+		for _, fi := range fis {
+			keyByte, err := base64.URLEncoding.DecodeString(fi.Name())
+			if err != nil {
+				continue
+			}
+
+			key := string(keyByte)
+
+			if key > afterKey {
+				ret = append(ret, key)
+			}
+		}
+
+		if limit > 0 && len(ret) > limit {
+			break
 		}
 	}
 
-	sort.Strings(decodedNames)
+	sort.Strings(ret)
 
-	if limit > 0 && len(decodedNames) > limit {
+	if limit > 0 && len(ret) > limit {
 		// copy instead of slice to avoid having the caller retain a possibly
 		// very large array of strings
 		cut := make([]string, limit)
-		copy(cut, decodedNames)
-		decodedNames = cut
+		copy(cut, ret)
+		ret = cut
 	}
 
-	return decodedNames, nil
+	return ret, nil
 }
 
 func (ds *Directory) UUID() [16]byte {
@@ -323,123 +664,4 @@ func (ds *Directory) UUID() [16]byte {
 
 func (ds *Directory) Name() string {
 	return ds.name
-}
-
-func (ds *Directory) Hashcheck() (good, bad int64) {
-	after := ""
-	for {
-		var goodStep, badStep int64
-		goodStep, badStep, after = ds.hashstepInner(after)
-		good += goodStep
-		bad += badStep
-
-		if after == "" {
-			return
-		}
-	}
-}
-
-func (ds *Directory) hashcheckLoop() {
-	for {
-		_, bad := ds.hashstep()
-		if bad != 0 {
-			log.Printf("Found %v bad items hash check on %v\n",
-				bad, uuid.Fmt(ds.UUID()))
-		}
-
-		select {
-		case <-time.After(5 * time.Second):
-		case <-ds.stop:
-			return
-		}
-	}
-}
-
-func (ds *Directory) hashstep() (good, bad int64) {
-	statePath := filepath.Join(ds.Dir, "hashcheck-at")
-	after := ""
-
-	fh, err := os.Open(statePath)
-	if err == nil {
-		data, err := ioutil.ReadAll(fh)
-		fh.Close()
-		if err != nil {
-			log.Printf("Couldn't read from %v: %v", statePath, err)
-			return
-		}
-		after = string(data)
-	} else if !os.IsNotExist(err) {
-		log.Printf("Couldn't open %v: %v", statePath, err)
-		return
-	}
-
-	good, bad, after = ds.hashstepInner(after)
-
-	fh, err = os.Create(statePath)
-	if err != nil {
-		log.Printf("Couldn't create %v: %v", statePath, err)
-		return
-	}
-	defer fh.Close()
-
-	_, err = fh.Write([]byte(after))
-	if err != nil {
-		log.Printf("Couldn't write to %v: %v", statePath, err)
-	}
-
-	return
-}
-
-func (ds *Directory) hashstepInner(afterIn string) (good, bad int64, after string) {
-	after = afterIn
-
-	keys, err := ds.List(after, 100)
-	if err != nil {
-		log.Printf("Couldn't list in %v for hash check: %v", ds.Dir, err)
-		return
-	}
-
-	if len(keys) == 0 {
-		after = ""
-		return
-	}
-
-	for _, key := range keys {
-		data, _, err := ds.Get(key)
-		if err != nil && err != store.ErrNotFound {
-			bad++
-		} else {
-			good++
-		}
-
-		wait := ds.perFileWait + time.Duration(len(data))*ds.perByteWait
-		data = nil // free memory before sleep
-		if wait > 0 {
-			time.Sleep(wait)
-		}
-
-		after = key
-
-		select {
-		case <-ds.stop:
-			return
-		default:
-		}
-	}
-
-	return
-}
-
-func (ds *Directory) quarantine(key string) {
-	quarantinePath := filepath.Join(ds.Dir, "quarantine", ds.encodeKey(key))
-	dataPath := ds.keyToFilename(key)
-
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-
-	err := os.Rename(dataPath, quarantinePath)
-	if err != nil {
-		log.Printf("Couldn't quarantine %v into %v: %v",
-			dataPath, quarantinePath, err)
-	}
 }
