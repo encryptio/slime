@@ -1,6 +1,7 @@
 package storetests
 
 import (
+	"crypto/sha256"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -23,6 +24,7 @@ func TestStoreBasics(t *testing.T, s store.Store) {
 	ShouldGetMiss(t, s, "hello")
 	ShouldCAS(t, s, "hello", store.MissingV, store.DataV([]byte("world")))
 	ShouldGet(t, s, "hello", []byte("world"))
+	ShouldStat(t, s, "hello", &store.Stat{SHA256: sha256.Sum256([]byte("world")), Size: 5})
 	ShouldCAS(t, s, "a", store.AnyV, store.MissingV)
 	ShouldFullList(t, s, []string{"hello"})
 	ShouldCAS(t, s, "b", store.AnyV, store.DataV([]byte("beta")))

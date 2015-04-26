@@ -184,7 +184,7 @@ func (ds *Directory) Stat(key string) (*store.Stat, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.Size = fi.Size()
+	st.Size = fi.Size() - 40
 
 	return st, nil
 }
