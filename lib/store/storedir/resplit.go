@@ -191,7 +191,8 @@ func (ds *Directory) resplitSplit(name string) error {
 	var newDir string
 	var newName string
 	for {
-		newName = fmt.Sprintf("%v", rand.Intn(len(ds.splits)+10))
+		maxN := len(ds.splits) + len(ds.splits)/2 + 10
+		newName = fmt.Sprintf("%v", rand.Intn(maxN))
 		newDir = filepath.Join(ds.Dir, "data", newName)
 		err := os.Mkdir(newDir, 0777)
 		if err != nil {
