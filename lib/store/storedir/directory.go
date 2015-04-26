@@ -271,8 +271,15 @@ func (ds *Directory) loadSplitsAndRecover() error {
 			Name: "migration",
 		}
 
+		migrated := 0
+
 		foundOne := false
 		for _, fi := range toMigrate {
+			migrated++
+			if migrated%1000 == 0 {
+				log.Printf("Migrated %v files in %v so far\n", migrated, ds.Dir)
+			}
+
 			name := fi.Name()
 
 			keyBytes, err := base64.URLEncoding.DecodeString(name)
@@ -294,6 +301,14 @@ func (ds *Directory) loadSplitsAndRecover() error {
 			}
 			if key > this.High {
 				this.High = key
+			}
+
+			oldPath := filepath.Join(ds.Dir, "data", name)
+			newPath := filepath.Join(ds.Dir, "data", "migration", name)
+
+			err = os.Rename(oldPath, newPath)
+			if err != nil {
+				log.Printf("Couldn't rename from %v to %v during migration: %v", oldPath, newPath, err)
 			}
 		}
 
