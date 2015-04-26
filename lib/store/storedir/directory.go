@@ -262,13 +262,13 @@ func (ds *Directory) loadSplitsAndRecover() error {
 	if len(toMigrate) > 0 {
 		log.Printf("Migrating %v files in %v to migration split dir", len(toMigrate), ds.Dir)
 
-		err := os.Mkdir(filepath.Join(ds.Dir, "data", "migration"), 0777)
+		err := os.Mkdir(filepath.Join(ds.Dir, "data", "0"), 0777)
 		if err != nil && !os.IsExist(err) {
 			return err
 		}
 
 		this := split{
-			Name: "migration",
+			Name: "0",
 		}
 
 		migrated := 0
@@ -304,7 +304,7 @@ func (ds *Directory) loadSplitsAndRecover() error {
 			}
 
 			oldPath := filepath.Join(ds.Dir, "data", name)
-			newPath := filepath.Join(ds.Dir, "data", "migration", name)
+			newPath := filepath.Join(ds.Dir, "data", "0", name)
 
 			err = os.Rename(oldPath, newPath)
 			if err != nil {
