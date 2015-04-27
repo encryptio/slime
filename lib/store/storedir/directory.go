@@ -415,6 +415,8 @@ func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
 	actualFNV := fnver.Sum(nil)
 
 	if !bytes.Equal(actualFNV, expectedFNV[:]) {
+		fh.Close()
+
 		// TODO: this relocking is fucked and racy
 		ds.mu.RUnlock()
 		ds.mu.Lock()
