@@ -41,8 +41,8 @@ func (ds *Directory) resplit() error {
 }
 
 func (ds *Directory) resplitStep() (bool, error) {
-	ds.mu.RLock()
-	defer ds.mu.RUnlock()
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
 
 	if len(ds.splits) == 0 {
 		return true, nil
@@ -60,18 +60,14 @@ func (ds *Directory) resplitStep() (bool, error) {
 	}
 
 	if len(fis) < ds.minSplitSize {
-		ds.mu.RUnlock()
 		err := ds.resplitMerge(s.Name)
-		ds.mu.RLock()
 		if err != nil {
 			return false, err
 		}
 	}
 
 	if len(fis) > ds.maxSplitSize {
-		ds.mu.RUnlock()
 		err := ds.resplitSplit(s.Name)
-		ds.mu.RLock()
 		if err != nil {
 			return false, err
 		}
@@ -86,9 +82,6 @@ func (ds *Directory) resplitStep() (bool, error) {
 }
 
 func (ds *Directory) resplitMerge(name string) error {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-
 	if len(ds.splits) < 2 {
 		return nil
 	}
@@ -148,9 +141,6 @@ func (ds *Directory) resplitMerge(name string) error {
 }
 
 func (ds *Directory) resplitSplit(name string) error {
-	ds.mu.Lock()
-	defer ds.mu.Unlock()
-
 	idx := -1
 	for i := 0; i < len(ds.splits); i++ {
 		if ds.splits[i].Name == name {

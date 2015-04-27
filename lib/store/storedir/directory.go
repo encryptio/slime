@@ -634,6 +634,9 @@ func (ds *Directory) chooseSplit(key string) (split, error) {
 }
 
 func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
+	ds.mu.RLock()
+	defer ds.mu.RUnlock()
+
 	ret := make([]string, 0, 100)
 	for _, s := range ds.splits {
 		if s.High < afterKey {
