@@ -570,12 +570,12 @@ func (ds *Directory) chooseSplit(key string) (split, error) {
 	// if there are no splits, make one
 	if len(ds.splits) == 0 {
 		this := split{
-			Name: "first",
+			Name: "1",
 			Low:  key,
 			High: key,
 		}
 
-		err := os.Mkdir(filepath.Join(ds.Dir, "data", "first"), 0777)
+		err := os.Mkdir(filepath.Join(ds.Dir, "data", "1"), 0777)
 		if err != nil {
 			return split{}, err
 		}
