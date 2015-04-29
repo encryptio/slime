@@ -17,6 +17,9 @@ version; you have been warned.
 Quickstart
 ----------
 
+This is how you can get a slime instance running locally to try it out. If you
+want to do a more production-style deployment, see PRODUCTION.md for details.
+
 Compile the slime tool (which includes the daemons in the same binary):
 
     $ go install git.encryptio.com/slime
