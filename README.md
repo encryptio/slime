@@ -10,8 +10,9 @@ Dependencies
 
 slime requires Go 1.4 to build, and Go tip to run its test suite.
 
-PostgreSQL must be 9.1 or later; true serializability was implemented in that
-version.
+PostgreSQL MUST be 9.1 or later; true serializability was implemented in that
+version. slime may eat all your data silently if you use an older PostgreSQL
+version; you have been warned.
 
 Quickstart
 ----------
@@ -183,6 +184,7 @@ to that item.
 
 One possible consequence of the differing availability models for data and
 metadata is that two proxy servers with different connections to chunk servers
-may be able to successfully write to the chunk servers _and_ successfully update
-the metadata store, and thus will see each other's writes in metadata, but may
-not be able to actually read the contents that the other proxy writes.
+may be able to successfully write to enough chunk servers _and_ successfully
+update the metadata store, and thus will see each other's writes in metadata,
+but may not be able to actually read the contents that the other proxy writes
+if they can't talk to the same chunk servers that the data was written to.
