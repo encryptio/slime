@@ -116,7 +116,7 @@ func chunkServer() {
 	}
 
 	if *logEnabled {
-		h = httputil.LogHttpRequests(h)
+		h = httputil.LogHTTPRequests(h)
 	}
 
 	serveOrDie(*listen, h)
@@ -151,7 +151,7 @@ func proxyServer() {
 	}
 
 	if *logEnabled {
-		h = httputil.LogHttpRequests(h)
+		h = httputil.LogHTTPRequests(h)
 	}
 
 	serveOrDie(*listen, h)

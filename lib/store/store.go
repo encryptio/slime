@@ -1,4 +1,4 @@
-// package store provides an interface for object stores
+// Package store provides an interface for object stores
 package store
 
 import (

@@ -12,8 +12,6 @@ import (
 	"git.encryptio.com/slime/lib/uuid"
 )
 
-var ScanInterval = 30 * time.Second
-
 type Handler struct {
 	stores   []store.Store
 	handlers []*storehttp.Server

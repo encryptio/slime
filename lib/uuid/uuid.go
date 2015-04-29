@@ -1,4 +1,4 @@
-// package uuid provides utilities for working with UUIDs
+// Package uuid provides utilities for working with UUIDs
 package uuid
 
 import (

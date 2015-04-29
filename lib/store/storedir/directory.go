@@ -555,13 +555,15 @@ func (ds *Directory) CAS(key string, from, to store.CASV) error {
 		}
 
 		return nil
-	} else {
-		if oldPath == "" {
-			return nil
-		}
-
-		return os.Remove(oldPath)
 	}
+
+	// !to.Present
+
+	if oldPath == "" {
+		return nil
+	}
+
+	return os.Remove(oldPath)
 }
 
 func (ds *Directory) chooseSplit(key string) (split, error) {

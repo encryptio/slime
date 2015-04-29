@@ -35,9 +35,9 @@ func getConfig(name string) string {
 
 	if strings.HasPrefix(line, "VALUE ") {
 		return strings.TrimPrefix(line, "VALUE ")
-	} else {
-		return ""
 	}
+
+	return ""
 }
 
 func keyURL(key string) string {
@@ -45,9 +45,9 @@ func keyURL(key string) string {
 		sha := sha256.Sum256([]byte(strings.ToLower(key)))
 		hexed := hex.EncodeToString(sha[0:3])
 		return baseURL + hexed[0:3] + "/" + hexed[3:6] + "/" + key
-	} else {
-		return baseURL + key
 	}
+
+	return baseURL + key
 }
 
 func initRemote() {

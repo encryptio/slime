@@ -28,7 +28,7 @@ type logRecord struct {
 
 	bytes    int
 	code     int
-	reqUrl   string
+	reqURL   string
 	hijacked bool
 
 	time time.Duration
@@ -61,7 +61,7 @@ func (r hijackableLogRecord) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return c, buf, err
 }
 
-func LogHttpRequests(inner http.Handler) http.Handler {
+func LogHTTPRequests(inner http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		src := &stattingReadCloser{ReadCloser: req.Body}
 		req.Body = src
@@ -69,18 +69,18 @@ func LogHttpRequests(inner http.Handler) http.Handler {
 		record := &logRecord{
 			ResponseWriter: w,
 			code:           200,
-			reqUrl:         req.URL.String(),
+			reqURL:         req.URL.String(),
 		}
 
 		started := time.Now()
 		defer func() {
 			if record.hijacked {
 				log.Printf("%s %s %s -> Connection Hijacked in %v",
-					req.RemoteAddr, req.Method, record.reqUrl,
+					req.RemoteAddr, req.Method, record.reqURL,
 					time.Now().Sub(started))
 			} else {
 				log.Printf("%s %s %s -> %d, read %d in %v, wrote %d in %v, total time %v",
-					req.RemoteAddr, req.Method, record.reqUrl, record.code,
+					req.RemoteAddr, req.Method, record.reqURL, record.code,
 					src.bytes, src.time,
 					record.bytes, record.time,
 					time.Now().Sub(started))
