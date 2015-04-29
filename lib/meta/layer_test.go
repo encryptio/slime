@@ -427,7 +427,7 @@ func TestLayerLocationContents(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(names, test.Entries) {
-				t.Errorf("GetLocationContents one by one returned %#v, wanted %#v",
+				t.Errorf("GetLocationContents on %v one by one returned %#v, wanted %#v",
 					uuid.Fmt(test.ID), names, test.Entries)
 			}
 		}
