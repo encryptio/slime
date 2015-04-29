@@ -663,7 +663,7 @@ func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
 			}
 		}
 
-		if limit > 0 && len(ret) > limit {
+		if limit > 0 && len(ret) >= limit {
 			break
 		}
 	}
