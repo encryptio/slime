@@ -181,7 +181,8 @@ func retrieve(key, file string) {
 
 	resp, err := http.Get(keyURL(key))
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Couldn't talk to server: %v", err)
+		return
 	}
 	defer resp.Body.Close()
 
@@ -235,6 +236,11 @@ func retrieve(key, file string) {
 }
 
 func checkPresent(key string) {
+	ret := "UNKNOWN"
+	defer func() {
+		out.WriteString("CHECKPRESENT-" + ret + " " + key + "\n")
+	}()
+
 	req, err := http.NewRequest("HEAD", keyURL(key), nil)
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v",
@@ -244,22 +250,24 @@ func checkPresent(key string) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Couldn't talk to server: %v", err)
+		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		out.WriteString("CHECKPRESENT-SUCCESS ")
+		ret = "SUCCESS"
 	} else if resp.StatusCode == 404 {
-		out.WriteString("CHECKPRESENT-FAILURE ")
-	} else {
-		out.WriteString("CHECKPRESENT-UNKNOWN ")
+		ret = "FAILURE"
 	}
-	out.WriteString(key)
-	out.WriteString("\n")
 }
 
 func remove(key string) {
+	ret := "FAILURE"
+	defer func() {
+		out.WriteString("REMOVE-" + ret + " " + key + "\n")
+	}()
+
 	req, err := http.NewRequest("DELETE", keyURL(key), nil)
 	if err != nil {
 		log.Printf("Couldn't create request for %s: %v",
@@ -269,17 +277,14 @@ func remove(key string) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Couldn't DELETE %v: %v", req.URL, err)
+		return
 	}
 	defer resp.Body.Close()
 
 	if (resp.StatusCode >= 200 && resp.StatusCode < 300) || resp.StatusCode == 404 {
-		out.WriteString("REMOVE-SUCCESS ")
-	} else {
-		out.WriteString("REMOVE-FAILURE ")
+		ret = "SUCCESS"
 	}
-	out.WriteString(key)
-	out.WriteString("\n")
 }
 
 func main() {
