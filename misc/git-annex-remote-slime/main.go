@@ -50,30 +50,17 @@ func keyURL(key string) string {
 	return baseURL + key
 }
 
-func initRemote() {
+func prepare(mode string) {
 	baseURL = getConfig("baseurl")
 	if baseURL == "" {
-		out.WriteString("INITREMOTE-FAILURE You must set baseurl to the URL (ending in /) that you want to use\n")
+		out.WriteString(mode + "-FAILURE You must set baseurl to the URL (ending in /) that you want to use\n")
 		return
 	}
 
 	old := getConfig("oldprefixmode")
 	oldPrefixMode = old == "true"
 
-	out.WriteString("INITREMOTE-SUCCESS\n")
-}
-
-func prepare() {
-	baseURL = getConfig("baseurl")
-	if baseURL == "" {
-		out.WriteString("PREPARE-FAILURE You must set baseurl to the URL (ending in /) that you want to use\n")
-		return
-	}
-
-	old := getConfig("oldprefixmode")
-	oldPrefixMode = old == "true"
-
-	out.WriteString("PREPARE-SUCCESS\n")
+	out.WriteString(mode + "-SUCCESS\n")
 }
 
 type positionPrinter struct {
@@ -313,10 +300,10 @@ func main() {
 
 		switch {
 		case strings.HasPrefix(line, "INITREMOTE"):
-			initRemote()
+			prepare("INITREMOTE")
 
 		case strings.HasPrefix(line, "PREPARE"):
-			prepare()
+			prepare("PREPARE")
 
 		case strings.HasPrefix(line, "TRANSFER "):
 			line = strings.TrimPrefix(line, "TRANSFER ")
