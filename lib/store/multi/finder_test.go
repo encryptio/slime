@@ -84,9 +84,9 @@ func TestFinderScan(t *testing.T) {
 
 	// when the store comes back
 	killer.setKilled(false)
-	err = f.scanStart()
+	err = f.Rescan()
 	if err != nil {
-		t.Fatalf("Couldn't scanStart: %v", err)
+		t.Fatalf("Couldn't Rescan: %v", err)
 	}
 
 	// it should be there again

@@ -32,8 +32,7 @@ type Finder struct {
 	db     kvl.DB
 	client *http.Client
 
-	stop     chan struct{}
-	scanDone chan struct{}
+	stop chan struct{}
 
 	mu     sync.Mutex
 	stores map[[16]byte]finderEntry
@@ -45,9 +44,8 @@ func NewFinder(db kvl.DB) (*Finder, error) {
 		client: &http.Client{
 			Timeout: time.Second * 15,
 		},
-		stop:     make(chan struct{}),
-		stores:   make(map[[16]byte]finderEntry, 16),
-		scanDone: make(chan struct{}),
+		stop:   make(chan struct{}),
+		stores: make(map[[16]byte]finderEntry, 16),
 	}
 
 	go f.scanLoop()
@@ -97,14 +95,9 @@ func (f *Finder) FreeMap() map[[16]byte]int64 {
 
 func (f *Finder) scanLoop() {
 	for {
-		err := f.scanStart()
+		err := f.Rescan()
 		if err != nil {
-			log.Printf("Couldn't start scanning for locations: %v", err)
-		}
-
-		select {
-		case f.scanDone <- struct{}{}:
-		default:
+			log.Printf("Couldn't scan for locations: %v", err)
 		}
 
 		select {
@@ -115,7 +108,7 @@ func (f *Finder) scanLoop() {
 	}
 }
 
-func (f *Finder) scanStart() error {
+func (f *Finder) Rescan() error {
 	ret, err := f.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -186,14 +179,17 @@ func (f *Finder) Scan(url string) error {
 				return err
 			}
 
-			e = finderEntry{
-				st:        st,
-				free:      free,
-				lastCheck: time.Now(),
-			}
-
 			f.mu.Lock()
-			f.stores[id] = e
+			e, found = f.stores[id]
+			if !found {
+				e = finderEntry{
+					st:        st,
+					free:      free,
+					lastCheck: time.Now(),
+				}
+
+				f.stores[id] = e
+			}
 			f.mu.Unlock()
 		}
 
@@ -254,13 +250,16 @@ func (f *Finder) testLoop() {
 func (f *Finder) test(wait time.Duration) {
 	for id, store := range f.Stores() {
 		free, err := store.FreeSpace()
-		if err != nil {
-			f.mu.Lock()
-			delete(f.stores, id)
-			f.mu.Unlock()
-		}
 
 		f.mu.Lock()
+		if err != nil {
+			e, ok := f.stores[id]
+			if ok {
+				e.st.Close()
+				delete(f.stores, id)
+			}
+		}
+
 		e, ok := f.stores[id]
 		if ok {
 			e.free = free

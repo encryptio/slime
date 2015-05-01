@@ -133,6 +133,14 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch req.Operation {
+		case "rescan":
+			err = h.finder.Rescan()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Couldn't rescan: %v", err),
+					http.StatusInternalServerError)
+				return
+			}
+
 		case "scan":
 			err = h.finder.Scan(req.URL)
 			if err != nil {
