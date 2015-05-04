@@ -324,7 +324,7 @@ func (ds *Directory) loadSplitsAndRecover() error {
 	return nil
 }
 
-func (ds *Directory) StillValid() bool {
+func (ds *Directory) Available() bool {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
