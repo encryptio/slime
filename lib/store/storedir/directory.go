@@ -378,7 +378,7 @@ func (ds *Directory) findAndOpen(key string) (*os.File, string, error) {
 	return nil, "", nil
 }
 
-func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
+func (ds *Directory) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
@@ -429,7 +429,7 @@ func (ds *Directory) Get(key string) ([]byte, [32]byte, error) {
 	return data, h, nil
 }
 
-func (ds *Directory) Stat(key string) (*store.Stat, error) {
+func (ds *Directory) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
@@ -463,7 +463,7 @@ func (ds *Directory) statUnlocked(key string) (*store.Stat, string, error) {
 	return st, path, nil
 }
 
-func (ds *Directory) CAS(key string, from, to store.CASV) error {
+func (ds *Directory) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
@@ -635,7 +635,7 @@ func (ds *Directory) chooseSplit(key string) (split, error) {
 	return middle, nil
 }
 
-func (ds *Directory) List(afterKey string, limit int) ([]string, error) {
+func (ds *Directory) List(afterKey string, limit int, cancel <-chan struct{}) ([]string, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 

@@ -114,42 +114,42 @@ func (rs *RetryStore) Name() string {
 	return s.Name()
 }
 
-func (rs *RetryStore) Get(key string) ([]byte, [32]byte, error) {
+func (rs *RetryStore) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
 	s := rs.getInner()
 	if s == nil {
 		return nil, [32]byte{}, ErrUnavailable
 	}
-	return s.Get(key)
+	return s.Get(key, cancel)
 }
 
-func (rs *RetryStore) List(after string, limit int) ([]string, error) {
+func (rs *RetryStore) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
 	s := rs.getInner()
 	if s == nil {
 		return nil, ErrUnavailable
 	}
-	return s.List(after, limit)
+	return s.List(after, limit, cancel)
 }
 
-func (rs *RetryStore) FreeSpace() (int64, error) {
+func (rs *RetryStore) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	s := rs.getInner()
 	if s == nil {
 		return 0, ErrUnavailable
 	}
-	return s.FreeSpace()
+	return s.FreeSpace(cancel)
 }
 
-func (rs *RetryStore) Stat(key string) (*Stat, error) {
+func (rs *RetryStore) Stat(key string, cancel <-chan struct{}) (*Stat, error) {
 	s := rs.getInner()
 	if s == nil {
 		return nil, ErrUnavailable
 	}
-	return s.Stat(key)
+	return s.Stat(key, cancel)
 }
 
-func (rs *RetryStore) CAS(key string, from, to CASV) error {
+func (rs *RetryStore) CAS(key string, from, to CASV, cancel <-chan struct{}) error {
 	s := rs.getInner()
 	if s == nil {
 		return ErrUnavailable
 	}
-	return s.CAS(key, from, to)
+	return s.CAS(key, from, to, cancel)
 }

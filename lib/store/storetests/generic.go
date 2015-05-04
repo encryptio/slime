@@ -89,7 +89,7 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 		go func(i int) {
 			for j := 0; j < iterations; j++ {
 				for {
-					data, oldsha, err := s.Get("key")
+					data, oldsha, err := s.Get("key", nil)
 					if err != nil {
 						t.Logf("Routine %v: Couldn't get key: %v", i, err)
 						errs <- err
@@ -109,7 +109,8 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 
 					err = s.CAS("key",
 						store.CASV{Present: true, SHA256: oldsha},
-						store.DataV(data))
+						store.DataV(data),
+						nil)
 					if err != nil {
 						if err == store.ErrCASFailure {
 							atomic.AddUint64(&casFailures, 1)

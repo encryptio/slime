@@ -174,7 +174,7 @@ func (f *Finder) Scan(url string) error {
 				return err
 			}
 
-			free, err := st.FreeSpace()
+			free, err := st.FreeSpace(nil)
 			if err != nil {
 				return err
 			}
@@ -249,7 +249,7 @@ func (f *Finder) testLoop() {
 
 func (f *Finder) test(wait time.Duration) {
 	for id, store := range f.Stores() {
-		free, err := store.FreeSpace()
+		free, err := store.FreeSpace(nil)
 
 		f.mu.Lock()
 		if err != nil {

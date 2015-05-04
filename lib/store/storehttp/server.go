@@ -86,7 +86,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		if theirEtags := r.Header.Get("if-none-match"); theirEtags != "" {
-			st, err := h.store.Stat(obj)
+			st, err := h.store.Stat(obj, nil)
 			if err != nil {
 				if err == store.ErrNotFound {
 					http.Error(w, "not found", http.StatusNotFound)
@@ -117,7 +117,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// miss an opportunity to cache, but we'll never return an incorrect
 		// result.
 
-		data, hash, err := h.store.Get(obj)
+		data, hash, err := h.store.Get(obj, nil)
 		if err != nil {
 			if err == store.ErrNotFound {
 				http.Error(w, "not found", http.StatusNotFound)
@@ -138,7 +138,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 
 	case "HEAD":
-		st, err := h.store.Stat(obj)
+		st, err := h.store.Stat(obj, nil)
 		if err != nil {
 			if err == store.ErrNotFound {
 				w.WriteHeader(http.StatusNotFound)
@@ -215,7 +215,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Present: true,
 			SHA256:  haveHash,
 			Data:    data,
-		})
+		}, nil)
 		if err != nil {
 			if err == store.ErrCASFailure {
 				http.Error(w, err.Error(), http.StatusPreconditionFailed)
@@ -243,7 +243,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if from.Any {
 				// TODO: make the CAS interface rich enough to handle this
 				// without Stat
-				st, err := h.store.Stat(obj)
+				st, err := h.store.Stat(obj, nil)
 				if err != nil {
 					if err == store.ErrNotFound {
 						http.Error(w, "not found", http.StatusNotFound)
@@ -258,8 +258,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				doRetry = true
 			}
 
-			err = h.store.CAS(obj, from,
-				store.CASV{Present: false})
+			err = h.store.CAS(obj, from, store.CASV{Present: false}, nil)
 			if err != nil {
 				if err == store.ErrCASFailure {
 					if doRetry {
@@ -325,7 +324,7 @@ func (h *Server) serveList(w http.ResponseWriter, r *http.Request) {
 		limit = int(i)
 	}
 
-	names, err := h.store.List(after, limit)
+	names, err := h.store.List(after, limit, nil)
 	if err != nil {
 		log.Printf("Couldn't List(): %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -341,7 +340,7 @@ func (h *Server) serveList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Server) serveFree(w http.ResponseWriter, r *http.Request) {
-	free, err := h.store.FreeSpace()
+	free, err := h.store.FreeSpace(nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -11,7 +11,7 @@ import (
 )
 
 func ShouldList(t *testing.T, s store.Store, after string, limit int, expect []string) {
-	got, err := s.List(after, limit)
+	got, err := s.List(after, limit, nil)
 	if err != nil {
 		t.Errorf("Unexpected error from List(%#v, %v): %v", after, limit, err)
 		return
@@ -26,7 +26,7 @@ func ShouldList(t *testing.T, s store.Store, after string, limit int, expect []s
 }
 
 func ShouldCASError(t *testing.T, s store.Store, key string, from, to store.CASV, wantErr error) {
-	err := s.CAS(key, from, to)
+	err := s.CAS(key, from, to, nil)
 	if err != wantErr {
 		t.Errorf("CAS(%#v, %v, %v) returned error %v, but wanted %v",
 			key, from, to, err, wantErr)
@@ -46,7 +46,7 @@ func ShouldFullList(t *testing.T, s store.Store, expect []string) {
 }
 
 func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
-	got, gothash, err := s.Get(key)
+	got, gothash, err := s.Get(key, nil)
 	if err != nil {
 		t.Errorf("Get(%#v) returned unexpected error %v", key, err)
 		return
@@ -61,7 +61,7 @@ func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
 }
 
 func ShouldGetError(t *testing.T, s store.Store, key string, wantErr error) {
-	got, _, err := s.Get(key)
+	got, _, err := s.Get(key, nil)
 	if err != wantErr {
 		t.Errorf("Get(%#v) = (%#v, %v), but wanted err = %v",
 			key, got, err, wantErr)
@@ -73,7 +73,7 @@ func ShouldGetMiss(t *testing.T, s store.Store, key string) {
 }
 
 func ShouldFreeSpace(t *testing.T, s store.Store) {
-	free, err := s.FreeSpace()
+	free, err := s.FreeSpace(nil)
 	if err != nil {
 		t.Errorf("FreeSpace() returned unexpected error %v", err)
 		return
@@ -84,7 +84,7 @@ func ShouldFreeSpace(t *testing.T, s store.Store) {
 }
 
 func ShouldStat(t *testing.T, s store.Store, key string, stat *store.Stat) {
-	st, err := s.Stat(key)
+	st, err := s.Stat(key, nil)
 	if err != nil {
 		t.Errorf("Stat(%#v) returned unexpected error %v", key, err)
 		return
@@ -95,7 +95,7 @@ func ShouldStat(t *testing.T, s store.Store, key string, stat *store.Stat) {
 }
 
 func ShouldStatMiss(t *testing.T, s store.Store, key string) {
-	st, err := s.Stat(key)
+	st, err := s.Stat(key, nil)
 	if err != store.ErrNotFound {
 		t.Errorf("Stat(%#v) returned (%v, %v), but wanted %v",
 			key, st, err, store.ErrNotFound)

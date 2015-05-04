@@ -76,7 +76,7 @@ func (m *Multi) getFile(key string) (*meta.File, error) {
 	return ret.(*meta.File), nil
 }
 
-func (m *Multi) Get(key string) ([]byte, [32]byte, error) {
+func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
 	var zeroes [32]byte
 
 	r := retry.New(10)
@@ -133,7 +133,7 @@ func (m *Multi) getChunkData(f *meta.File) [][]byte {
 		var data []byte
 		if st != nil {
 			localKey := localKeyFor(f, i)
-			data, _, _ = st.Get(localKey)
+			data, _, _ = st.Get(localKey, nil)
 			// TODO: log err?
 		}
 		results <- chunkResult{i, data}
@@ -237,7 +237,7 @@ func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
 	return data, nil
 }
 
-func (m *Multi) Stat(key string) (*store.Stat, error) {
+func (m *Multi) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
 	var file *meta.File
 	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
@@ -296,7 +296,7 @@ func splitVector(data []uint32, count int) [][]uint32 {
 	return parts
 }
 
-func (m *Multi) CAS(key string, from, to store.CASV) error {
+func (m *Multi) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {
 	var file *meta.File
 	prefixid := uuid.Gen4()
 
@@ -421,7 +421,7 @@ func (m *Multi) deleteChunks(file *meta.File) error {
 			st := m.finder.StoreFor(loc)
 			if st != nil {
 				// TODO: log err
-				st.CAS(localKey, store.AnyV, store.MissingV)
+				st.CAS(localKey, store.AnyV, store.MissingV, nil)
 			} else {
 				// TODO: log delete skip
 			}
@@ -548,7 +548,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte, prefixid [16]
 			localKey := localKeyFor(file, i)
 			dataV := store.DataV(data)
 			for st := range storeCh {
-				err := st.CAS(localKey, store.AnyV, dataV)
+				err := st.CAS(localKey, store.AnyV, dataV, nil)
 				if err != nil {
 					// TODO: log
 					continue
@@ -576,7 +576,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte, prefixid [16]
 			st := m.finder.StoreFor(file.Locations[i])
 			if st != nil {
 				localKey := localKeyFor(file, i)
-				st.CAS(localKey, store.AnyV, store.MissingV)
+				st.CAS(localKey, store.AnyV, store.MissingV, nil)
 			}
 		}
 
@@ -586,7 +586,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte, prefixid [16]
 	return file, nil
 }
 
-func (m *Multi) List(after string, limit int) ([]string, error) {
+func (m *Multi) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
 	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -620,15 +620,15 @@ func (s int64Slice) Len() int           { return len(s) }
 func (s int64Slice) Less(i, j int) bool { return s[i] < s[j] }
 func (s int64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func (m *Multi) FreeSpace() (int64, error) {
+func (m *Multi) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	m.mu.Lock()
 	conf := m.config
 	m.mu.Unlock()
 
 	var frees []int64
-	stores := m.finder.Stores()
+	stores := m.finder.Stores() // TODO: freeMap
 	for _, st := range stores {
-		free, err := st.FreeSpace()
+		free, err := st.FreeSpace(nil)
 		if err == nil {
 			frees = append(frees, free)
 		}

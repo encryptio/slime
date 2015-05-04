@@ -214,7 +214,7 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 	}()
 
 	localKey := localKeyFor(&f, minI)
-	data, hash, err := minS.Get(localKey)
+	data, hash, err := minS.Get(localKey, nil)
 	if err != nil {
 		return false, err
 	}
@@ -225,7 +225,7 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 		Data:    data,
 	}
 
-	err = maxS.CAS(localKey, store.MissingV, setCASV)
+	err = maxS.CAS(localKey, store.MissingV, setCASV, nil)
 	if err != nil {
 		return false, err
 	}
@@ -268,11 +268,11 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 		return nil, nil
 	})
 	if err != nil {
-		maxS.CAS(localKey, setCASV, store.MissingV) // ignore error
+		maxS.CAS(localKey, setCASV, store.MissingV, nil) // ignore error
 		return false, err
 	}
 
-	err = minS.CAS(localKey, setCASV, store.MissingV)
+	err = minS.CAS(localKey, setCASV, store.MissingV, nil)
 	if err != nil {
 		log.Printf("Couldn't remove rebalanced chunk from old location %v: %v",
 			uuid.Fmt(maxS.UUID()), err)

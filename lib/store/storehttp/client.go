@@ -68,7 +68,7 @@ func (cc *Client) Name() string {
 	return cc.name
 }
 
-func (cc *Client) Get(key string) ([]byte, [32]byte, error) {
+func (cc *Client) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
 	var h [32]byte
 
 	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil)
@@ -109,7 +109,7 @@ func (cc *Client) Get(key string) ([]byte, [32]byte, error) {
 	return data, h, nil
 }
 
-func (cc *Client) CAS(key string, from, to store.CASV) error {
+func (cc *Client) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {
 	var req *http.Request
 	var err error
 
@@ -160,7 +160,7 @@ func (cc *Client) CAS(key string, from, to store.CASV) error {
 	return httputil.ReadResponseAsError(resp)
 }
 
-func (cc *Client) List(after string, limit int) ([]string, error) {
+func (cc *Client) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
 	args := make(url.Values)
 	args.Add("mode", "list")
 	if after != "" {
@@ -202,7 +202,7 @@ func (cc *Client) List(after string, limit int) ([]string, error) {
 	return strs, nil
 }
 
-func (cc *Client) FreeSpace() (int64, error) {
+func (cc *Client) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	resp, err := cc.startReq("GET", cc.url+"?mode=free", nil)
 	if err != nil {
 		return 0, err
@@ -221,7 +221,7 @@ func (cc *Client) FreeSpace() (int64, error) {
 	return strconv.ParseInt(string(data), 10, 64)
 }
 
-func (cc *Client) Stat(key string) (*store.Stat, error) {
+func (cc *Client) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
 	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil)
 	if err != nil {
 		return nil, err

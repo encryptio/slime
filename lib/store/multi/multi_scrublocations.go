@@ -192,7 +192,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		return false, nil
 	}
 
-	haveFiles, err := st.List(from, scrubLocationsCount)
+	haveFiles, err := st.List(from, scrubLocationsCount, nil)
 	if err != nil {
 		log.Printf("Couldn't List from %v: %v", uuid.Fmt(thisLoc.UUID), err)
 		return false, nil
@@ -224,7 +224,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 				log.Printf("Couldn't figure out PrefixID from localKey(%#v): %v",
 					have, err)
 
-				err = st.CAS(have, store.AnyV, store.MissingV)
+				err = st.CAS(have, store.AnyV, store.MissingV, nil)
 				if err != nil {
 					log.Printf("Couldn't delete extraneous chunk %v from %v: %v",
 						have, uuid.Fmt(thisLoc.UUID), err)
@@ -271,7 +271,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 			log.Printf("deleting extraneous chunk %v on %v",
 				have, uuid.Fmt(thisLoc.UUID))
-			err = st.CAS(have, store.AnyV, store.MissingV)
+			err = st.CAS(have, store.AnyV, store.MissingV, nil)
 			if err != nil {
 				log.Printf("Couldn't delete extraneous chunk %v from %v: %v",
 					have, uuid.Fmt(thisLoc.UUID), err)

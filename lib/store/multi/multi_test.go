@@ -17,14 +17,14 @@ import (
 )
 
 func mustCAS(t *testing.T, message string, st store.Store, key string, from, to store.CASV) {
-	err := st.CAS(key, from, to)
+	err := st.CAS(key, from, to, nil)
 	if err != nil {
 		t.Fatalf("Couldn't CAS(%#v) during %v: %v", key, message, err)
 	}
 }
 
 func mustGet(t *testing.T, message string, st store.Store, key string, value []byte) {
-	got, _, err := st.Get(key)
+	got, _, err := st.Get(key, nil)
 	if err != nil {
 		t.Fatalf("Couldn't Get(%#v) during %v: %v", key, message, err)
 	}
@@ -35,7 +35,7 @@ func mustGet(t *testing.T, message string, st store.Store, key string, value []b
 }
 
 func mustGetMiss(t *testing.T, message string, st store.Store, key string) {
-	got, _, err := st.Get(key)
+	got, _, err := st.Get(key, nil)
 	if err != store.ErrNotFound {
 		if err != nil {
 			t.Fatalf("Couldn't Get(%#v) during %v: %v", key, message, err)
@@ -50,7 +50,7 @@ func mustListCount(t *testing.T, message string, st store.Store, count int) {
 
 	from := ""
 	for {
-		list, err := st.List(from, 100)
+		list, err := st.List(from, 100, nil)
 		if err != nil {
 			t.Fatalf("Couldn't List(%#v, 100) during %v: %v", from, message, err)
 		}
@@ -201,7 +201,7 @@ func TestMultiScrubRecreatesMissing(t *testing.T) {
 
 	mustCAS(t, "fill", multi, "key", store.MissingV, store.DataV(data))
 
-	names, err := dirstores[0].List("", 1)
+	names, err := dirstores[0].List("", 1, nil)
 	if err != nil {
 		t.Fatalf("Couldn't list first dirstore: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestMultiScrubRecreatesMissing(t *testing.T) {
 
 	found := 0
 	for _, ds := range dirstores {
-		names, err := ds.List("", 1)
+		names, err := ds.List("", 1, nil)
 		if err != nil {
 			t.Fatalf("Couldn't list dirstore: %v", err)
 		}

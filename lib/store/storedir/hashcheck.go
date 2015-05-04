@@ -68,7 +68,7 @@ func (ds *Directory) hashstep() (good, bad int64) {
 func (ds *Directory) hashstepInner(afterIn string) (good, bad int64, after string) {
 	after = afterIn
 
-	keys, err := ds.List(after, 100)
+	keys, err := ds.List(after, 100, nil)
 	if err != nil {
 		log.Printf("Couldn't list in %v for hash check: %v", ds.Dir, err)
 		return
@@ -80,7 +80,7 @@ func (ds *Directory) hashstepInner(afterIn string) (good, bad int64, after strin
 	}
 
 	for _, key := range keys {
-		data, _, err := ds.Get(key)
+		data, _, err := ds.Get(key, nil)
 		if err != nil && err != store.ErrNotFound {
 			bad++
 		} else {

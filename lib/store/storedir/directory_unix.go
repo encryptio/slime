@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func (ds *Directory) FreeSpace() (int64, error) {
+func (ds *Directory) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	s := unix.Statfs_t{}
 	err := unix.Statfs(filepath.Join(ds.Dir, "data"), &s)
 	if err != nil {

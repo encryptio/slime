@@ -11,7 +11,7 @@ import (
 
 var getDiskFreeSpaceExW = windows.MustLoadDLL("Kernel32.dll").MustFindProc("GetDiskFreeSpaceExW")
 
-func (ds *Directory) FreeSpace() (int64, error) {
+func (ds *Directory) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	dir, err := filepath.Abs(ds.Dir)
 	if err != nil {
 		return 0, err

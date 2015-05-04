@@ -19,6 +19,10 @@ var (
 	// ErrUnavailable is returned from a SometimesStore when the store is
 	// unavailable.
 	ErrUnavailable = errors.New("unavailable")
+
+	// ErrCancelled is returned from Stores when the cancel channel is closed
+	// and the operation has been aborted.
+	ErrCancelled = errors.New("cancelled")
 )
 
 type Stat struct {
@@ -29,25 +33,29 @@ type Stat struct {
 // A Store is a object store. Keys are strings of non-zero length, subject to
 // implementation-specific restrictions. Data is arbitrary, subject to
 // implementation-specific limits on length.
+//
+// If a non-nil cancel channel is given, then if it is closed, the operation
+// may exit early and return ErrCancelled. However, the operation may be in
+// any state after returning ErrCancelled, including successful completion.
 type Store interface {
 	UUID() [16]byte
 	Name() string
 
 	// Get retrieves the value for the given key and its SHA256 hash, or
 	// ErrNotFound if the key does not exist.
-	Get(key string) ([]byte, [32]byte, error)
+	Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error)
 
 	// List returns a list of keys which compare bytewise greater than after,
 	// up to the limit number of keys. If limit is <=0, then the return size is
 	// unlimited.
-	List(after string, limit int) ([]string, error)
+	List(after string, limit int, cancel <-chan struct{}) ([]string, error)
 
 	// FreeSpace returns the expected number of bytes free on this Store.
-	FreeSpace() (int64, error)
+	FreeSpace(cancel <-chan struct{}) (int64, error)
 
 	// Stat returns a bit of info about the key given, or ErrNotFound if the
 	// key-value pair is nonexistent.
-	Stat(key string) (*Stat, error)
+	Stat(key string, cancel <-chan struct{}) (*Stat, error)
 
 	// CAS writes to the object store. It returns ErrCASFailure if the value
 	// currently in the store does not match the "from" argument. If it does,
@@ -61,7 +69,7 @@ type Store interface {
 	// If "to.Present" is false, the value is deleted (set to the nonexistent
 	// value.) Otherwise, "to.Data" is written with the assumed-correct hash
 	// given in "to.SHA256."
-	CAS(key string, from, to CASV) error
+	CAS(key string, from, to CASV, cancel <-chan struct{}) error
 
 	// Close cleans up any resources for the Store. The behavior of the other
 	// methods is undefined as soon as Close has been called, regardless of
