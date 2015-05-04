@@ -56,9 +56,9 @@ func printTable(w io.Writer, tbl [][]string, widthLimit int) {
 				}
 				shown = colW[i]
 			}
-			want := colW[i]
-			if i != len(row)-1 {
-				want++
+			want := colW[i] + 1
+			if i == len(row)-1 {
+				want = 0
 			}
 			for j := shown; j < want; j++ {
 				o += " "
