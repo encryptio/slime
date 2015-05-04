@@ -52,7 +52,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "    %s redundancy\n", prog)
 	fmt.Fprintf(os.Stderr, "    %s redundancy set <need> <total>\n", prog)
 	fmt.Fprintf(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "A \"storeid\" may be a uuid or a unique substring of a store's name\n")
+	fmt.Fprintf(os.Stderr, "A \"storeid\" may be a uuid or a unique substring of a store's name or uuid\n")
 }
 
 func main() {

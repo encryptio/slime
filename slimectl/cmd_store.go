@@ -11,13 +11,6 @@ import (
 	"git.encryptio.com/slime/lib/uuid"
 )
 
-// fmt.Fprintf(os.Stderr, "    %s store list\n", prog)
-// fmt.Fprintf(os.Stderr, "    %s store dead <storeid>\n", prog)
-// fmt.Fprintf(os.Stderr, "    %s store undead <storeid>\n", prog)
-// fmt.Fprintf(os.Stderr, "    %s store delete <storeid>\n", prog)
-// fmt.Fprintf(os.Stderr, "    %s store scan <url>\n", prog)
-// fmt.Fprintf(os.Stderr, "    %s store rescan\n", prog)
-
 func handleStore(args []string) error {
 	if len(args) == 0 {
 		return errors.New("store subcommand requires another subcommand")
@@ -83,7 +76,9 @@ func resolveStoreUUID(query string) (string, error) {
 
 	var candidates []storeResponse
 	for _, res := range list {
-		if strings.Contains(strings.ToLower(res.Name), query) {
+		if strings.Contains(strings.ToLower(res.Name), query) ||
+			strings.Contains(strings.ToLower(res.UUID), query) {
+
 			candidates = append(candidates, res)
 		}
 	}
