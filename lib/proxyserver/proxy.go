@@ -149,7 +149,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-		case "dead":
+		case "dead", "undead":
 			id, err := uuid.Parse(req.UUID)
 			if err != nil {
 				http.Error(w, "Couldn't parse UUID", http.StatusBadRequest)
@@ -171,7 +171,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 					return nil, kvl.ErrNotFound
 				}
 
-				loc.Dead = true
+				loc.Dead = req.Operation == "dead"
 
 				err = layer.SetLocation(*loc)
 				if err != nil {
