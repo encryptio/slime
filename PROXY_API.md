@@ -55,6 +55,8 @@ Operations:
   to not be dependent on it anymore. Being "dead" does not imply that the store
   is accessible or inaccessible, just that we don't want to use it in the
   future.
+- undead: `{"operation": undead", "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}`
+  Revert a "dead" operation.
 - delete: `{"operation": "delete", "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"}`
   Remove knowledge of a store from slime. It must not be connected (which may
   take a few minutes for the proxy to realize) and must already be marked dead.

@@ -20,9 +20,9 @@ Quickstart
 This is how you can get a slime instance running locally to try it out. If you
 want to do a more production-style deployment, see PRODUCTION.md for details.
 
-Compile the slime tool (which includes the daemons in the same binary):
+Compile the slime daemons and control tools:
 
-    $ go install git.encryptio.com/slime
+    $ go install git.encryptio.com/slime git.encryptio.com/slime/slimectl
 
 Create a PostgreSQL database and user:
 
@@ -50,17 +50,30 @@ Start the proxy server (it will listen on port 17942 by default):
 
 Tell the proxy server about the chunk server:
 
-    $ curl -v -XPOST -d '{"operation":"scan","url":"http://127.0.0.1:17941"}' http://127.0.0.1:17942/stores
+    $ slimectl -base http://127.0.0.1:17942/ store scan http://127.0.0.1:17941
+
+Make sure it actually found what you wanted it to find:
+
+    $ slimectl -base http://127.0.0.1:17942/ store list
+    Name             UUID                                 Status    Free
+    box:/tmp/slime-1 cfe68a68-a841-4a4c-4e11-dac8db89167e connected 649.3 GiB
+    box:/tmp/slime-2 d75eac08-4005-47a8-6984-d2cd2d9b52e0 connected 649.3 GiB
+    box:/tmp/slime-3 52e43f88-a619-43b1-7ebd-7a6a8016985c connected 649.3 GiB
 
 Set the redundancy level:
 
-    $ curl -v -XPOST -d '{"need":2,"total":3}' http://127.0.0.1:17942/redundancy
+    $ slimectl -base http://127.0.0.1:17942/ redundancy set 2 3
+    Redundancy sucessfully changed to 2 of 3
 
 Save a file:
 
     $ curl -v -XPUT --data-binary @somefilename http://127.0.0.1:17942/data/file
 
-Download it back:
+Corrupt one of the data stores:
+
+    $ rm -f /tmp/slime-1/data/*/*
+
+Download the file back, despite the corruption:
 
     $ curl -v -o thefile http://127.0.0.1:17942/data/file
 
@@ -82,9 +95,8 @@ bad or bitrotted block.
 The storage required for data is `total/need` times that of the actual data
 (plus a few bytes per file for tracking.)
 
-GET /redundancy on the proxy to get the current redundancy level (JSON
-formatted), and POST to the same path with a similar object to adjust the
-redundancy levels.
+Run `slimectl redundancy` to get the current redundancy level, and run
+`slimectl redundancy set NEED TOTAL` to adjust the redundancy level.
 
 Store Discovery
 ---------------
@@ -95,11 +107,11 @@ servers to figure out which ones are currently connectable. From then on, they
 will periodically scan the chunk servers to look for new and no-longer-available
 stores.
 
-GET /stores on the proxy server to get a json-formatted list of stores.
+`slimectl store list` will show you a list of the known stores.
 
 You must tell the proxy server explicitly to scan a chunk server if it's on a
-new or different URL; POST {"operation":"scan","url":"http://host:port"} to
-/stores on a proxy to scan a new chunk server (or an old one at a new URL.)
+new or different URL; `slimectl store scan http://chunkserver` to scan a new
+chunk server (or an old one at a new URL.)
 
 Each directory has a UUID file in it; if you move drives between servers, then
 the URL stored in the database will be updated on the first successful scan of
@@ -112,22 +124,15 @@ If a drive is no longer served by a chunk server, slime will stop writing new
 data to it, but in the hopes that it might come back, will not start rebuilding
 the data on the drives it can access until you tell it to do so.
 
-To notify slime that a drive really is dead, POST
-    {
-        "operation": "dead",
-        "uuid": "...drive uuid..."
-    }
-to /stores on a proxy. (GET /stores to see a list of stores; any dead ones will
-likely show up as connected: false, and you can use the name field to verify
-that the UUID you're marking is actually the dead drive.)
+To notify slime that a drive really is dead, `slimectl store dead STORE`.
 
 Slime will gradually rewrite the data that was stored in the dead drive to other
 drives.
 
 Note that you can even mark a drive that's still connected "dead", and slime
 will try to read data from it if it needs it, but will still rewrite the data to
-no longer depend on that drive. This can be useful if you're replacing a drive
-for upgrades or because you suspect it will fail soon.
+no longer depend on that drive. This can be useful because it doesn't reduce
+your effective redundancy while rebalancing off that drive.
 
 Recovery from loss of files on a drive
 --------------------------------------

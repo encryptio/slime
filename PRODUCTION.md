@@ -170,6 +170,13 @@ all 5 chunks are stored on different machines, not just different locations.)
 See "Consistency and Availability Model" in README.md for some more information
 on when data is readable at a given redundancy level.
 
+Nagios Checks
+=============
+
+There is a nagios plugin for slime-proxy at nagios-check-slime-proxy, which
+tests connectivity to the proxy as well as its connectivity to all of the chunk
+servers.
+
 A Note About Failing Drives
 ===========================
 

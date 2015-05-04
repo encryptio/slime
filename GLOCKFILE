@@ -1,3 +1,5 @@
 git.encryptio.com/kvl 0c85bab62c64bcc176360cf725e460050a9357d3
 github.com/lib/pq 30ed2200d7ec99cf17272292f1d4b7b0bd7165db
+github.com/naoina/go-stringutil 360db0db4b01d34e12a2ec042c09e7d37fece761
+github.com/naoina/toml 7b2dffbeaee47506726f29e36d19cf4ee90d361b
 golang.org/x/sys 46ba3e7a1971708017c843c1034571ac252dd35f
