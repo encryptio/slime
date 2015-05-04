@@ -247,6 +247,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stores := h.finder.Stores()
+	freeMap := h.finder.FreeMap()
 
 	ret := make([]storesResponseEntry, 0, 10)
 	_, err := h.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
@@ -263,17 +264,8 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, loc := range locs {
-			st, connected := stores[loc.UUID]
-
-			var free int64
-			var errorField string
-			if connected {
-				free, err = st.FreeSpace()
-				if err != nil {
-					errorField = err.Error()
-					free = 0
-				}
-			}
+			_, connected := stores[loc.UUID]
+			free := freeMap[loc.UUID]
 
 			ret = append(ret, storesResponseEntry{
 				UUID:      uuid.Fmt(loc.UUID),
@@ -283,7 +275,6 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 				Connected: connected,
 				LastSeen:  time.Unix(loc.LastSeen, 0).UTC(),
 				Free:      free,
-				Error:     errorField,
 			})
 		}
 
