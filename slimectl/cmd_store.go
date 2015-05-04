@@ -119,7 +119,10 @@ func handleStoreList() error {
 			status = fmt.Sprintf("dead (%v)", status)
 		}
 
-		free := fmt.Sprintf("%.1f GiB", float64(st.Free)/1024/1024/1024)
+		var free string
+		if st.Free > 0 {
+			free = fmt.Sprintf("%.1f GiB", float64(st.Free)/1024/1024/1024)
+		}
 
 		table = append(table, []string{st.Name, st.UUID, status, free})
 	}
