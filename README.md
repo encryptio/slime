@@ -50,11 +50,11 @@ Start the proxy server (it will listen on port 17942 by default):
 
 Tell the proxy server about the chunk server:
 
-    $ slimectl -base http://127.0.0.1:17942/ store scan http://127.0.0.1:17941
+    $ slimectl store scan http://127.0.0.1:17941
 
 Make sure it actually found what you wanted it to find:
 
-    $ slimectl -base http://127.0.0.1:17942/ store list
+    $ slimectl store list
     Name             UUID                                 Status    Free
     box:/tmp/slime-1 cfe68a68-a841-4a4c-4e11-dac8db89167e connected 649.3 GiB
     box:/tmp/slime-2 d75eac08-4005-47a8-6984-d2cd2d9b52e0 connected 649.3 GiB
@@ -62,7 +62,7 @@ Make sure it actually found what you wanted it to find:
 
 Set the redundancy level:
 
-    $ slimectl -base http://127.0.0.1:17942/ redundancy set 2 3
+    $ slimectl redundancy set 2 3
     Redundancy sucessfully changed to 2 of 3
 
 Save a file:

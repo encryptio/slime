@@ -10,33 +10,42 @@ import (
 	"github.com/naoina/toml"
 )
 
+var configLocation = filepath.Join(os.Getenv("HOME"), ".config", "slimectl.toml") // TODO: this is awkward on windows
+
 var conf struct {
-	Wide    bool   `toml:"wide"`
-	BaseURL string `toml:"base_url"`
+	Wide bool   `toml:"wide"`
+	Base string `toml:"base"`
 }
 
 func setOptions() {
 	// first set default values
-	conf.BaseURL = "baseurl default"
+	conf.Base = "http://127.0.0.1:17942/"
 
 	// then read slimectl.toml, if available
-	data, err := ioutil.ReadFile(filepath.Join(os.Getenv("HOME"), ".config", "slimectl.toml"))
+	data, err := ioutil.ReadFile(configLocation)
 	if err == nil {
 		err = toml.Unmarshal(data, &conf)
 		if err != nil {
-			fmt.Printf("Couldn't parse slimectl.toml: %v", err)
+			fmt.Printf("Couldn't parse %v: %v", configLocation, err)
 			os.Exit(1)
 		}
+	} else if !os.IsNotExist(err) {
+		fmt.Printf("Couldn't read %v: %v", configLocation, err)
+		os.Exit(1)
 	}
 
 	// then add flags
 	flag.BoolVar(&conf.Wide, "w", conf.Wide, "never ellipsize columns")
-	flag.StringVar(&conf.BaseURL, "base", conf.BaseURL, "slime proxy base url")
+	flag.StringVar(&conf.Base, "base", conf.Base, "slime proxy base url")
 }
 
 func showUsage() {
 	prog := os.Args[0]
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", prog)
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "Reads TOML options from %v:\n", configLocation)
+	fmt.Fprintf(os.Stderr, "    wide = bool # default value for -w\n")
+	fmt.Fprintf(os.Stderr, "    base = string # default value for -base\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Flags (use before subcommand):\n")
 	flag.PrintDefaults()

@@ -35,7 +35,7 @@ func handleRedundancy(args []string) error {
 func handleRedundancyGet() error {
 	var r redundancy
 
-	err := jsonGet(conf.BaseURL+"redundancy", &r)
+	err := jsonGet(conf.Base+"redundancy", &r)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func handleRedundancySet(needStr, totalStr string) error {
 	}
 
 	var r redundancy
-	err = jsonPost(conf.BaseURL+"redundancy", redundancy{
+	err = jsonPost(conf.Base+"redundancy", redundancy{
 		Need:  int(need),
 		Total: int(total),
 	}, &r)

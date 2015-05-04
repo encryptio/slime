@@ -69,7 +69,7 @@ func resolveStoreUUID(query string) (string, error) {
 	query = strings.ToLower(query)
 
 	var list []storeResponse
-	err := jsonGet(conf.BaseURL+"stores", &list)
+	err := jsonGet(conf.Base+"stores", &list)
 	if err != nil {
 		return "", err
 	}
@@ -97,7 +97,7 @@ func resolveStoreUUID(query string) (string, error) {
 
 func handleStoreList() error {
 	var list []storeResponse
-	err := jsonGet(conf.BaseURL+"stores", &list)
+	err := jsonGet(conf.Base+"stores", &list)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func handleStoreStoreOperation(operation string, target string) error {
 	}
 
 	var list []storeResponse
-	return jsonPost(conf.BaseURL+"stores", map[string]string{
+	return jsonPost(conf.Base+"stores", map[string]string{
 		"operation": operation,
 		"uuid":      target,
 	}, &list)
@@ -150,7 +150,7 @@ func handleStoreStoreOperation(operation string, target string) error {
 
 func handleStoreScan(url string) error {
 	var list []storeResponse
-	return jsonPost(conf.BaseURL+"stores", map[string]string{
+	return jsonPost(conf.Base+"stores", map[string]string{
 		"operation": "scan",
 		"url":       url,
 	}, &list)
@@ -158,7 +158,7 @@ func handleStoreScan(url string) error {
 
 func handleStoreRescan() error {
 	var list []storeResponse
-	return jsonPost(conf.BaseURL+"stores", map[string]string{
+	return jsonPost(conf.Base+"stores", map[string]string{
 		"operation": "rescan",
 	}, &list)
 }
