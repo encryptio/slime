@@ -29,7 +29,7 @@ func TestFinderScan(t *testing.T) {
 
 	cs.WaitAllAvailable()
 
-	killer := &killHandler{inner: cs}
+	killer := newKillHandler(cs)
 	srv := httptest.NewServer(killer)
 	defer srv.Close()
 

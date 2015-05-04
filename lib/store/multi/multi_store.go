@@ -90,7 +90,7 @@ func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error
 			return nil, zeroes, store.ErrNotFound
 		}
 
-		data, err := m.reconstruct(f)
+		data, err := m.reconstruct(f, cancel)
 		if err != nil {
 			f2, err2 := m.getFile(key)
 			if err2 != nil {
@@ -110,12 +110,12 @@ func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error
 	return nil, zeroes, ErrTooManyRetries
 }
 
-func (m *Multi) getChunkData(f *meta.File) [][]byte {
+func (m *Multi) getChunkData(f *meta.File, cancel <-chan struct{}) [][]byte {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	// TODO: figure out how to cancel Get requests to avoid blocking on stuff
-	// we've already given up on
+	localCancel := make(chan struct{})
+	defer close(localCancel)
 
 	chunkData := make([][]byte, len(f.Locations))
 
@@ -133,7 +133,7 @@ func (m *Multi) getChunkData(f *meta.File) [][]byte {
 		var data []byte
 		if st != nil {
 			localKey := localKeyFor(f, i)
-			data, _, _ = st.Get(localKey, nil)
+			data, _, _ = st.Get(localKey, localCancel)
 			// TODO: log err?
 		}
 		results <- chunkResult{i, data}
@@ -180,12 +180,20 @@ func (m *Multi) getChunkData(f *meta.File) [][]byte {
 				wg.Add(1)
 				go work(i)
 			}
+		case <-cancel:
+			return chunkData
 		}
 	}
 }
 
-func (m *Multi) reconstruct(f *meta.File) ([]byte, error) {
-	chunkData := m.getChunkData(f)
+func (m *Multi) reconstruct(f *meta.File, cancel <-chan struct{}) ([]byte, error) {
+	chunkData := m.getChunkData(f, cancel)
+
+	select {
+	case <-cancel:
+		return nil, store.ErrCancelled
+	default:
+	}
 
 	rawDataAvailable := false
 	for i := 0; i < int(f.DataChunks); i++ {

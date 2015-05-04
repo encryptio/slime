@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/store"
@@ -106,7 +107,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		}
 		chunkServers = append(chunkServers, cs)
 
-		killer := &killHandler{inner: cs}
+		killer := newKillHandler(cs)
 		srv := httptest.NewServer(killer)
 
 		killers = append(killers, killer)
@@ -328,4 +329,36 @@ func TestMultiScrubRemovesUnreferencedChunks(t *testing.T) {
 	mustListCount(t, "dirs[0] after remove", dirs[0], 1)
 	multi.scrubAll()
 	mustListCount(t, "dirs[0] after scrub", dirs[0], 0)
+}
+
+func TestMultiHungStoreDoesntBlock(t *testing.T) {
+	killers, multi, _, done := prepareMultiTest(t, 2, 4, 4)
+	defer done()
+
+	oldTimeout := dataOnlyTimeout
+	dataOnlyTimeout = 10 * time.Millisecond
+	defer func() { dataOnlyTimeout = oldTimeout }()
+
+	mustCAS(t, "write key", multi, "a", store.MissingV, store.DataV([]byte("data")))
+
+	for _, k := range killers {
+		k.setBlocked(true)
+
+		result := make(chan error)
+		go func() {
+			_, _, err := multi.Get("a", nil)
+			result <- err
+		}()
+
+		select {
+		case err := <-result:
+			if err != nil {
+				t.Errorf("couldn't get key: %v", err)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatalf("timed out waiting for read")
+		}
+
+		k.setBlocked(false)
+	}
 }
