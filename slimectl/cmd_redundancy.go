@@ -16,15 +16,20 @@ func handleRedundancy(args []string) error {
 		return handleRedundancyGet()
 	}
 
-	if args[0] == "set" {
+	switch args[0] {
+	case "get":
+		return handleRedundancyGet()
+
+	case "set":
 		if len(args) != 3 {
 			return errors.New("redundancy set takes two arguments")
 		}
 
 		return handleRedundancySet(args[1], args[2])
-	}
 
-	return fmt.Errorf("bad redundancy subcommand %v", args[0])
+	default:
+		return fmt.Errorf("bad redundancy subcommand %v", args[0])
+	}
 }
 
 func handleRedundancyGet() error {
