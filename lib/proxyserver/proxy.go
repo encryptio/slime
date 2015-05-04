@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"git.encryptio.com/slime/lib/httputil"
 	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/store/multi"
 	"git.encryptio.com/slime/lib/store/storehttp"
@@ -63,7 +64,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Hello from slime proxy server!"))
 	default:
-		http.Error(w, "not found", http.StatusNotFound)
+		httputil.RespondJSONError(w, "not found", http.StatusNotFound)
 	}
 }
 
@@ -80,7 +81,7 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		err := json.NewDecoder(r.Body).Decode(&redundancy)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			httputil.RespondJSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -90,13 +91,13 @@ func (h *Handler) serveRedundancy(w http.ResponseWriter, r *http.Request) {
 			if _, ok := err.(multi.BadConfigError); ok {
 				status = http.StatusBadRequest
 			}
-			http.Error(w, err.Error(), status)
+			httputil.RespondJSONError(w, err.Error(), status)
 			return
 		}
 
 	default:
 		w.Header().Set("Allow", "GET, POST")
-		http.Error(w, "bad method", http.StatusMethodNotAllowed)
+		httputil.RespondJSONError(w, "bad method", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -128,7 +129,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		var req storesRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			httputil.RespondJSONError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -136,7 +137,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		case "rescan":
 			err = h.finder.Rescan()
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Couldn't rescan: %v", err),
+				httputil.RespondJSONError(w, fmt.Sprintf("Couldn't rescan: %v", err),
 					http.StatusInternalServerError)
 				return
 			}
@@ -144,7 +145,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		case "scan":
 			err = h.finder.Scan(req.URL)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("Couldn't scan %v: %v", req.URL, err),
+				httputil.RespondJSONError(w, fmt.Sprintf("Couldn't scan %v: %v", req.URL, err),
 					http.StatusBadRequest)
 				return
 			}
@@ -152,7 +153,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		case "dead", "undead":
 			id, err := uuid.Parse(req.UUID)
 			if err != nil {
-				http.Error(w, "Couldn't parse UUID", http.StatusBadRequest)
+				httputil.RespondJSONError(w, "Couldn't parse UUID", http.StatusBadRequest)
 				return
 			}
 
@@ -182,24 +183,24 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 			})
 			if err != nil {
 				if err == kvl.ErrNotFound {
-					http.Error(w, "No store with that UUID",
+					httputil.RespondJSONError(w, "No store with that UUID",
 						http.StatusBadRequest)
 					return
 				}
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				httputil.RespondJSONError(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
 		case "delete":
 			id, err := uuid.Parse(req.UUID)
 			if err != nil {
-				http.Error(w, "Couldn't parse UUID", http.StatusBadRequest)
+				httputil.RespondJSONError(w, "Couldn't parse UUID", http.StatusBadRequest)
 				return
 			}
 
 			st := h.finder.StoreFor(id)
 			if st != nil {
-				http.Error(w, "UUID currently connected", http.StatusBadRequest)
+				httputil.RespondJSONError(w, "UUID currently connected", http.StatusBadRequest)
 				return
 			}
 
@@ -227,21 +228,21 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 			})
 			if err != nil {
 				if err == kvl.ErrNotFound {
-					http.Error(w, "No store with that UUID",
+					httputil.RespondJSONError(w, "No store with that UUID",
 						http.StatusBadRequest)
 					return
 				}
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				httputil.RespondJSONError(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
 		default:
-			http.Error(w, "unsupported operation", http.StatusBadRequest)
+			httputil.RespondJSONError(w, "unsupported operation", http.StatusBadRequest)
 			return
 		}
 	} else if r.Method != "GET" {
 		w.Header().Set("Allow", "GET, POST")
-		http.Error(w, "bad method", http.StatusMethodNotAllowed)
+		httputil.RespondJSONError(w, "bad method", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -289,7 +290,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 		return nil, nil
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httputil.RespondJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
