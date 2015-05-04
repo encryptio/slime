@@ -71,7 +71,7 @@ func (cc *Client) Name() string {
 func (cc *Client) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
 	var h [32]byte
 
-	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil)
+	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, cancel)
 	if err != nil {
 		return nil, h, err
 	}
@@ -170,7 +170,7 @@ func (cc *Client) List(after string, limit int, cancel <-chan struct{}) ([]strin
 		args.Add("limit", strconv.FormatInt(int64(limit), 10))
 	}
 
-	resp, err := cc.startReq("GET", cc.url+"?"+args.Encode(), nil)
+	resp, err := cc.startReq("GET", cc.url+"?"+args.Encode(), nil, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (cc *Client) List(after string, limit int, cancel <-chan struct{}) ([]strin
 }
 
 func (cc *Client) FreeSpace(cancel <-chan struct{}) (int64, error) {
-	resp, err := cc.startReq("GET", cc.url+"?mode=free", nil)
+	resp, err := cc.startReq("GET", cc.url+"?mode=free", nil, cancel)
 	if err != nil {
 		return 0, err
 	}
@@ -222,7 +222,7 @@ func (cc *Client) FreeSpace(cancel <-chan struct{}) (int64, error) {
 }
 
 func (cc *Client) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
-	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil)
+	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (cc *Client) loadStatics() error {
 }
 
 func (cc *Client) loadUUID() error {
-	resp, err := cc.startReq("GET", cc.url+"?mode=uuid", nil)
+	resp, err := cc.startReq("GET", cc.url+"?mode=uuid", nil, nil)
 	if err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func (cc *Client) loadUUID() error {
 }
 
 func (cc *Client) loadName() error {
-	resp, err := cc.startReq("GET", cc.url+"?mode=name", nil)
+	resp, err := cc.startReq("GET", cc.url+"?mode=name", nil, nil)
 	if err != nil {
 		return err
 	}
@@ -311,11 +311,38 @@ func (cc *Client) loadName() error {
 	return nil
 }
 
-func (cc *Client) startReq(method, url string, body io.Reader) (*http.Response, error) {
+func (cc *Client) startReq(method, url string, body io.Reader, cancel <-chan struct{}) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
 
-	return cc.client.Do(req)
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-done:
+		case <-cancel:
+			var rt http.RoundTripper
+			if cc.client.Transport == nil {
+				rt = http.DefaultTransport
+			} else {
+				rt = cc.client.Transport
+			}
+			if tr, ok := rt.(interface {
+				CancelRequest(*http.Request)
+			}); ok {
+				tr.CancelRequest(req)
+			}
+		}
+	}()
+
+	resp, err := cc.client.Do(req)
+	close(done)
+
+	select {
+	case <-cancel:
+		return nil, store.ErrCancelled
+	default:
+		return resp, err
+	}
 }
