@@ -4,6 +4,6 @@ package main
 
 // TODO: windows version
 
-func getTTYSize() int {
+func getTTYWidth() int {
 	return 0
 }
