@@ -25,6 +25,28 @@ func ShouldList(t *testing.T, s store.Store, after string, limit int, expect []s
 	}
 }
 
+func ShouldListCount(t *testing.T, s store.Store, count int) {
+	actualCount := 0
+
+	from := ""
+	for {
+		list, err := s.List(from, 100, nil)
+		if err != nil {
+			t.Errorf("Couldn't List(%#v, 100): %v", from, err)
+			return
+		}
+
+		actualCount += len(list)
+		if len(list) < 100 {
+			break
+		}
+	}
+
+	if actualCount != count {
+		t.Errorf("Full list returned %v elements but wanted %v", actualCount, count)
+	}
+}
+
 func ShouldCASError(t *testing.T, s store.Store, key string, from, to store.CASV, wantErr error) {
 	err := s.CAS(key, from, to, nil)
 	if err != wantErr {

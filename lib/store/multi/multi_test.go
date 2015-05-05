@@ -1,7 +1,6 @@
 package multi
 
 import (
-	"bytes"
 	"math/rand"
 	"net/http/httptest"
 	"os"
@@ -16,56 +15,6 @@ import (
 
 	"git.encryptio.com/kvl/backend/ram"
 )
-
-func mustCAS(t *testing.T, message string, st store.Store, key string, from, to store.CASV) {
-	err := st.CAS(key, from, to, nil)
-	if err != nil {
-		t.Fatalf("Couldn't CAS(%#v) during %v: %v", key, message, err)
-	}
-}
-
-func mustGet(t *testing.T, message string, st store.Store, key string, value []byte) {
-	got, _, err := st.Get(key, nil)
-	if err != nil {
-		t.Fatalf("Couldn't Get(%#v) during %v: %v", key, message, err)
-	}
-
-	if !bytes.Equal(got, value) {
-		t.Fatalf("Get(%#v) returned %#v during %v, but wanted %#v", key, string(got), message, string(value))
-	}
-}
-
-func mustGetMiss(t *testing.T, message string, st store.Store, key string) {
-	got, _, err := st.Get(key, nil)
-	if err != store.ErrNotFound {
-		if err != nil {
-			t.Fatalf("Couldn't Get(%#v) during %v: %v", key, message, err)
-		}
-		t.Fatalf("Get(%#v) returned unexpected data %#v during %v, but wanted ErrNotFound",
-			key, string(got), message)
-	}
-}
-
-func mustListCount(t *testing.T, message string, st store.Store, count int) {
-	actualCount := 0
-
-	from := ""
-	for {
-		list, err := st.List(from, 100, nil)
-		if err != nil {
-			t.Fatalf("Couldn't List(%#v, 100) during %v: %v", from, message, err)
-		}
-
-		actualCount += len(list)
-		if len(list) < 100 {
-			break
-		}
-	}
-
-	if actualCount != count {
-		t.Fatalf("List returned %v elements during %v but wanted %v", actualCount, message, count)
-	}
-}
 
 func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*storedir.Directory, func()) {
 	var killers []*killHandler
@@ -168,7 +117,7 @@ func TestMultiRecovery(t *testing.T) {
 				value = append(value, []byte(key)...)
 			}
 
-			mustCAS(t, "fill multi", multi, key, store.MissingV, store.DataV(value))
+			storetests.ShouldCAS(t, multi, key, store.MissingV, store.DataV(value))
 		}
 
 		for i := 0; i < total-3; i++ {
@@ -189,7 +138,7 @@ func TestMultiRecovery(t *testing.T) {
 				value = append(value, []byte(key)...)
 			}
 
-			mustGet(t, "after failing underneath redundancy level", multi, key, value)
+			storetests.ShouldGet(t, multi, key, value)
 		}
 	}
 }
@@ -200,7 +149,7 @@ func TestMultiScrubRecreatesMissing(t *testing.T) {
 
 	data := []byte("hello world! this is some test data.")
 
-	mustCAS(t, "fill", multi, "key", store.MissingV, store.DataV(data))
+	storetests.ShouldCAS(t, multi, "key", store.MissingV, store.DataV(data))
 
 	names, err := dirstores[0].List("", 1, nil)
 	if err != nil {
@@ -210,7 +159,7 @@ func TestMultiScrubRecreatesMissing(t *testing.T) {
 		t.Fatalf("Didn't get a name from dirstore")
 	}
 
-	mustCAS(t, "kill", dirstores[0], names[0], store.AnyV, store.MissingV)
+	storetests.ShouldCAS(t, dirstores[0], names[0], store.AnyV, store.MissingV)
 
 	multi.scrubAll()
 
@@ -237,25 +186,25 @@ func TestMultiDuplicateContent(t *testing.T) {
 	data := []byte("this is some test data")
 
 	for i := 0; i < 10; i++ {
-		mustCAS(t, "fill", multi,
+		storetests.ShouldCAS(t, multi,
 			strconv.FormatInt(int64(i), 10),
 			store.MissingV, store.DataV(data))
 	}
 
 	for i := 0; i < 10; i++ {
-		mustGet(t, "after fill", multi,
+		storetests.ShouldGet(t, multi,
 			strconv.FormatInt(int64(i), 10),
 			data)
 	}
 
 	for i := 0; i < 5; i++ {
-		mustCAS(t, "delete half", multi,
+		storetests.ShouldCAS(t, multi,
 			strconv.FormatInt(int64(i), 10),
 			store.AnyV, store.MissingV)
 	}
 
 	for i := 5; i < 10; i++ {
-		mustGet(t, "after delete", multi,
+		storetests.ShouldGet(t, multi,
 			strconv.FormatInt(int64(i), 10),
 			data)
 	}
@@ -268,7 +217,7 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	data := []byte("who knows where the wind goes")
 
 	for i := 0; i < 10; i++ {
-		mustCAS(t, "fill", multi,
+		storetests.ShouldCAS(t, multi,
 			strconv.FormatInt(int64(i), 10),
 			store.MissingV, store.DataV(data))
 	}
@@ -285,7 +234,7 @@ func TestMultiScrubChangeRedundancy(t *testing.T) {
 	killers[2].setKilled(true)
 
 	for i := 0; i < 10; i++ {
-		mustGet(t, "check", multi,
+		storetests.ShouldGet(t, multi,
 			strconv.FormatInt(int64(i), 10),
 			data)
 	}
@@ -295,7 +244,7 @@ func TestMultiCanReplaceDeadKeys(t *testing.T) {
 	killers, multi, _, done := prepareMultiTest(t, 3, 4, 4)
 	defer done()
 
-	mustCAS(t, "initial write", multi, "a", store.MissingV, store.DataV([]byte("hello")))
+	storetests.ShouldCAS(t, multi, "a", store.MissingV, store.DataV([]byte("hello")))
 	killers[0].setKilled(true)
 
 	err := multi.SetRedundancy(1, 2)
@@ -303,32 +252,32 @@ func TestMultiCanReplaceDeadKeys(t *testing.T) {
 		t.Fatalf("Couldn't adjust redundancy: %v", err)
 	}
 
-	mustCAS(t, "write after fail 1", multi, "a", store.DataV([]byte("hello")), store.DataV([]byte("there")))
+	storetests.ShouldCAS(t, multi, "a", store.DataV([]byte("hello")), store.DataV([]byte("there")))
 	killers[1].setKilled(true)
-	mustCAS(t, "write after fail 2", multi, "a", store.DataV([]byte("there")), store.MissingV)
+	storetests.ShouldCAS(t, multi, "a", store.DataV([]byte("there")), store.MissingV)
 }
 
 func TestMultiScrubRemovesWeirdChunks(t *testing.T) {
 	_, multi, dirs, done := prepareMultiTest(t, 1, 1, 1)
 	defer done()
 
-	mustCAS(t, "write key", dirs[0], "a", store.MissingV, store.DataV([]byte("data")))
+	storetests.ShouldCAS(t, dirs[0], "a", store.MissingV, store.DataV([]byte("data")))
 	multi.scrubAll()
-	mustGetMiss(t, "after scrub", dirs[0], "a")
+	storetests.ShouldGetMiss(t, dirs[0], "a")
 }
 
 func TestMultiScrubRemovesUnreferencedChunks(t *testing.T) {
 	killers, multi, dirs, done := prepareMultiTest(t, 1, 2, 2)
 	defer done()
 
-	mustCAS(t, "write key", multi, "a", store.MissingV, store.DataV([]byte("data")))
+	storetests.ShouldCAS(t, multi, "a", store.MissingV, store.DataV([]byte("data")))
 	killers[0].setKilled(true)
-	mustCAS(t, "remove key", multi, "a", store.DataV([]byte("data")), store.MissingV)
+	storetests.ShouldCAS(t, multi, "a", store.DataV([]byte("data")), store.MissingV)
 	killers[0].setKilled(false)
-	mustListCount(t, "multi after remove", multi, 0)
-	mustListCount(t, "dirs[0] after remove", dirs[0], 1)
+	storetests.ShouldListCount(t, multi, 0)
+	storetests.ShouldListCount(t, dirs[0], 1)
 	multi.scrubAll()
-	mustListCount(t, "dirs[0] after scrub", dirs[0], 0)
+	storetests.ShouldListCount(t, dirs[0], 0)
 }
 
 func TestMultiHungStoreDoesntBlock(t *testing.T) {
@@ -339,7 +288,7 @@ func TestMultiHungStoreDoesntBlock(t *testing.T) {
 	dataOnlyTimeout = 10 * time.Millisecond
 	defer func() { dataOnlyTimeout = oldTimeout }()
 
-	mustCAS(t, "write key", multi, "a", store.MissingV, store.DataV([]byte("data")))
+	storetests.ShouldCAS(t, multi, "a", store.MissingV, store.DataV([]byte("data")))
 
 	for _, k := range killers {
 		k.setBlocked(true)
