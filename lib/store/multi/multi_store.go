@@ -634,24 +634,16 @@ func (m *Multi) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	m.mu.Unlock()
 
 	var frees []int64
-	stores := m.finder.Stores() // TODO: freeMap
-	for _, st := range stores {
-		free, err := st.FreeSpace(nil)
-		if err == nil {
-			frees = append(frees, free)
-		}
+	for _, free := range m.finder.FreeMap() {
+		frees = append(frees, free)
 	}
-	sort.Sort(sort.Reverse(int64Slice(frees)))
+	sort.Sort(int64Slice(frees))
 
 	var free int64
-	for len(frees) >= conf.Total {
-		removing := frees[len(frees)-1]
-		for i := 0; i < conf.Total; i++ {
-			frees[len(frees)-1-i] -= removing
-		}
-		frees = frees[:len(frees)-1]
-
-		free += removing * int64(conf.Need)
+	var lastStoreFree int64
+	for i := 0; i <= len(frees)-conf.Total; i++ {
+		free += (frees[i] - lastStoreFree) * int64(len(frees)-i+1) * int64(conf.Need) / int64(conf.Total)
+		lastStoreFree = frees[i]
 	}
 
 	return free, nil
