@@ -85,201 +85,13 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		if theirEtags := r.Header.Get("if-none-match"); theirEtags != "" {
-			st, err := h.store.Stat(obj, nil)
-			if err != nil {
-				if err == store.ErrNotFound {
-					http.Error(w, "not found", http.StatusNotFound)
-					return
-				}
-				log.Printf("Couldn't Stat(%#v): %v", obj, err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			etag := `"` + hex.EncodeToString(st.SHA256[:]) + `"`
-
-			matched := false
-			for _, s := range strings.Split(theirEtags, ",") {
-				s = strings.TrimSpace(s)
-				if s == "*" || s == etag {
-					matched = true
-				}
-			}
-
-			if matched {
-				w.WriteHeader(http.StatusNotModified)
-				return
-			}
-		}
-
-		// The race between this Get and the above Stat is benign; we might
-		// miss an opportunity to cache, but we'll never return an incorrect
-		// result.
-
-		data, hash, err := h.store.Get(obj, nil)
-		if err != nil {
-			if err == store.ErrNotFound {
-				http.Error(w, "not found", http.StatusNotFound)
-				return
-			}
-			log.Printf("Couldn't Get(%#v): %v", obj, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Length",
-			strconv.FormatInt(int64(len(data)), 10))
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("X-Content-SHA256", hex.EncodeToString(hash[:]))
-		w.Header().Set("ETag", `"`+hex.EncodeToString(hash[:])+`"`)
-		w.WriteHeader(http.StatusOK)
-
-		w.Write(data)
-
+		h.serveObjectGet(w, r, obj)
 	case "HEAD":
-		st, err := h.store.Stat(obj, nil)
-		if err != nil {
-			if err == store.ErrNotFound {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			log.Printf("Couldn't Stat(%#v): %v", obj, err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		if st.Size >= 0 {
-			w.Header().Set("Content-Length",
-				strconv.FormatInt(st.Size, 10))
-		}
-
-		var zeroes [32]byte
-		if zeroes != st.SHA256 {
-			w.Header().Set("X-Content-SHA256",
-				hex.EncodeToString(st.SHA256[:]))
-			w.Header().Set("ETag",
-				`"`+hex.EncodeToString(st.SHA256[:])+`"`)
-		}
-
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.WriteHeader(http.StatusOK)
-
+		h.serveObjectHead(w, r, obj)
 	case "PUT":
-		if r.ContentLength > MaxFileSize {
-			http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-
-		hash := sha256.New()
-		tee := io.TeeReader(io.LimitReader(r.Body, MaxFileSize+1), hash)
-		data, err := ioutil.ReadAll(tee)
-		if err != nil {
-			log.Printf("Couldn't read object body in PUT: %v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if len(data) == MaxFileSize+1 {
-			http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-
-		var haveHash [32]byte
-		hash.Sum(haveHash[:0])
-
-		if want := r.Header.Get("X-Content-SHA256"); want != "" {
-			wantBytes, err := hex.DecodeString(want)
-			if err != nil || len(wantBytes) != 32 {
-				http.Error(w, "bad format for x-content-sha256",
-					http.StatusBadRequest)
-				return
-			}
-
-			var wantHash [32]byte
-			copy(wantHash[:], wantBytes)
-
-			if wantHash != haveHash {
-				http.Error(w, "hash mismatch", http.StatusBadRequest)
-				return
-			}
-		}
-
-		from, err := parseIfMatch(r.Header.Get("If-Match"))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		err = h.store.CAS(obj, from, store.CASV{
-			Present: true,
-			SHA256:  haveHash,
-			Data:    data,
-		}, nil)
-		if err != nil {
-			if err == store.ErrCASFailure {
-				http.Error(w, err.Error(), http.StatusPreconditionFailed)
-				return
-			}
-			log.Printf("Couldn't CAS(%#v): %v", obj, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-
+		h.serveObjectPut(w, r, obj)
 	case "DELETE":
-		doRetry := true
-		retr := retry.New(10)
-		for retr.Next() {
-			doRetry = false
-
-			from, err := parseIfMatch(r.Header.Get("If-Match"))
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-
-			if from.Any {
-				// TODO: make the CAS interface rich enough to handle this
-				// without Stat
-				st, err := h.store.Stat(obj, nil)
-				if err != nil {
-					if err == store.ErrNotFound {
-						http.Error(w, "not found", http.StatusNotFound)
-						return
-					}
-					log.Printf("Couldn't Stat(%#v): %v", obj, err)
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-
-				from = store.CASV{Present: true, SHA256: st.SHA256}
-				doRetry = true
-			}
-
-			err = h.store.CAS(obj, from, store.CASV{Present: false}, nil)
-			if err != nil {
-				if err == store.ErrCASFailure {
-					if doRetry {
-						continue
-					} else {
-						http.Error(w, err.Error(),
-							http.StatusPreconditionFailed)
-						return
-					}
-				}
-				log.Printf("Couldn't CAS(%#v): %v", obj, err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		http.Error(w, "too many retries", http.StatusInternalServerError)
-
+		h.serveObjectDelete(w, r, obj)
 	default:
 		w.Header().Set("Allow", "GET, HEAD, PUT, DELETE")
 		http.Error(w, "bad method", http.StatusMethodNotAllowed)
@@ -358,4 +170,204 @@ func (h *Server) serveUUID(w http.ResponseWriter, r *http.Request) {
 func (h *Server) serveName(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(h.store.Name()))
+}
+
+func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj string) {
+	if theirEtags := r.Header.Get("if-none-match"); theirEtags != "" {
+		st, err := h.store.Stat(obj, nil)
+		if err != nil {
+			if err == store.ErrNotFound {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			log.Printf("Couldn't Stat(%#v): %v", obj, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		etag := `"` + hex.EncodeToString(st.SHA256[:]) + `"`
+
+		matched := false
+		for _, s := range strings.Split(theirEtags, ",") {
+			s = strings.TrimSpace(s)
+			if s == "*" || s == etag {
+				matched = true
+			}
+		}
+
+		if matched {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+
+	// The race between this Get and the above Stat is benign; we might
+	// miss an opportunity to cache, but we'll never return an incorrect
+	// result.
+
+	data, hash, err := h.store.Get(obj, nil)
+	if err != nil {
+		if err == store.ErrNotFound {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("Couldn't Get(%#v): %v", obj, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Length",
+		strconv.FormatInt(int64(len(data)), 10))
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("X-Content-SHA256", hex.EncodeToString(hash[:]))
+	w.Header().Set("ETag", `"`+hex.EncodeToString(hash[:])+`"`)
+	w.WriteHeader(http.StatusOK)
+
+	w.Write(data)
+}
+
+func (h *Server) serveObjectHead(w http.ResponseWriter, r *http.Request, obj string) {
+	st, err := h.store.Stat(obj, nil)
+	if err != nil {
+		if err == store.ErrNotFound {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Printf("Couldn't Stat(%#v): %v", obj, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if st.Size >= 0 {
+		w.Header().Set("Content-Length",
+			strconv.FormatInt(st.Size, 10))
+	}
+
+	var zeroes [32]byte
+	if zeroes != st.SHA256 {
+		w.Header().Set("X-Content-SHA256",
+			hex.EncodeToString(st.SHA256[:]))
+		w.Header().Set("ETag",
+			`"`+hex.EncodeToString(st.SHA256[:])+`"`)
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Server) serveObjectPut(w http.ResponseWriter, r *http.Request, obj string) {
+	if r.ContentLength > MaxFileSize {
+		http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	hash := sha256.New()
+	tee := io.TeeReader(io.LimitReader(r.Body, MaxFileSize+1), hash)
+	data, err := ioutil.ReadAll(tee)
+	if err != nil {
+		log.Printf("Couldn't read object body in PUT: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(data) == MaxFileSize+1 {
+		http.Error(w, "file too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	var haveHash [32]byte
+	hash.Sum(haveHash[:0])
+
+	if want := r.Header.Get("X-Content-SHA256"); want != "" {
+		wantBytes, err := hex.DecodeString(want)
+		if err != nil || len(wantBytes) != 32 {
+			http.Error(w, "bad format for x-content-sha256",
+				http.StatusBadRequest)
+			return
+		}
+
+		var wantHash [32]byte
+		copy(wantHash[:], wantBytes)
+
+		if wantHash != haveHash {
+			http.Error(w, "hash mismatch", http.StatusBadRequest)
+			return
+		}
+	}
+
+	from, err := parseIfMatch(r.Header.Get("If-Match"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = h.store.CAS(obj, from, store.CASV{
+		Present: true,
+		SHA256:  haveHash,
+		Data:    data,
+	}, nil)
+	if err != nil {
+		if err == store.ErrCASFailure {
+			http.Error(w, err.Error(), http.StatusPreconditionFailed)
+			return
+		}
+		log.Printf("Couldn't CAS(%#v): %v", obj, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Server) serveObjectDelete(w http.ResponseWriter, r *http.Request, obj string) {
+	doRetry := true
+	retr := retry.New(10)
+	for retr.Next() {
+		doRetry = false
+
+		from, err := parseIfMatch(r.Header.Get("If-Match"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if from.Any {
+			// TODO: make the CAS interface rich enough to handle this
+			// without Stat
+			st, err := h.store.Stat(obj, nil)
+			if err != nil {
+				if err == store.ErrNotFound {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				log.Printf("Couldn't Stat(%#v): %v", obj, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			from = store.CASV{Present: true, SHA256: st.SHA256}
+			doRetry = true
+		}
+
+		err = h.store.CAS(obj, from, store.CASV{Present: false}, nil)
+		if err != nil {
+			if err == store.ErrCASFailure {
+				if doRetry {
+					continue
+				} else {
+					http.Error(w, err.Error(),
+						http.StatusPreconditionFailed)
+					return
+				}
+			}
+			log.Printf("Couldn't CAS(%#v): %v", obj, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	http.Error(w, "too many retries", http.StatusInternalServerError)
 }
