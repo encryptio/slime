@@ -327,6 +327,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 			err = m.rebuild(path)
 			if err != nil {
 				log.Printf("Couldn't rebuild %v: %v", path, err)
+				continue
 			}
 
 			log.Printf("successfully rebuilt %v", path)
