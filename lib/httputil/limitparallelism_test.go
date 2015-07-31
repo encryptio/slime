@@ -31,8 +31,8 @@ func TestLimitParallelism(t *testing.T) {
 	lp := NewLimitParallelism(5, h)
 
 	var wg sync.WaitGroup
+	wg.Add(100)
 	for i := 0; i < 100; i++ {
-		wg.Add(1)
 		go func() {
 			r, _ := http.NewRequest("GET", "/", nil)
 			w := httptest.NewRecorder()
@@ -41,6 +41,8 @@ func TestLimitParallelism(t *testing.T) {
 		}()
 	}
 
+	// Try to wait until all the goroutines are blocked on lp.ServeHTTP. This is
+	// racy, but can only cause spurious test successes.
 	time.Sleep(time.Millisecond * 10)
 
 	close(release)
