@@ -41,24 +41,23 @@ func (m *Multi) rebalanceLoop() {
 }
 
 func (m *Multi) rebalanceStep() error {
-	stores := m.finder.Stores()
-	frees := m.finder.FreeMap()
+	finderEntries := m.finder.Stores()
 
 	// bail out early if there's no rebalancing possible
 	mostFree := int64(0)
 	leastFree := int64(0)
 	markedOne := false
-	for _, free := range frees {
+	for _, fe := range finderEntries {
 		if !markedOne {
 			markedOne = true
-			mostFree = free
-			leastFree = free
+			mostFree = fe.Free
+			leastFree = fe.Free
 		}
-		if free > mostFree {
-			mostFree = free
+		if fe.Free > mostFree {
+			mostFree = fe.Free
 		}
-		if free < leastFree {
-			leastFree = free
+		if fe.Free < leastFree {
+			leastFree = fe.Free
 		}
 	}
 	if mostFree-leastFree < rebalanceMinDifference {
@@ -110,7 +109,7 @@ func (m *Multi) rebalanceStep() error {
 		}
 
 		for _, f := range files {
-			did, err := m.rebalanceFile(f, stores, frees)
+			did, err := m.rebalanceFile(f, finderEntries)
 			if err != nil {
 				log.Printf("Failed to rebalance %v: %v", f.Path, err)
 			}
@@ -130,20 +129,20 @@ func (m *Multi) rebalanceStep() error {
 	return nil
 }
 
-func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, frees map[[16]byte]int64) (bool, error) {
+func (m *Multi) rebalanceFile(f meta.File, finderEntries map[[16]byte]FinderEntry) (bool, error) {
 	// search for the lowest free location that this file is stored on
 	var minI int
 	var minF int64
 	var minS store.Store
 	for i, l := range f.Locations {
-		free, ok := frees[l]
+		fe, ok := finderEntries[l]
 		if !ok {
 			continue
 		}
 
-		if minS == nil || minF > free {
-			minS = stores[l]
-			minF = free
+		if minS == nil || minF > fe.Free {
+			minS = fe.Store
+			minF = fe.Free
 			minI = i
 		}
 	}
@@ -155,7 +154,11 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 	// search for the highest free location that this file is NOT stored on
 	var maxF int64
 	var maxS store.Store
-	for id, st := range stores {
+	for id, fe := range finderEntries {
+		if fe.Dead {
+			continue
+		}
+
 		found := false
 		for _, locid := range f.Locations {
 			if locid == id {
@@ -167,14 +170,9 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 			continue
 		}
 
-		free, ok := frees[id]
-		if !ok {
-			continue
-		}
-
-		if maxS == nil || maxF < free {
-			maxF = free
-			maxS = st
+		if maxS == nil || maxF < fe.Free {
+			maxF = fe.Free
+			maxS = fe.Store
 		}
 	}
 
@@ -278,8 +276,13 @@ func (m *Multi) rebalanceFile(f meta.File, stores map[[16]byte]store.Store, free
 			uuid.Fmt(maxS.UUID()), err)
 	}
 
-	frees[minS.UUID()] += int64(len(data))
-	frees[maxS.UUID()] -= int64(len(data))
+	fe := finderEntries[minS.UUID()]
+	fe.Free += int64(len(data))
+	finderEntries[minS.UUID()] = fe
+
+	fe = finderEntries[maxS.UUID()]
+	fe.Free -= int64(len(data))
+	finderEntries[maxS.UUID()] = fe
 
 	return true, nil
 }

@@ -441,12 +441,11 @@ func (m *Multi) deleteChunks(file *meta.File) error {
 }
 
 func (m *Multi) getStoreWeights() map[[16]byte]int64 {
-	free := m.finder.FreeMap()
-	storesMap := m.finder.Stores()
+	finderEntries := m.finder.Stores()
 
-	weights := make(map[[16]byte]int64, len(storesMap))
-	for id := range storesMap {
-		weights[id] = 10000000000 + free[id]
+	weights := make(map[[16]byte]int64, len(finderEntries))
+	for id, fe := range finderEntries {
+		weights[id] = 10000000000 + fe.Free
 	}
 
 	return weights
@@ -457,7 +456,10 @@ func (m *Multi) orderTargets() ([]store.Store, error) {
 	conf := m.config
 	m.mu.Unlock()
 
-	storesMap := m.finder.Stores()
+	storesMap := make(map[[16]byte]store.Store)
+	for id, fe := range m.finder.Stores() {
+		storesMap[id] = fe.Store
+	}
 
 	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
 		layer, err := meta.Open(ctx)
@@ -634,8 +636,8 @@ func (m *Multi) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	m.mu.Unlock()
 
 	var frees []int64
-	for _, free := range m.finder.FreeMap() {
-		frees = append(frees, free)
+	for _, fe := range m.finder.Stores() {
+		frees = append(frees, fe.Free)
 	}
 	sort.Sort(int64Slice(frees))
 

@@ -20,10 +20,11 @@ import (
 var ScanInterval = time.Minute * 5
 var TestIntervalBetween = time.Second * 5
 
-type finderEntry struct {
-	st        store.Store
-	free      int64
-	lastCheck time.Time
+type FinderEntry struct {
+	Store     store.Store
+	Free      int64
+	LastCheck time.Time
+	Dead      bool
 }
 
 // A Finder keeps track of all currently reachable meta.Locations and their
@@ -35,7 +36,7 @@ type Finder struct {
 	stop chan struct{}
 
 	mu     sync.Mutex
-	stores map[[16]byte]finderEntry
+	stores map[[16]byte]FinderEntry
 }
 
 func NewFinder(db kvl.DB) (*Finder, error) {
@@ -45,7 +46,7 @@ func NewFinder(db kvl.DB) (*Finder, error) {
 			Timeout: time.Second * 15,
 		},
 		stop:   make(chan struct{}),
-		stores: make(map[[16]byte]finderEntry, 16),
+		stores: make(map[[16]byte]FinderEntry, 16),
 	}
 
 	go f.scanLoop()
@@ -66,11 +67,11 @@ func (f *Finder) Stop() {
 	f.mu.Unlock()
 }
 
-func (f *Finder) Stores() map[[16]byte]store.Store {
+func (f *Finder) Stores() map[[16]byte]FinderEntry {
 	f.mu.Lock()
-	ret := make(map[[16]byte]store.Store, len(f.stores))
+	ret := make(map[[16]byte]FinderEntry, len(f.stores))
 	for k, v := range f.stores {
-		ret[k] = v.st
+		ret[k] = v
 	}
 	f.mu.Unlock()
 	return ret
@@ -78,17 +79,7 @@ func (f *Finder) Stores() map[[16]byte]store.Store {
 
 func (f *Finder) StoreFor(uuid [16]byte) store.Store {
 	f.mu.Lock()
-	ret := f.stores[uuid].st
-	f.mu.Unlock()
-	return ret
-}
-
-func (f *Finder) FreeMap() map[[16]byte]int64 {
-	f.mu.Lock()
-	ret := make(map[[16]byte]int64, len(f.stores))
-	for k, v := range f.stores {
-		ret[k] = v.free
-	}
+	ret := f.stores[uuid].Store
 	f.mu.Unlock()
 	return ret
 }
@@ -182,10 +173,13 @@ func (f *Finder) Scan(url string) error {
 			f.mu.Lock()
 			e, found = f.stores[id]
 			if !found {
-				e = finderEntry{
-					st:        st,
-					free:      free,
-					lastCheck: time.Now(),
+				dead, _ := f.checkDead(id)
+
+				e = FinderEntry{
+					Store:     st,
+					Free:      free,
+					LastCheck: time.Now(),
+					Dead:      dead,
 				}
 
 				f.stores[id] = e
@@ -193,13 +187,36 @@ func (f *Finder) Scan(url string) error {
 			f.mu.Unlock()
 		}
 
-		f.markActive(url, e.st.Name(), id)
+		err = f.markActive(url, e.Store.Name(), id)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (f *Finder) checkDead(id [16]byte) (bool, error) {
+	dead, err := f.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		layer, err := meta.Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		loc, err := layer.GetLocation(id)
+		if err != nil {
+			return nil, err
+		}
+
+		if loc == nil {
+			return false, nil
+		}
+		return loc.Dead, nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return dead.(bool), nil
 }
 
 func (f *Finder) markActive(url, name string, id [16]byte) error {
@@ -248,22 +265,28 @@ func (f *Finder) testLoop() {
 }
 
 func (f *Finder) test(wait time.Duration) {
-	for id, store := range f.Stores() {
-		free, err := store.FreeSpace(nil)
+	for id, fe := range f.Stores() {
+		dead, err := f.checkDead(id)
+		if err != nil {
+			continue
+		}
+
+		free, err := fe.Store.FreeSpace(nil)
 
 		f.mu.Lock()
 		if err != nil {
 			e, ok := f.stores[id]
 			if ok {
-				e.st.Close()
+				e.Store.Close()
 				delete(f.stores, id)
 			}
 		}
 
 		e, ok := f.stores[id]
 		if ok {
-			e.free = free
-			e.lastCheck = time.Now()
+			e.Free = free
+			e.LastCheck = time.Now()
+			e.Dead = dead
 			f.stores[id] = e
 		}
 		f.mu.Unlock()
