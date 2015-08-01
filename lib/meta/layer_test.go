@@ -438,3 +438,66 @@ func TestLayerLocationContents(t *testing.T) {
 		t.Errorf("Couldn't run transaction: %v", err)
 	}
 }
+
+func TestLayerWALConcurrent(t *testing.T) {
+	db := ram.New()
+
+	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		l, err := Open(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		id := uuid.Gen4()
+		out, err := l.WALCheck(id)
+		if err != nil {
+			return nil, err
+		}
+		if out != false {
+			t.Errorf("WALCheck returned %v on an empty database", out)
+		}
+
+		for i := 0; i < 5; i++ {
+			err = l.WALMark(id)
+			if err != nil {
+				return nil, err
+			}
+
+			out, err = l.WALCheck(id)
+			if err != nil {
+				return nil, err
+			}
+			if out != true {
+				t.Errorf("WALCheck returned %v after marking %v times", out, i+1)
+			}
+		}
+
+		for i := 0; i < 5; i++ {
+			err = l.WALClear(id)
+			if err != nil {
+				return nil, err
+			}
+
+			out, err = l.WALCheck(id)
+			if err != nil {
+				return nil, err
+			}
+			if out != (i < 4) {
+				t.Errorf("WALCheck returned %v after unmarking %v times (should have %v marks)", out, i+1, 5-(i+1))
+			}
+		}
+
+		out, err = l.WALCheck(id)
+		if err != nil {
+			return nil, err
+		}
+		if out != false {
+			t.Errorf("WALCheck returned %v on an empty database after unmarking", out)
+		}
+
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("Couldn't run transaction: %v", err)
+	}
+}

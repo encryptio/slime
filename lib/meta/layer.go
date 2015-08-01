@@ -52,18 +52,96 @@ func (l *Layer) SetConfig(key string, data []byte) error {
 	return l.inner.Set(kvl.Pair{tuple.MustAppend(nil, "config", key), data})
 }
 
+func walParse(data []byte) ([]int64, error) {
+	var timestamps []int64
+	if len(data) > 0 {
+		var err error
+		var length int
+		data, err = tuple.UnpackIntoPartial(data, &length)
+		if err != nil {
+			return nil, err
+		}
+
+		timestamps = make([]int64, length)
+		for i := range timestamps {
+			data, err = tuple.UnpackIntoPartial(data, &timestamps[i])
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return timestamps, nil
+}
+
+func walDump(timestamps []int64) []byte {
+	data := tuple.MustAppend(nil, len(timestamps))
+	for _, t := range timestamps {
+		data = tuple.MustAppend(data, t)
+	}
+	return data
+}
+
 func (l *Layer) WALMark(id [16]byte) error {
-	return l.inner.Set(kvl.Pair{
-		tuple.MustAppend(nil, "wal", id),
-		tuple.MustAppend(nil, time.Now().Unix()),
-	})
+	key := tuple.MustAppend(nil, "wal2", id)
+	p, err := l.inner.Get(key)
+	if err != nil && err != kvl.ErrNotFound {
+		return err
+	}
+
+	timestamps, err := walParse(p.Value)
+	if err != nil {
+		return err
+	}
+
+	timestamps = append(timestamps, time.Now().Unix())
+
+	return l.inner.Set(kvl.Pair{key, walDump(timestamps)})
 }
 
 func (l *Layer) WALClear(id [16]byte) error {
-	return l.inner.Delete(tuple.MustAppend(nil, "wal", id))
+	key := tuple.MustAppend(nil, "wal2", id)
+	p, err := l.inner.Get(key)
+	if err != nil && err != kvl.ErrNotFound {
+		return err
+	}
+
+	timestamps, err := walParse(p.Value)
+	if err != nil {
+		return err
+	}
+
+	if len(timestamps) == 0 {
+		return errors.New("WAL does not have locks on that id")
+	}
+
+	// Remove most recent timestamp.
+	//
+	// In the case of hung/stopped processes that marked an id but never
+	// cleared it, this effectively assumes that the hung one is the *oldest*
+	// one, making the WAL lock unneccessarily longer than it should be. This
+	// is not ideal, but is safe.
+	timestamps = timestamps[:len(timestamps)-1]
+
+	if len(timestamps) == 0 {
+		return l.inner.Delete(key)
+	} else {
+		return l.inner.Set(kvl.Pair{key, walDump(timestamps)})
+	}
 }
 
 func (l *Layer) WALCheck(id [16]byte) (bool, error) {
+	_, err := l.inner.Get(tuple.MustAppend(nil, "wal2", id))
+	if err != nil {
+		if err == kvl.ErrNotFound {
+			return l.walCheckVersion1(id)
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (l *Layer) walCheckVersion1(id [16]byte) (bool, error) {
 	_, err := l.inner.Get(tuple.MustAppend(nil, "wal", id))
 	if err != nil {
 		if err == kvl.ErrNotFound {
@@ -75,6 +153,73 @@ func (l *Layer) WALCheck(id [16]byte) (bool, error) {
 }
 
 func (l *Layer) WALClearOld() error {
+	var rang kvl.RangeQuery
+	rang.Low, rang.High = keys.PrefixRange(tuple.MustAppend(nil, "wal2"))
+	rang.Limit = 100
+
+	for {
+		ps, err := l.inner.Range(rang)
+		if err != nil {
+			return err
+		}
+
+		now := time.Now().Unix()
+
+		for _, p := range ps {
+			var typ string
+			var id [16]byte
+			err = tuple.UnpackInto(p.Key, &typ, &id)
+			if err != nil {
+				return err
+			}
+
+			timestamps, err := walParse(p.Value)
+			if err != nil {
+				return err
+			}
+
+			newestAge := time.Duration(now-timestamps[len(timestamps)-1]) * time.Second
+			oldestAge := time.Duration(now-timestamps[0]) * time.Second
+
+			if newestAge < -walUnsafeFutureAge {
+				log.Printf("WARNING: WAL entry %v is %v in the future! Skipping it.",
+					uuid.Fmt(id), newestAge)
+			} else if oldestAge > walUnsafeOldAge {
+				log.Printf("WARNING: WAL entry %v is %v in the past! Skipping it.",
+					uuid.Fmt(id), oldestAge)
+			} else if oldestAge > walExpireAge {
+				log.Printf("Removing expired WAL entry %v (%v old)",
+					uuid.Fmt(id), oldestAge)
+
+				// Remove the oldest timestamp (only); we'll get to the other timestamps
+				// in future passes if needed.
+				timestamps = timestamps[1:]
+
+				if len(timestamps) == 0 {
+					err = l.inner.Delete(p.Key)
+					if err != nil {
+						return err
+					}
+				} else {
+					err = l.inner.Set(kvl.Pair{p.Key, walDump(timestamps)})
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		if len(ps) < rang.Limit {
+			break
+		}
+
+		rang.Low = ps[len(ps)-1].Key
+	}
+
+	return l.walClearOldVersion1()
+}
+
+func (l *Layer) walClearOldVersion1() error {
 	var rang kvl.RangeQuery
 	rang.Low, rang.High = keys.PrefixRange(tuple.MustAppend(nil, "wal"))
 	rang.Limit = 100
