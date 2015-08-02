@@ -45,6 +45,8 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/tomb.v2"
+
 	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/uuid"
 )
@@ -70,8 +72,7 @@ type Directory struct {
 	perFileWait time.Duration
 	perByteWait time.Duration
 
-	stop   chan struct{}
-	stopWg *sync.WaitGroup
+	tomb tomb.Tomb
 
 	// mu protects all operations in the directory as well as the fields below
 	mu                         sync.RWMutex
@@ -128,8 +129,6 @@ func OpenDirectory(dir string, perFileWait, perByteWait time.Duration) (*Directo
 		Dir:          dir,
 		uuid:         myUUID,
 		name:         host + ":" + dir,
-		stop:         make(chan struct{}),
-		stopWg:       &sync.WaitGroup{},
 		perFileWait:  perFileWait,
 		perByteWait:  perByteWait,
 		minSplitSize: 500,
@@ -141,15 +140,11 @@ func OpenDirectory(dir string, perFileWait, perByteWait time.Duration) (*Directo
 		return nil, err
 	}
 
-	ds.stopWg.Add(2)
-	go func() {
-		defer ds.stopWg.Done()
-		ds.hashcheckLoop()
-	}()
-	go func() {
-		defer ds.stopWg.Done()
-		ds.resplitLoop()
-	}()
+	ds.tomb.Go(func() error {
+		ds.tomb.Go(ds.hashcheckLoop)
+		ds.tomb.Go(ds.resplitLoop)
+		return nil
+	})
 
 	return ds, nil
 }
@@ -342,18 +337,8 @@ func (ds *Directory) Available() bool {
 }
 
 func (ds *Directory) Close() error {
-	ds.mu.Lock()
-
-	select {
-	case <-ds.stop:
-		ds.mu.Unlock()
-	default:
-		close(ds.stop)
-		ds.mu.Unlock()
-		ds.stopWg.Wait()
-	}
-
-	return nil
+	ds.tomb.Kill(nil)
+	return ds.tomb.Wait()
 }
 
 func (ds *Directory) findAndOpen(key string) (*os.File, string, error) {

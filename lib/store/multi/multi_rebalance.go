@@ -26,11 +26,11 @@ const (
 	rebalanceMinDifference = 1024 * 1024 * 1024 // 1 GiB
 )
 
-func (m *Multi) rebalanceLoop() {
+func (m *Multi) rebalanceLoop() error {
 	for {
 		select {
-		case <-m.stop:
-			return
+		case <-m.tomb.Dying():
+			return nil
 		case <-time.After(jitterDuration(rebalanceWait)):
 			err := m.rebalanceStep()
 			if err != nil {

@@ -12,14 +12,14 @@ import (
 	"time"
 )
 
-func (ds *Directory) resplitLoop() {
+func (ds *Directory) resplitLoop() error {
 	for {
 		ds.resplitStep()
 
 		select {
 		case <-time.After(time.Minute):
-		case <-ds.stop:
-			return
+		case <-ds.tomb.Dying():
+			return nil
 		}
 	}
 }

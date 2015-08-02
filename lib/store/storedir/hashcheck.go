@@ -26,7 +26,7 @@ func (ds *Directory) Hashcheck() (good, bad int64) {
 	}
 }
 
-func (ds *Directory) hashcheckLoop() {
+func (ds *Directory) hashcheckLoop() error {
 	for {
 		_, bad := ds.hashstep()
 		if bad != 0 {
@@ -36,8 +36,8 @@ func (ds *Directory) hashcheckLoop() {
 
 		select {
 		case <-time.After(5 * time.Second):
-		case <-ds.stop:
-			return
+		case <-ds.tomb.Dying():
+			return nil
 		}
 	}
 }
@@ -96,7 +96,7 @@ func (ds *Directory) hashstepInner(afterIn string) (good, bad int64, after strin
 		after = key
 
 		select {
-		case <-ds.stop:
+		case <-ds.tomb.Dying():
 			return
 		default:
 		}

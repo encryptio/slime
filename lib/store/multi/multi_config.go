@@ -170,12 +170,12 @@ func (m *Multi) loadConfig() error {
 	return err
 }
 
-func (m *Multi) loadConfigLoop(interval time.Duration) {
+func (m *Multi) loadConfigLoop() error {
 	for {
 		select {
-		case <-m.stop:
-			return
-		case <-time.After(jitterDuration(interval)):
+		case <-m.tomb.Dying():
+			return nil
+		case <-time.After(jitterDuration(loadConfigInterval)):
 			err := m.loadConfig()
 			if err != nil {
 				log.Printf("Couldn't load config: %v", err)

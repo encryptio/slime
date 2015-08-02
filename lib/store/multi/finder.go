@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/tomb.v2"
+
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/store"
@@ -33,7 +35,7 @@ type Finder struct {
 	db     kvl.DB
 	client *http.Client
 
-	stop chan struct{}
+	tomb tomb.Tomb
 
 	mu     sync.Mutex
 	stores map[[16]byte]FinderEntry
@@ -45,26 +47,21 @@ func NewFinder(db kvl.DB) (*Finder, error) {
 		client: &http.Client{
 			Timeout: time.Second * 15,
 		},
-		stop:   make(chan struct{}),
 		stores: make(map[[16]byte]FinderEntry, 16),
 	}
 
-	go f.scanLoop()
-	go f.testLoop()
+	f.tomb.Go(func() error {
+		f.tomb.Go(f.scanLoop)
+		f.tomb.Go(f.testLoop)
+		return nil
+	})
 
 	return f, nil
 }
 
-func (f *Finder) Stop() {
-	f.mu.Lock()
-
-	select {
-	case <-f.stop:
-	default:
-		close(f.stop)
-	}
-
-	f.mu.Unlock()
+func (f *Finder) Stop() error {
+	f.tomb.Kill(nil)
+	return f.tomb.Wait()
 }
 
 func (f *Finder) Stores() map[[16]byte]FinderEntry {
@@ -84,7 +81,7 @@ func (f *Finder) StoreFor(uuid [16]byte) store.Store {
 	return ret
 }
 
-func (f *Finder) scanLoop() {
+func (f *Finder) scanLoop() error {
 	for {
 		err := f.Rescan()
 		if err != nil {
@@ -92,8 +89,8 @@ func (f *Finder) scanLoop() {
 		}
 
 		select {
-		case <-f.stop:
-			return
+		case <-f.tomb.Dying():
+			return nil
 		case <-time.After(jitterDuration(ScanInterval)):
 		}
 	}
@@ -252,13 +249,13 @@ func (f *Finder) markActive(url, name string, id [16]byte) error {
 	return err
 }
 
-func (f *Finder) testLoop() {
+func (f *Finder) testLoop() error {
 	for {
 		f.test(TestIntervalBetween)
 
 		select {
-		case <-f.stop:
-			return
+		case <-f.tomb.Dying():
+			return nil
 		default:
 		}
 	}
@@ -292,7 +289,7 @@ func (f *Finder) test(wait time.Duration) {
 		f.mu.Unlock()
 
 		select {
-		case <-f.stop:
+		case <-f.tomb.Dying():
 			return
 		case <-time.After(jitterDuration(wait)):
 		}

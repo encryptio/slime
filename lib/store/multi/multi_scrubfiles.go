@@ -34,11 +34,11 @@ func (m *Multi) scrubFilesAll() {
 	}
 }
 
-func (m *Multi) scrubFilesLoop() {
+func (m *Multi) scrubFilesLoop() error {
 	for {
 		select {
-		case <-m.stop:
-			return
+		case <-m.tomb.Dying():
+			return nil
 		case <-time.After(jitterDuration(scrubFilesWait)):
 			_, err := m.scrubFilesStep()
 			if err != nil {

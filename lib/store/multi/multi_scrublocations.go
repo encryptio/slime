@@ -55,11 +55,11 @@ func (m *Multi) scrubLocationsAll() {
 	}
 }
 
-func (m *Multi) scrubLocationsLoop() {
+func (m *Multi) scrubLocationsLoop() error {
 	for {
 		select {
-		case <-m.stop:
-			return
+		case <-m.tomb.Dying():
+			return nil
 		case <-time.After(jitterDuration(scrubLocationsWait)):
 			_, err := m.scrubLocationsStep()
 			if err != nil {

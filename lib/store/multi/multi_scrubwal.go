@@ -13,11 +13,11 @@ var (
 	scrubWALWait = time.Hour * 4
 )
 
-func (m *Multi) scrubWALLoop() {
+func (m *Multi) scrubWALLoop() error {
 	for {
 		select {
-		case <-m.stop:
-			return
+		case <-m.tomb.Dying():
+			return nil
 		case <-time.After(jitterDuration(scrubWALWait)):
 			err := m.scrubWAL()
 			if err != nil {

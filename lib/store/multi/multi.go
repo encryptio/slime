@@ -7,6 +7,8 @@ package multi
 import (
 	"sync"
 
+	"gopkg.in/tomb.v2"
+
 	"git.encryptio.com/kvl"
 )
 
@@ -17,7 +19,7 @@ type Multi struct {
 
 	freeMapChannel chan map[[16]byte]int64
 
-	stop chan struct{}
+	tomb tomb.Tomb
 
 	mu     sync.Mutex
 	config multiConfig
@@ -27,7 +29,6 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 	m := &Multi{
 		db:             db,
 		finder:         finder,
-		stop:           make(chan struct{}),
 		freeMapChannel: make(chan map[[16]byte]int64),
 	}
 
@@ -41,27 +42,21 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 		return nil, err
 	}
 
-	go m.loadConfigLoop(loadConfigInterval)
-	go m.scrubFilesLoop()
-	go m.scrubLocationsLoop()
-	go m.scrubWALLoop()
-	go m.rebalanceLoop()
+	m.tomb.Go(func() error {
+		m.tomb.Go(m.loadConfigLoop)
+		m.tomb.Go(m.scrubFilesLoop)
+		m.tomb.Go(m.scrubLocationsLoop)
+		m.tomb.Go(m.scrubWALLoop)
+		m.tomb.Go(m.rebalanceLoop)
+		return nil
+	})
 
 	return m, nil
 }
 
 func (m *Multi) Close() error {
-	m.mu.Lock()
-
-	select {
-	case <-m.stop:
-	default:
-		close(m.stop)
-	}
-
-	m.mu.Unlock()
-
-	return nil
+	m.tomb.Kill(nil)
+	return m.tomb.Wait()
 }
 
 func (m *Multi) scrubAll() {
