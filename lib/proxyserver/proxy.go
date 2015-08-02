@@ -23,13 +23,13 @@ type Handler struct {
 	finder     *multi.Finder
 }
 
-func New(db kvl.DB) (*Handler, error) {
+func New(db kvl.DB, scrubbers int) (*Handler, error) {
 	finder, err := multi.NewFinder(db)
 	if err != nil {
 		return nil, err
 	}
 
-	multi, err := multi.NewMulti(db, finder)
+	multi, err := multi.NewMulti(db, finder, scrubbers)
 	if err != nil {
 		finder.Stop()
 		return nil, err

@@ -124,11 +124,13 @@ func chunkServer() {
 
 func proxyServer() {
 	listen := flag.String("listen", ":17942",
-		"Address and port to serve on")
+		"Address and port to serve on (set to \"none\" to not listen)")
 	logEnabled := flag.Bool("log", true,
 		"enable access logging")
 	parallel := flag.Int("parallel", 50,
 		"max number of requests to handle in parallel")
+	scrubbers := flag.Int("scrubbers", 1,
+		"number of concurrent scrubbers (of all types)")
 	flag.Parse()
 
 	db, err := psql.Open(os.Getenv("SLIME_PGDSN"))
@@ -141,7 +143,7 @@ func proxyServer() {
 	defer db.Close()
 
 	var h http.Handler
-	h, err = proxyserver.New(db)
+	h, err = proxyserver.New(db, *scrubbers)
 	if err != nil {
 		log.Fatalf("Couldn't initialize handler: %v", err)
 	}
@@ -154,7 +156,13 @@ func proxyServer() {
 		h = httputil.LogHTTPRequests(h)
 	}
 
-	serveOrDie(*listen, h)
+	if *listen == "none" {
+		for {
+			time.Sleep(time.Hour)
+		}
+	} else {
+		serveOrDie(*listen, h)
+	}
 }
 
 func dbReindex() {

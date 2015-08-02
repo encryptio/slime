@@ -25,7 +25,7 @@ type Multi struct {
 	config multiConfig
 }
 
-func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
+func NewMulti(db kvl.DB, finder *Finder, scrubbers int) (*Multi, error) {
 	m := &Multi{
 		db:             db,
 		finder:         finder,
@@ -44,10 +44,17 @@ func NewMulti(db kvl.DB, finder *Finder) (*Multi, error) {
 
 	m.tomb.Go(func() error {
 		m.tomb.Go(m.loadConfigLoop)
-		m.tomb.Go(m.scrubFilesLoop)
-		m.tomb.Go(m.scrubLocationsLoop)
-		m.tomb.Go(m.scrubWALLoop)
-		m.tomb.Go(m.rebalanceLoop)
+
+		for i := 0; i < scrubbers; i++ {
+			m.tomb.Go(m.scrubFilesLoop)
+			m.tomb.Go(m.scrubLocationsLoop)
+			m.tomb.Go(m.rebalanceLoop)
+		}
+
+		if scrubbers > 0 {
+			m.tomb.Go(m.scrubWALLoop)
+		}
+
 		return nil
 	})
 

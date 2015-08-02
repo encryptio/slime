@@ -84,7 +84,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		t.Fatalf("Finder did not find all stores")
 	}
 
-	multi, err = NewMulti(db, finder)
+	multi, err = NewMulti(db, finder, 0)
 	if err != nil {
 		done()
 		t.Fatalf("Couldn't create multi: %v", err)
