@@ -334,5 +334,58 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		}
 	}
 
+	if thisLoc.Dead && len(wantFiles) > 0 {
+		// dead stores should be cleared
+
+		for _, want := range wantFiles {
+			pid, err := prefixIDFromLocalKey(want)
+			if err != nil {
+				// already logged in a loop above
+				continue
+			}
+
+			var inWAL bool
+			var path string
+			_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+				layer, err := meta.Open(ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				inWAL, err = layer.WALCheck(pid)
+				if err != nil {
+					return nil, err
+				}
+
+				if !inWAL {
+					path, err = layer.PathForPrefixID(pid)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				return nil, nil
+			})
+			if err != nil {
+				log.Printf("Couldn't check wal/path for PrefixID %v: %v",
+					uuid.Fmt(pid), err)
+				continue
+			}
+
+			if inWAL {
+				log.Printf("skipping rebuild of PrefixID %v on dead store, prefix in WAL", uuid.Fmt(pid))
+				continue
+			}
+
+			err = m.rebuild(path)
+			if err != nil {
+				log.Printf("Couldn't rebuild %v: %v", path, err)
+				continue
+			}
+
+			log.Printf("successfully rebuilt %v", path)
+		}
+	}
+
 	return len(wantFiles) == 0, nil
 }
