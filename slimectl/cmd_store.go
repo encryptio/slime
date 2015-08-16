@@ -32,10 +32,10 @@ func handleStore(args []string) error {
 		return handleStoreStoreOperation(args[0], args[1])
 	case "scan":
 		if len(args) == 1 {
-			return fmt.Errorf("store scan requires a url argument", args[0])
+			return fmt.Errorf("store scan requires a url argument")
 		}
 		if len(args) > 2 {
-			return fmt.Errorf("too many arguments to store scan", args[0])
+			return fmt.Errorf("too many arguments to store scan")
 		}
 		return handleStoreScan(args[1])
 	case "rescan":
