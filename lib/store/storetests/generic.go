@@ -2,6 +2,7 @@ package storetests
 
 import (
 	"crypto/sha256"
+	"runtime"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -13,6 +14,7 @@ func TestStore(t *testing.T, s store.Store) {
 	TestStoreBasics(t, s)
 	TestStoreList(t, s)
 	TestStoreCASCountRace(t, s)
+	TestStoreGoroutineLeaks(t, s)
 }
 
 func TestStoreBasics(t *testing.T, s store.Store) {
@@ -45,6 +47,31 @@ func TestStoreBasics(t *testing.T, s store.Store) {
 	ShouldFullList(t, s, nil)
 
 	ShouldFreeSpace(t, s)
+}
+
+func TestStoreGoroutineLeaks(t *testing.T, s store.Store) {
+	t.Logf("TestStoreGoroutineLeaks()")
+
+	// do the operations twice, only check goroutine counts on the second iteration
+	// the implementation may start helper routines, which are not an issue unless
+	// they leak for each operation.
+	for i := 0; i < 2; i++ {
+		routinesAtStart := runtime.NumGoroutine()
+
+		ShouldCAS(t, s, "hello", store.MissingV, store.DataV([]byte("world")))
+		ShouldGet(t, s, "hello", []byte("world"))
+		ShouldFullList(t, s, []string{"hello"})
+		ShouldFreeSpace(t, s)
+		ShouldCAS(t, s, "hello", store.AnyV, store.MissingV)
+
+		if i == 1 {
+			routinesAtEnd := runtime.NumGoroutine()
+
+			if routinesAtStart != routinesAtEnd {
+				t.Errorf("Had %v goroutines running, wanted %v", routinesAtEnd, routinesAtStart)
+			}
+		}
+	}
 }
 
 func TestStoreList(t *testing.T, s store.Store) {
