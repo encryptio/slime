@@ -16,6 +16,11 @@ gotestworks() {
     return $?
 }
 
+govetclean() {
+    go vet ./...
+    return $?
+}
+
 glockfileupdated() {
     glock save -n git.encryptio.com/slime > .glockfile-tmp
     diff .glockfile-tmp GLOCKFILE || {
@@ -28,5 +33,6 @@ glockfileupdated() {
 }
 
 gofmtidempotent || exit 1
+govetclean || exit 1
 gotestworks || exit 1
 glockfileupdated || exit 1
