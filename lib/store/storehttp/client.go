@@ -19,7 +19,7 @@ import (
 	"git.encryptio.com/slime/lib/uuid"
 )
 
-// A Client is a Store which interfaces with the standard HTTP interface.
+// Client is a Store which interfaces with the standard HTTP interface.
 type Client struct {
 	url    string
 	uuid   [16]byte
@@ -45,6 +45,7 @@ func NewClient(url string) (*Client, error) {
 	return c, nil
 }
 
+// Close closes the Client and any HTTP connections it has to the server.
 func (cc *Client) Close() error {
 	var rt http.RoundTripper
 	if cc.client.Transport == nil {

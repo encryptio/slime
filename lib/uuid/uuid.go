@@ -12,6 +12,7 @@ import (
 	"sync"
 )
 
+// ErrBadFormat is returned from Parse when the input does not look like a UUID.
 var ErrBadFormat = errors.New("bad format for UUID")
 
 var rng *rand.Rand
@@ -28,6 +29,7 @@ func init() {
 	rng = rand.New(source)
 }
 
+// Gen4 generates a type-4 (random) UUID and returns it.
 func Gen4() [16]byte {
 	var ret [16]byte
 	rngMu.Lock()
@@ -40,11 +42,21 @@ func Gen4() [16]byte {
 	return ret
 }
 
+// Fmt formats a UUID as a string using the standard XXXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX format.
 func Fmt(uuid [16]byte) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x",
 		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16])
 }
 
+// Parse parses a UUID from a string.
+//
+// It accepts these formats:
+//     {12345678-1234-1234-1234-12345678abcd}
+//     12345678-1234-1234-1234-12345678abcd
+//     1234567812341234123412345678abcd
+//
+// When passed a UUID format other than these, it may either return ErrBadFormat
+// or return a best guess parsing of the UUID.
 func Parse(s string) ([16]byte, error) {
 	var uuid [16]byte
 
