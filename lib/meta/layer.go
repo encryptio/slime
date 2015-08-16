@@ -125,9 +125,9 @@ func (l *Layer) WALClear(id [16]byte) error {
 
 	if len(timestamps) == 0 {
 		return l.inner.Delete(key)
-	} else {
-		return l.inner.Set(kvl.Pair{key, walDump(timestamps)})
 	}
+
+	return l.inner.Set(kvl.Pair{key, walDump(timestamps)})
 }
 
 func (l *Layer) WALCheck(id [16]byte) (bool, error) {

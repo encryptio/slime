@@ -31,7 +31,7 @@ func New(stores []store.Store) (*Handler, error) {
 	return h, nil
 }
 
-// Does not Close any of the stores passed to New.
+// Close is a no-op. Notably, it does not Close any of the stores passed to New.
 func (h *Handler) Close() error {
 	return nil
 }
