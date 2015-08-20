@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"runtime"
 	"time"
@@ -131,6 +132,8 @@ func proxyServer() {
 		"max number of requests to handle in parallel")
 	scrubbers := flag.Int("scrubbers", 1,
 		"number of concurrent scrubbers (of all types)")
+	debug := flag.Bool("debug", false,
+		"enable /debug/pprof http endpoints")
 	flag.Parse()
 
 	db, err := psql.Open(os.Getenv("SLIME_PGDSN"))
@@ -150,6 +153,17 @@ func proxyServer() {
 
 	if *parallel > 0 {
 		h = httputil.NewLimitParallelism(*parallel, h)
+	}
+
+	if *debug != false {
+		mux := http.NewServeMux()
+		mux.Handle("/", h)
+		mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+		mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+		mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+		mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+		mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+		h = mux
 	}
 
 	if *logEnabled {
