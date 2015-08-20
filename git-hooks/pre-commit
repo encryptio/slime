@@ -17,8 +17,10 @@ gotestworks() {
 }
 
 govetclean() {
-    go vet ./...
-    return $?
+    find . -name \*.go | while read FILE; do
+        go tool vet -composites=false "$FILE" || exit 1
+    done
+    return "$?"
 }
 
 glockfileupdated() {
