@@ -20,6 +20,7 @@ func TestFinderScan(t *testing.T) {
 
 	ds, tmpPath := storedir.MakeTestingDirectory(t)
 	defer os.RemoveAll(tmpPath)
+	defer ds.Close()
 
 	cs, err := chunkserver.New([]store.Store{ds})
 	if err != nil {

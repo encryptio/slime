@@ -39,6 +39,9 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		for _, cs := range chunkServers {
 			cs.Close()
 		}
+		for _, ds := range dirstores {
+			ds.Close()
+		}
 		for _, path := range tmpPaths {
 			os.RemoveAll(path)
 		}
