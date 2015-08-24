@@ -87,7 +87,7 @@ func (m *Multi) scrubFilesStep() (bool, error) {
 	}
 
 	var locs []meta.Location
-	err = m.db.RunTx(func(ctx kvl.Ctx) error {
+	err = m.db.RunReadTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
 			return err

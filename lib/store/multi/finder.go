@@ -98,7 +98,7 @@ func (f *Finder) scanLoop() error {
 
 func (f *Finder) Rescan() error {
 	var locs []meta.Location
-	err := f.db.RunTx(func(ctx kvl.Ctx) error {
+	err := f.db.RunReadTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
 			return err
@@ -194,7 +194,7 @@ func (f *Finder) Scan(url string) error {
 
 func (f *Finder) checkDead(id [16]byte) (bool, error) {
 	var dead bool
-	err := f.db.RunTx(func(ctx kvl.Ctx) error {
+	err := f.db.RunReadTx(func(ctx kvl.Ctx) error {
 		dead = false
 
 		layer, err := meta.Open(ctx)

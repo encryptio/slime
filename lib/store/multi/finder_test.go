@@ -62,7 +62,7 @@ func TestFinderScan(t *testing.T) {
 	}
 
 	// but should stay in the DB
-	err = db.RunTx(func(ctx kvl.Ctx) error {
+	err = db.RunReadTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
 			return err

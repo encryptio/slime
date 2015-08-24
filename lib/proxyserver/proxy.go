@@ -239,7 +239,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 	finderEntries := h.finder.Stores()
 
 	ret := make([]storesResponseEntry, 0, 10)
-	err := h.db.RunTx(func(ctx kvl.Ctx) error {
+	err := h.db.RunReadTx(func(ctx kvl.Ctx) error {
 		ret = ret[:0]
 
 		layer, err := meta.Open(ctx)

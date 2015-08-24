@@ -52,7 +52,7 @@ func (m *Multi) Name() string {
 
 func (m *Multi) getFile(key string) (*meta.File, error) {
 	var file *meta.File
-	err := m.db.RunTx(func(ctx kvl.Ctx) error {
+	err := m.db.RunReadTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
 			return err
@@ -453,7 +453,7 @@ func (m *Multi) orderTargets() ([]store.Store, error) {
 	}
 
 	var locs []meta.Location
-	err := m.db.RunTx(func(ctx kvl.Ctx) error {
+	err := m.db.RunReadTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
 			return err
@@ -588,7 +588,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte, prefixid [16]
 
 func (m *Multi) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
 	var files []meta.File
-	err := m.db.RunTx(func(ctx kvl.Ctx) error {
+	err := m.db.RunReadTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
 			return err
