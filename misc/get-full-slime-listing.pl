@@ -8,7 +8,7 @@ use URI::Escape;
 my $data_url = shift;
 die "Usage: $0 base_url\n" if @ARGV or not defined $data_url;
 
-my $page_size = 1000;
+my $page_size = 10000;
 my $after = "";
 while ( 1 ) {
     my $url = $data_url."?mode=list&limit=$page_size&after=".uri_escape($after);
