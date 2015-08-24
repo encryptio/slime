@@ -61,6 +61,8 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  %s redundancy [get]\n", prog)
 	fmt.Fprintf(os.Stderr, "  %s redundancy set <need> <total>\n", prog)
 	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "  %s df\n", prog)
+	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "A \"storeid\" may be a uuid or a unique substring of a store's name or uuid\n")
 }
 
@@ -82,6 +84,8 @@ func main() {
 		err = handleStore(args[1:])
 	case "redundancy":
 		err = handleRedundancy(args[1:])
+	case "df":
+		err = handleDF(args[1:])
 	default:
 		err = fmt.Errorf("unknown subcommand %v", args[0])
 	}
