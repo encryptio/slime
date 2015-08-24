@@ -71,20 +71,23 @@ func (m *Multi) rebalanceStep() error {
 	}()
 
 	for moved < rebalanceFileCount && scanned < rebalanceMaxScan {
-		ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		var files []meta.File
+		err := m.db.RunTx(func(ctx kvl.Ctx) error {
+			files = nil
+
 			l, err := meta.Open(ctx)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			startkey, err := l.GetConfig("rebalpos")
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			files, err := l.ListFiles(string(startkey), 20)
+			files, err = l.ListFiles(string(startkey), 20)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			if len(files) > 0 {
@@ -93,16 +96,14 @@ func (m *Multi) rebalanceStep() error {
 				err = l.SetConfig("rebalpos", []byte{})
 			}
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			return files, nil
+			return nil
 		})
 		if err != nil {
 			return err
 		}
-
-		files := ret.([]meta.File)
 
 		if len(files) == 0 {
 			break
@@ -186,28 +187,26 @@ func (m *Multi) rebalanceFile(f meta.File, finderEntries map[[16]byte]FinderEntr
 
 	// we should move chunk minI on minS to maxS
 
-	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		err = l.WALMark(f.PrefixID)
-		return nil, err
+		return l.WALMark(f.PrefixID)
 	})
 	if err != nil {
 		return false, err
 	}
 	defer func() {
 		// TODO: how to handle errors here?
-		m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		m.db.RunTx(func(ctx kvl.Ctx) error {
 			l, err := meta.Open(ctx)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			err = l.WALClear(f.PrefixID)
-			return nil, err
+			return l.WALClear(f.PrefixID)
 		})
 	}()
 
@@ -233,37 +232,37 @@ func (m *Multi) rebalanceFile(f meta.File, finderEntries map[[16]byte]FinderEntr
 	copy(newF.Locations, f.Locations)
 	newF.Locations[minI] = maxS.UUID()
 
-	_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err = m.db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		f2, err := l.GetFile(f.Path)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if f2.PrefixID != f.PrefixID {
-			return nil, errModifiedDuringBalance
+			return errModifiedDuringBalance
 		}
 
 		if len(f2.Locations) != len(f.Locations) {
-			return nil, errModifiedDuringBalance
+			return errModifiedDuringBalance
 		}
 
 		for i, floc := range f.Locations {
 			if floc != f2.Locations[i] {
-				return nil, errModifiedDuringBalance
+				return errModifiedDuringBalance
 			}
 		}
 
 		err = l.SetFile(&newF)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		maxS.CAS(localKey, setCASV, store.MissingV, nil) // ignore error

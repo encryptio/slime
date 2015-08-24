@@ -97,21 +97,20 @@ func (f *Finder) scanLoop() error {
 }
 
 func (f *Finder) Rescan() error {
-	ret, err := f.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var locs []meta.Location
+	err := f.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		locs, err := layer.AllLocations()
-		return locs, err
+		locs, err = layer.AllLocations()
+		return err
 	})
-
 	if err != nil {
 		return err
 	}
 
-	locs := ret.([]meta.Location)
 	searched := make(map[string]struct{})
 	for _, loc := range locs {
 		_, found := searched[loc.URL]
@@ -194,38 +193,38 @@ func (f *Finder) Scan(url string) error {
 }
 
 func (f *Finder) checkDead(id [16]byte) (bool, error) {
-	dead, err := f.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var dead bool
+	err := f.db.RunTx(func(ctx kvl.Ctx) error {
+		dead = false
+
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		loc, err := layer.GetLocation(id)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		if loc == nil {
-			return false, nil
+		if loc != nil {
+			dead = loc.Dead
 		}
-		return loc.Dead, nil
+		return nil
 	})
-	if err != nil {
-		return false, err
-	}
-	return dead.(bool), nil
+	return dead, err
 }
 
 func (f *Finder) markActive(url, name string, id [16]byte) error {
-	_, err := f.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := f.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		loc, err := layer.GetLocation(id)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if loc == nil {
@@ -241,10 +240,10 @@ func (f *Finder) markActive(url, name string, id [16]byte) error {
 
 		err = layer.SetLocation(*loc)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return nil, nil
+		return nil
 	})
 	return err
 }

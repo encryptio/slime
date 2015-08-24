@@ -63,22 +63,22 @@ func (m *Multi) SetRedundancy(need, total int) error {
 		return err
 	}
 
-	_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err = m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		err = layer.SetConfig("need", strconv.AppendInt(nil, int64(conf.Need), 10))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		err = layer.SetConfig("total", strconv.AppendInt(nil, int64(conf.Total), 10))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return nil, nil
+		return nil
 	})
 
 	m.mu.Lock()
@@ -89,15 +89,16 @@ func (m *Multi) SetRedundancy(need, total int) error {
 }
 
 func (m *Multi) loadUUID() error {
-	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var id []byte
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		id, err := layer.GetConfig("uuid")
+		id, err = layer.GetConfig("uuid")
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if len(id) == 0 {
@@ -105,25 +106,25 @@ func (m *Multi) loadUUID() error {
 			id = newID[:]
 			err = layer.SetConfig("uuid", id)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 
-		return id, nil
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	copy(m.uuid[:], ret.([]byte))
+	copy(m.uuid[:], id)
 	return nil
 }
 
 func (m *Multi) loadConfig() error {
-	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		m.mu.Lock()
@@ -132,40 +133,40 @@ func (m *Multi) loadConfig() error {
 
 		needBytes, err := layer.GetConfig("need")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if needBytes == nil {
 			needBytes = []byte("3")
 		}
 		need, err := strconv.ParseInt(string(needBytes), 10, 0)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		conf.Need = int(need)
 
 		totalBytes, err := layer.GetConfig("total")
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if totalBytes == nil {
 			totalBytes = []byte("5")
 		}
 		total, err := strconv.ParseInt(string(totalBytes), 10, 0)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		conf.Total = int(total)
 
 		err = checkConfig(conf)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		m.mu.Lock()
 		m.config = conf
 		m.mu.Unlock()
 
-		return nil, nil
+		return nil
 	})
 	return err
 }

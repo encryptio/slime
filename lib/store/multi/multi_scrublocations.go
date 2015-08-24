@@ -21,19 +21,26 @@ func (m *Multi) scrubLocationsAll() {
 	// hits the end of each of them.
 	//
 	// We assume there are no concurrent adding/removing of Locations.
-	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var need int
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return layer.AllLocations()
+		locs, err := layer.AllLocations()
+		if err != nil {
+			return err
+		}
+
+		need = len(locs) * 2
+
+		return nil
 	})
 	if err != nil {
 		log.Printf("Couldn't get all locations: %v", err)
 		return
 	}
-	need := len(ret.([]meta.Location)) * 2
 
 	if need == 0 {
 		return
@@ -83,15 +90,19 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 	var thisLoc meta.Location
 	var from string
-	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var wantFiles []string
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
+		from = ""
+		wantFiles = nil
+
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		pos, err := layer.GetConfig("scrublocationpos")
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// parse errors okay, since will be the zero UUID
@@ -99,12 +110,12 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 		allLocations, err := layer.AllLocations()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if len(allLocations) == 0 {
 			// no locations exist
-			return nil, nil
+			return nil
 		}
 
 		for {
@@ -139,7 +150,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 		err = layer.SetConfig("scrublocationpos", []byte(uuid.Fmt(since)))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// now get the file list in the location we've chosen, resuming at the
@@ -148,14 +159,14 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		fromB, err := layer.GetConfig(
 			"scrublocationpos-" + uuid.Fmt(thisLoc.UUID))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		from = string(fromB)
 
 		files, err := layer.GetLocationContents(thisLoc.UUID, from,
 			scrubLocationsCount)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		var newLocPos string
@@ -167,19 +178,17 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 		err = layer.SetConfig(
 			"scrublocationpos-"+uuid.Fmt(thisLoc.UUID), []byte(newLocPos))
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return files, nil
+		wantFiles = files
+
+		return nil
 	})
 	if err != nil {
 		return false, err
 	}
-	if ret == nil {
-		return false, nil
-	}
 
-	wantFiles := ret.([]string)
 	wantFilesMap := make(map[string]struct{}, len(wantFiles))
 	for _, f := range wantFiles {
 		wantFilesMap[f] = struct{}{}
@@ -234,34 +243,33 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 				continue
 			}
 
-			ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			var inWAL bool
+			err = m.db.RunTx(func(ctx kvl.Ctx) error {
 				layer, err := meta.Open(ctx)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
-				found, err := layer.WALCheck(pid)
+				inWAL, err = layer.WALCheck(pid)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
-				if !found {
+				if !inWAL {
 					// check to see if the write finished
-					found, err = layer.LocationShouldHave(thisLoc.UUID, have)
+					inWAL, err = layer.LocationShouldHave(thisLoc.UUID, have)
 					if err != nil {
-						return nil, err
+						return err
 					}
 				}
 
-				return found, nil
+				return nil
 			})
 			if err != nil {
 				log.Printf("Couldn't check WAL for PrefixID %v: %v",
 					uuid.Fmt(pid), err)
 				continue
 			}
-
-			inWAL := ret.(bool)
 
 			if inWAL {
 				log.Printf("extraneous chunk %v on %v, but is in WAL, skipping",
@@ -293,25 +301,27 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 			var inWAL bool
 			var path string
-			_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			err = m.db.RunTx(func(ctx kvl.Ctx) error {
+				path = ""
+
 				layer, err := meta.Open(ctx)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				inWAL, err = layer.WALCheck(pid)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				if !inWAL {
 					path, err = layer.PathForPrefixID(pid)
 					if err != nil {
-						return nil, err
+						return err
 					}
 				}
 
-				return nil, nil
+				return nil
 			})
 			if err != nil {
 				log.Printf("Couldn't get path for PrefixID %v: %v",
@@ -346,25 +356,27 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 			var inWAL bool
 			var path string
-			_, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			err = m.db.RunTx(func(ctx kvl.Ctx) error {
+				path = ""
+
 				layer, err := meta.Open(ctx)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				inWAL, err = layer.WALCheck(pid)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				if !inWAL {
 					path, err = layer.PathForPrefixID(pid)
 					if err != nil {
-						return nil, err
+						return err
 					}
 				}
 
-				return nil, nil
+				return nil
 			})
 			if err != nil {
 				log.Printf("Couldn't check wal/path for PrefixID %v: %v",

@@ -51,29 +51,20 @@ func (m *Multi) Name() string {
 }
 
 func (m *Multi) getFile(key string) (*meta.File, error) {
-	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var file *meta.File
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		f, err := layer.GetFile(key)
-		if err != nil {
-			return nil, err
-		}
-
-		if f == nil {
-			return nil, nil
-		}
-		return f, nil
+		file, err = layer.GetFile(key)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	if ret == nil {
-		return nil, err
-	}
-	return ret.(*meta.File), nil
+	return file, nil
 }
 
 func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
@@ -247,18 +238,18 @@ func (m *Multi) reconstruct(f *meta.File, cancel <-chan struct{}) ([]byte, error
 
 func (m *Multi) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
 	var file *meta.File
-	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		file, err = layer.GetFile(key)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -310,38 +301,38 @@ func (m *Multi) CAS(key string, from, to store.CASV, cancel <-chan struct{}) err
 
 	if to.Present {
 		// check before doing work; additionally, add a WAL entry
-		_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+		err := m.db.RunTx(func(ctx kvl.Ctx) error {
 			layer, err := meta.Open(ctx)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			oldFile, err := layer.GetFile(key)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			if !from.Any {
 				if from.Present {
 					if oldFile == nil {
-						return nil, store.ErrCASFailure
+						return store.ErrCASFailure
 					}
 					if oldFile.SHA256 != from.SHA256 {
-						return nil, store.ErrCASFailure
+						return store.ErrCASFailure
 					}
 				} else {
 					if oldFile != nil {
-						return nil, store.ErrCASFailure
+						return store.ErrCASFailure
 					}
 				}
 			}
 
 			err = layer.WALMark(prefixid)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			return nil, nil
+			return nil
 		})
 		if err != nil {
 			return err
@@ -354,28 +345,28 @@ func (m *Multi) CAS(key string, from, to store.CASV, cancel <-chan struct{}) err
 	}
 
 	var oldFile *meta.File
-	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		oldFile, err = layer.GetFile(key)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if !from.Any {
 			if from.Present {
 				if oldFile == nil {
-					return nil, store.ErrCASFailure
+					return store.ErrCASFailure
 				}
 				if oldFile.SHA256 != from.SHA256 {
-					return nil, store.ErrCASFailure
+					return store.ErrCASFailure
 				}
 			} else {
 				if oldFile != nil {
-					return nil, store.ErrCASFailure
+					return store.ErrCASFailure
 				}
 			}
 		}
@@ -383,12 +374,12 @@ func (m *Multi) CAS(key string, from, to store.CASV, cancel <-chan struct{}) err
 		if to.Present {
 			err = layer.SetFile(file)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			err = layer.WALClear(prefixid)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		} else {
 			if from.Present || from.Any {
@@ -396,15 +387,15 @@ func (m *Multi) CAS(key string, from, to store.CASV, cancel <-chan struct{}) err
 				if err == kvl.ErrNotFound {
 					if !from.Any {
 						// internal inconsistency
-						return nil, store.ErrCASFailure
+						return store.ErrCASFailure
 					}
 				} else if err != nil {
-					return nil, err
+					return err
 				}
 			}
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		m.deleteChunks(file)
@@ -461,22 +452,21 @@ func (m *Multi) orderTargets() ([]store.Store, error) {
 		storesMap[id] = fe.Store
 	}
 
-	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var locs []meta.Location
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		locs, err := layer.AllLocations()
-		if err != nil {
-			return nil, err
-		}
-		return locs, nil
+		locs, err = layer.AllLocations()
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	for _, loc := range ret.([]meta.Location) {
+
+	for _, loc := range locs {
 		if loc.Dead {
 			delete(storesMap, loc.UUID)
 		}
@@ -597,24 +587,20 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte, prefixid [16]
 }
 
 func (m *Multi) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
-	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var files []meta.File
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		files, err := layer.ListFiles(after, limit)
-		if err != nil {
-			return nil, err
-		}
-
-		return files, nil
+		files, err = layer.ListFiles(after, limit)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	files := ret.([]meta.File)
 	names := make([]string, len(files))
 	for i, file := range files {
 		names[i] = file.Path

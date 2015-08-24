@@ -28,14 +28,12 @@ func (m *Multi) scrubWALLoop() error {
 }
 
 func (m *Multi) scrubWAL() error {
-	_, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	return m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		err = layer.WALClearOld()
-		return nil, err
+		return layer.WALClearOld()
 	})
-	return err
 }

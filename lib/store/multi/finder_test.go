@@ -62,22 +62,22 @@ func TestFinderScan(t *testing.T) {
 	}
 
 	// but should stay in the DB
-	_, err = db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err = db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		loc, err := layer.GetLocation(ds.UUID())
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if loc == nil {
-			return nil, fmt.Errorf("No location in database")
+			return fmt.Errorf("No location in database")
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		t.Fatalf("Couldn't verify locations: %v", err)

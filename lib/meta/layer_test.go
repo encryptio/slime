@@ -17,16 +17,16 @@ import (
 func TestLayerConfig(t *testing.T) {
 	db := ram.New()
 
-	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		value, err := l.GetConfig("a")
 		if err != nil {
 			t.Errorf("Nonexistent config returned unexpected error %v", err)
-			return nil, err
+			return err
 		}
 
 		if string(value) != "" {
@@ -37,13 +37,13 @@ func TestLayerConfig(t *testing.T) {
 		err = l.SetConfig("a", []byte("hello there"))
 		if err != nil {
 			t.Errorf("Couldn't set config variable: %v", err)
-			return nil, err
+			return err
 		}
 
 		value, err = l.GetConfig("a")
 		if err != nil {
 			t.Errorf("Couldn't get config variable \"a\": %v", err)
-			return nil, err
+			return err
 		}
 
 		if string(value) != "hello there" {
@@ -51,7 +51,7 @@ func TestLayerConfig(t *testing.T) {
 				string(value), "hello there")
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		t.Errorf("Couldn't run transaction: %v", err)
@@ -61,10 +61,10 @@ func TestLayerConfig(t *testing.T) {
 func TestLayerFileGetSetRemove(t *testing.T) {
 	db := ram.New()
 
-	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		fileA := File{
@@ -81,13 +81,13 @@ func TestLayerFileGetSetRemove(t *testing.T) {
 		err = l.SetFile(&fileA)
 		if err != nil {
 			t.Errorf("Couldn't SetFile(%#v): %v", fileA, err)
-			return nil, err
+			return err
 		}
 
 		f, err := l.GetFile("path to a")
 		if err != nil {
 			t.Errorf("Couldn't GetFile(path to a): %v", err)
-			return nil, err
+			return err
 		}
 
 		if !reflect.DeepEqual(f, &fileA) {
@@ -98,7 +98,7 @@ func TestLayerFileGetSetRemove(t *testing.T) {
 		f, err = l.GetFile("nonexistent")
 		if err != nil {
 			t.Errorf("Couldn't GetFile(nonexistent): %v", err)
-			return nil, err
+			return err
 		}
 
 		if f != nil {
@@ -110,7 +110,7 @@ func TestLayerFileGetSetRemove(t *testing.T) {
 			t.Errorf("RemoveFilePath(nonexistent) returned %v, but wanted %v",
 				err, kvl.ErrNotFound)
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 
@@ -118,20 +118,20 @@ func TestLayerFileGetSetRemove(t *testing.T) {
 		if err != nil {
 			t.Errorf("Couldn't RemoveFilePath(path to a): %v",
 				err)
-			return nil, err
+			return err
 		}
 
 		f, err = l.GetFile("path to a")
 		if err != nil {
 			t.Errorf("Couldn't GetFile(path to a): %v", err)
-			return nil, err
+			return err
 		}
 
 		if f != nil {
 			t.Errorf("GetFile(path to a) returned %#v, but wnated nil", f)
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		t.Errorf("Couldn't run transaction: %v", err)
@@ -141,10 +141,10 @@ func TestLayerFileGetSetRemove(t *testing.T) {
 func TestLayerFileGetByLocation(t *testing.T) {
 	db := ram.New()
 
-	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		idA := [16]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
@@ -175,19 +175,19 @@ func TestLayerFileGetByLocation(t *testing.T) {
 		err = l.SetFile(&fileA)
 		if err != nil {
 			t.Errorf("Couldn't SetFile(%#v): %v", fileA, err)
-			return nil, err
+			return err
 		}
 
 		err = l.SetFile(&fileB)
 		if err != nil {
 			t.Errorf("Couldn't SetFile(%#v): %v", fileB, err)
-			return nil, err
+			return err
 		}
 
 		fs, err := l.GetFilesByLocation(idB, 1)
 		if err != nil {
 			t.Errorf("Couldn't GetFilesByLocation: %v", err)
-			return nil, err
+			return err
 		}
 
 		if len(fs) != 1 || !reflect.DeepEqual(fs[0], fileA) {
@@ -198,7 +198,7 @@ func TestLayerFileGetByLocation(t *testing.T) {
 		fs, err = l.GetFilesByLocation(idA, 3)
 		if err != nil {
 			t.Errorf("Couldn't GetFilesByLocation: %v", err)
-			return nil, err
+			return err
 		}
 
 		if len(fs) != 1 || !reflect.DeepEqual(fs[0], fileB) {
@@ -209,7 +209,7 @@ func TestLayerFileGetByLocation(t *testing.T) {
 		fs, err = l.GetFilesByLocation(idC, 3)
 		if err != nil {
 			t.Errorf("Couldn't GetFilesByLocation: %v", err)
-			return nil, err
+			return err
 		}
 
 		if len(fs) != 2 ||
@@ -220,7 +220,7 @@ func TestLayerFileGetByLocation(t *testing.T) {
 				uuid.Fmt(idC), fs, []File{fileA, fileB})
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		t.Errorf("Couldn't run transaction: %v", err)
@@ -230,10 +230,10 @@ func TestLayerFileGetByLocation(t *testing.T) {
 func TestLayerFileList(t *testing.T) {
 	db := ram.New()
 
-	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for c := 'a'; c <= 'z'; c++ {
@@ -251,7 +251,7 @@ func TestLayerFileList(t *testing.T) {
 			err := l.SetFile(&f)
 			if err != nil {
 				t.Errorf("Couldn't SetFile: %v", err)
-				return nil, err
+				return err
 			}
 		}
 
@@ -293,7 +293,7 @@ func TestLayerFileList(t *testing.T) {
 			}
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		t.Errorf("Couldn't run transaction: %v", err)
@@ -303,10 +303,10 @@ func TestLayerFileList(t *testing.T) {
 func TestLayerLocationContents(t *testing.T) {
 	db := ram.New()
 
-	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		locA := uuid.Gen4()
@@ -350,7 +350,7 @@ func TestLayerLocationContents(t *testing.T) {
 			err := l.SetFile(&file)
 			if err != nil {
 				t.Errorf("Couldn't SetFile: %v", err)
-				return nil, err
+				return err
 			}
 		}
 
@@ -395,7 +395,7 @@ func TestLayerLocationContents(t *testing.T) {
 			if err != nil {
 				t.Errorf("Couldn't GetLocationContents(%#v, \"\", 0): %v",
 					uuid.Fmt(test.ID), err)
-				return nil, err
+				return err
 			}
 
 			if !reflect.DeepEqual(names, test.Entries) {
@@ -410,7 +410,7 @@ func TestLayerLocationContents(t *testing.T) {
 				if err != nil {
 					t.Errorf("Couldn't GetLocationContents(%#v, %#v, %v): %v",
 						uuid.Fmt(test.ID), after, 1, err)
-					return nil, err
+					return err
 				}
 
 				if len(localNames) > 1 {
@@ -432,7 +432,7 @@ func TestLayerLocationContents(t *testing.T) {
 			}
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		t.Errorf("Couldn't run transaction: %v", err)
@@ -442,16 +442,16 @@ func TestLayerLocationContents(t *testing.T) {
 func TestLayerWALConcurrent(t *testing.T) {
 	db := ram.New()
 
-	_, err := db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := db.RunTx(func(ctx kvl.Ctx) error {
 		l, err := Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		id := uuid.Gen4()
 		out, err := l.WALCheck(id)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if out != false {
 			t.Errorf("WALCheck returned %v on an empty database", out)
@@ -460,12 +460,12 @@ func TestLayerWALConcurrent(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			err = l.WALMark(id)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			out, err = l.WALCheck(id)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if out != true {
 				t.Errorf("WALCheck returned %v after marking %v times", out, i+1)
@@ -475,12 +475,12 @@ func TestLayerWALConcurrent(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			err = l.WALClear(id)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			out, err = l.WALCheck(id)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if out != (i < 4) {
 				t.Errorf("WALCheck returned %v after unmarking %v times (should have %v marks)", out, i+1, 5-(i+1))
@@ -489,13 +489,13 @@ func TestLayerWALConcurrent(t *testing.T) {
 
 		out, err = l.WALCheck(id)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if out != false {
 			t.Errorf("WALCheck returned %v on an empty database after unmarking", out)
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		t.Fatalf("Couldn't run transaction: %v", err)

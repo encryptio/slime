@@ -49,57 +49,54 @@ func (m *Multi) scrubFilesLoop() error {
 }
 
 func (m *Multi) scrubFilesStep() (bool, error) {
-	ret, err := m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var files []meta.File
+	err := m.db.RunTx(func(ctx kvl.Ctx) error {
+		files = nil
+
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		startKey, err := layer.GetConfig("scrubpos")
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		files, err := layer.ListFiles(string(startKey), scrubFilesCount)
+		files, err = layer.ListFiles(string(startKey), scrubFilesCount)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if len(files) > 0 {
 			err = layer.SetConfig("scrubpos", []byte(files[len(files)-1].Path))
 			if err != nil {
-				return nil, err
+				return err
 			}
 		} else {
 			err = layer.SetConfig("scrubpos", []byte{})
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 
-		return files, nil
+		return nil
 	})
 	if err != nil {
 		return false, err
 	}
 
-	files := ret.([]meta.File)
-
-	ret, err = m.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	var locs []meta.Location
+	err = m.db.RunTx(func(ctx kvl.Ctx) error {
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		allLocations, err := layer.AllLocations()
-		if err != nil {
-			return nil, err
-		}
-
-		return allLocations, nil
+		locs, err = layer.AllLocations()
+		return err
 	})
 
-	locs := ret.([]meta.Location)
 	allLocations := make(map[[16]byte]meta.Location, len(locs))
 	for _, loc := range locs {
 		allLocations[loc.UUID] = loc

@@ -157,29 +157,24 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			_, err = h.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			err = h.db.RunTx(func(ctx kvl.Ctx) error {
 				layer, err := meta.Open(ctx)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				loc, err := layer.GetLocation(id)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				if loc == nil {
-					return nil, kvl.ErrNotFound
+					return kvl.ErrNotFound
 				}
 
 				loc.Dead = req.Operation == "dead"
 
-				err = layer.SetLocation(*loc)
-				if err != nil {
-					return nil, err
-				}
-
-				return nil, nil
+				return layer.SetLocation(*loc)
 			})
 			if err != nil {
 				if err == kvl.ErrNotFound {
@@ -204,27 +199,22 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			_, err = h.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+			err = h.db.RunTx(func(ctx kvl.Ctx) error {
 				layer, err := meta.Open(ctx)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				loc, err := layer.GetLocation(id)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				if loc == nil {
-					return nil, kvl.ErrNotFound
+					return kvl.ErrNotFound
 				}
 
-				err = layer.DeleteLocation(*loc)
-				if err != nil {
-					return nil, err
-				}
-
-				return nil, nil
+				return layer.DeleteLocation(*loc)
 			})
 			if err != nil {
 				if err == kvl.ErrNotFound {
@@ -249,17 +239,17 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 	finderEntries := h.finder.Stores()
 
 	ret := make([]storesResponseEntry, 0, 10)
-	_, err := h.db.RunTx(func(ctx kvl.Ctx) (interface{}, error) {
+	err := h.db.RunTx(func(ctx kvl.Ctx) error {
 		ret = ret[:0]
 
 		layer, err := meta.Open(ctx)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		locs, err := layer.AllLocations()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		for _, loc := range locs {
@@ -276,7 +266,7 @@ func (h *Handler) serveStores(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		return nil, nil
+		return nil
 	})
 	if err != nil {
 		httputil.RespondJSONError(w, err.Error(), http.StatusInternalServerError)
