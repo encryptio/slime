@@ -237,20 +237,7 @@ func (m *Multi) reconstruct(f *meta.File, cancel <-chan struct{}) ([]byte, error
 }
 
 func (m *Multi) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
-	var file *meta.File
-	err := m.db.RunTx(func(ctx kvl.Ctx) error {
-		layer, err := meta.Open(ctx)
-		if err != nil {
-			return err
-		}
-
-		file, err = layer.GetFile(key)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
+	file, err := m.getFile(key)
 	if err != nil {
 		return nil, err
 	}
