@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
-	"runtime"
 	"time"
 
 	"git.encryptio.com/slime/lib/chunkserver"
@@ -197,7 +196,6 @@ func dbReindex() {
 
 func main() {
 	initRandom()
-	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	log.SetFlags(log.Lshortfile)
 
