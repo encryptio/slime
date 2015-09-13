@@ -309,7 +309,7 @@ func TestMultiHungStoreDoesntBlock(t *testing.T) {
 				t.Errorf("couldn't get key: %v", err)
 			}
 		case <-time.After(100 * time.Millisecond):
-			t.Fatalf("timed out waiting for read")
+			t.Errorf("timed out waiting for read")
 		}
 
 		k.setBlocked(false)
