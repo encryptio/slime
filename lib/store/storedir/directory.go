@@ -113,6 +113,10 @@ func CreateDirectory(dir string) error {
 
 // OpenDirectory opens an existing directory store.
 func OpenDirectory(dir string, perFileWait, perByteWait time.Duration) (*Directory, error) {
+	return openDirectoryImpl(dir, perFileWait, perByteWait, false)
+}
+
+func openDirectoryImpl(dir string, perFileWait, perByteWait time.Duration, disableBackgroundLoops bool) (*Directory, error) {
 	data, err := ioutil.ReadFile(filepath.Join(dir, "uuid"))
 	if err != nil {
 		return nil, err
@@ -141,8 +145,10 @@ func OpenDirectory(dir string, perFileWait, perByteWait time.Duration) (*Directo
 	}
 
 	ds.tomb.Go(func() error {
-		ds.tomb.Go(ds.hashcheckLoop)
-		ds.tomb.Go(ds.resplitLoop)
+		if !disableBackgroundLoops {
+			ds.tomb.Go(ds.hashcheckLoop)
+			ds.tomb.Go(ds.resplitLoop)
+		}
 		return nil
 	})
 

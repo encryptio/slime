@@ -18,7 +18,7 @@ func MakeTestingDirectory(t *testing.T) (*Directory, string) {
 		t.Fatalf("CreateDirectory returned unexpected error %v", err)
 	}
 
-	ds, err := OpenDirectory(tmpDir, 0, 0)
+	ds, err := openDirectoryImpl(tmpDir, 0, 0, true)
 	if err != nil {
 		os.RemoveAll(tmpDir)
 		t.Fatalf("OpenDirectory returned unexpected error %v", err)
