@@ -279,6 +279,7 @@ func TestMultiScrubRemovesUnreferencedChunks(t *testing.T) {
 	killers[0].setKilled(false)
 	storetests.ShouldListCount(t, multi, 0)
 	storetests.ShouldListCount(t, dirs[0], 1)
+	multi.finder.Rescan()
 	multi.scrubAll()
 	storetests.ShouldListCount(t, dirs[0], 0)
 }
