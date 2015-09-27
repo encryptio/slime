@@ -165,7 +165,8 @@ func chunkServer() {
 	loadConfigOrDie()
 
 	stores := make([]store.Store, len(config.Chunk.Dirs))
-	for i, dir := range config.Chunk.Dirs {
+	for i := range config.Chunk.Dirs {
+		dir := config.Chunk.Dirs[i]
 		construct := func() store.Store {
 			ds, err := storedir.OpenDirectory(
 				dir,
