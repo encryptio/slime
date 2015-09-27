@@ -135,6 +135,13 @@ If the machine wasn't running any other locations, use the proxy API to scan the
 chunk server. If it is running other locations, the proxy servers will find the
 new drive on their periodic scans.
 
+A Note About Failing Drives
+===========================
+
+Data on failing and missing locations *will not be rebuilt* unless the locations
+are marked dead. Monitor your cluster and mark drives dead aggressively. If you
+were too aggressive, you can always change your mind and mark it undead.
+
 Redundancy Level
 ================
 
@@ -177,9 +184,18 @@ There is a nagios plugin for slime-proxy at nagios-check-slime-proxy, which
 tests connectivity to the proxy as well as its connectivity to all of the chunk
 servers.
 
-A Note About Failing Drives
-===========================
+Supervision
+===========
 
-Data on failing and missing locations *will not be rebuilt* unless the locations
-are marked dead. Monitor your cluster and mark drives dead aggressively. If you
-were too aggressive, you can always change your mind and mark it undead.
+Both the proxy server and the chunk server crash on major failures, and should
+be run in a process supervisor, such as runit or systemd.
+
+Logging
+=======
+
+Both the proxy server and the chunk server log to stdout. Panic messages are
+sent to stderr.
+
+Your supervisor should be able to redirect these to a logging system of your
+choice; for example, you can add a log service to a runit service that runs
+logger(1), svlogd(8), or anything else.
