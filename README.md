@@ -19,7 +19,7 @@ Quickstart
 This is how you can get a slime instance running locally to try it out. If you
 want to do a more production-style deployment, see PRODUCTION.md for details.
 
-Compile the slime daemons and control tools:
+Compile the slime daemon and control tool:
 
     $ go install git.encryptio.com/slime git.encryptio.com/slime/slimectl
 
@@ -36,15 +36,23 @@ Create a few storage directories:
     $ slime fmt-dir /tmp/slime-2
     $ slime fmt-dir /tmp/slime-3
 
+Create a config file:
+
+    $ cat > server.toml
+    [proxy.database]
+    type = "postgresql"
+    dsn = "user=slime password=secret sslmode=disable"
+    [chunk]
+    dirs = ["/tmp/slime-1", "/tmp/slime-2", "/tmp/slime-3"]
+
 Start the chunk server (it will listen on port 17941 by default):
 
-    $ slime chunk-server /tmp/slime-{1,2,3}
+    $ slime chunk-server server.toml
     <command will not return>
 
 Start the proxy server (it will listen on port 17942 by default):
 
-    $ export SLIME_PGDSN="user=slime dbname=slime password=secret sslmode=disable"
-    $ slime proxy-server
+    $ slime proxy-server server.toml
     <command will not return>
 
 Tell the proxy server about the chunk server:
@@ -109,8 +117,8 @@ stores.
 `slimectl store list` will show you a list of the known stores.
 
 You must tell the proxy server explicitly to scan a chunk server if it's on a
-new or different URL; `slimectl store scan http://chunkserver` to scan a new
-chunk server (or an old one at a new URL.)
+new URL; `slimectl store scan http://chunkserver` to scan a new chunk server (or
+an old one at a new URL.)
 
 Each directory has a UUID file in it; if you move drives between servers, then
 the URL stored in the database will be updated on the first successful scan of
@@ -130,8 +138,8 @@ drives.
 
 Note that you can even mark a drive that's still connected "dead", and slime
 will try to read data from it if it needs it, but will still rewrite the data to
-no longer depend on that drive. This can be useful because it doesn't reduce
-your effective redundancy while rebalancing off that drive.
+no longer depend on that drive. This can be useful because you don't lose
+failure tolerance while rebalancing.
 
 Recovery from loss of files on a drive
 --------------------------------------

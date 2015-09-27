@@ -1,0 +1,59 @@
+# This is an annotated example configuration file for slime servers.
+# It can be modified and placed into /etc/slime/server.toml
+#
+# Lines that are not commented out are ones you should always set explicitly.
+# Commented out config lines are ones that you might want to set for certain
+# situations, but are probably fine at their defaults.
+
+################################################################################
+# Options specific to the proxy server
+[proxy]
+
+# The address to listen on, host:port format. An empty host means "listen on all
+# interfaces." Set to "none" to disable listening on any ports.
+listen = ":17942"
+
+# Maximum number of parallel requests to handle at once. Any requests on top of
+# this will wait until a slot is available.
+#parallel-requests = 50
+
+# Number of background scrubber threads to run. Set to -1 to disable scrubbing
+# on this proxy.
+#scrubbers = 1
+
+# Enable /debug HTTP API endpoints
+#debug = false
+
+# Database to connect to; currently only postgresql is supported. You might need
+# sslmode=disable in the dsn if you haven't set up SSL.
+[proxy.database]
+type = "postgresql"
+dsn = "user=username password=correcthorsebatterystaple"
+
+################################################################################
+# Options specific to the chunk server
+[chunk]
+
+# The address to listen on, host:port format. An empty host means "listen on all
+# interfaces."
+listen = ":17941"
+
+# Maximum number of parallel requests to handle at once. Any requests on top of
+# this will wait until a slot is available.
+#parallel-requests = 50
+
+# Directories to consider as storage directories. Note that these must already
+# be formatted, and the chunk server will poll to see if they have appeared or
+# disappeared.
+dirs = [
+    "/mnt/storage_a/slime",
+    "/mnt/storage_b/slime",
+]
+
+# Scrubber options
+[chunk.scrubber]
+    # Amount of time for the scrubber to sleep between files.
+    #sleep-per-file = "50ms"
+
+    # Amount of time for the scrubber to sleep based on the file size.
+    #sleep-per-byte = "1500ns"

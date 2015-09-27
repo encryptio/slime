@@ -100,8 +100,9 @@ Ensure they have good connectivity to the database; good connectivity to the
 chunk servers is less important.
 
 All chunk data is held in memory while it is being reconstructed. Limit the
-number of parallel http requests handled with the -parallel flag. A conservative
-estimate of RAM usage would be 4x the size of the file being requested in RAM.
+number of parallel http requests handled with the parallel-requests config
+option. A conservative estimate of RAM usage would be 4x the size of the file
+being requested in RAM.
 
 Getting data from the proxy servers is relatively expensive, but getting
 metadata (file listings, HEAD requests, and matching If-None-Match GETs) is very

@@ -1,0 +1,8 @@
+# This is an annotated example configuration file for slimectl.
+# It can be modified and placed into ~/.config/slimectl.toml
+
+# Always use full-width tables, regardless of terminal size
+#wide = false
+
+# Base URL for a proxy server in the cluster
+base = "http://slime.internal.company.com:17942/"

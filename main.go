@@ -3,7 +3,7 @@ package main
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"flag"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -20,7 +20,96 @@ import (
 	"git.encryptio.com/slime/lib/store/storedir"
 
 	"git.encryptio.com/kvl/backend/psql"
+	"github.com/naoina/toml"
 )
+
+const (
+	defaultConfigLocation = "/etc/slime/server.toml"
+)
+
+type tomlDuration struct {
+	time.Duration
+}
+
+func (d *tomlDuration) UnmarshalTOML(b []byte) error {
+	// A duration has no escaped characters and no structural forms but a
+	// string. This hacky parsing is sufficient.
+
+	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		return errors.New("bad duration format")
+	}
+
+	var err error
+	d.Duration, err = time.ParseDuration(string(b[1 : len(b)-1]))
+	return err
+}
+
+var config struct {
+	Proxy struct {
+		Listen           string
+		ParallelRequests int `toml:"parallel-requests"`
+		Debug            bool
+		Scrubbers        int
+		Database         struct {
+			Type string
+			DSN  string
+		}
+	}
+	Chunk struct {
+		Listen           string
+		ParallelRequests int `toml:"parallel-requests"`
+		Dirs             []string
+		Scrubber         struct {
+			SleepPerFile tomlDuration `toml:"sleep-per-file"`
+			SleepPerByte tomlDuration `toml:"sleep-per-byte"`
+		}
+	}
+}
+
+func loadConfigOrDie() {
+	var configName string
+	if len(os.Args) < 2 {
+		configName = defaultConfigLocation
+	} else {
+		configName = os.Args[1]
+		os.Args = append(os.Args[0:1], os.Args[2:]...)
+	}
+
+	fh, err := os.Open(configName)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+	defer fh.Close()
+
+	err = toml.NewDecoder(fh).Decode(&config)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+
+	if config.Proxy.Listen == "" {
+		config.Proxy.Listen = "127.0.0.1:17942"
+	}
+	if config.Proxy.ParallelRequests <= 0 {
+		config.Proxy.ParallelRequests = 50
+	}
+	if config.Proxy.Scrubbers == 0 {
+		config.Proxy.Scrubbers = 1
+	}
+	if config.Chunk.Listen == "" {
+		config.Chunk.Listen = "127.0.0.1:17941"
+	}
+	if config.Chunk.ParallelRequests <= 0 {
+		config.Chunk.ParallelRequests = 50
+	}
+	if config.Chunk.Scrubber.SleepPerFile.Duration <= 0 {
+		config.Chunk.Scrubber.SleepPerFile.Duration = 50 * time.Millisecond
+	}
+	if config.Chunk.Scrubber.SleepPerByte.Duration <= 0 {
+		config.Chunk.Scrubber.SleepPerByte.Duration = 1500 * time.Nanosecond
+	}
+}
 
 func initRandom() {
 	var buf [8]byte
@@ -35,14 +124,18 @@ func initRandom() {
 func help() {
 	fmt.Fprintf(os.Stderr, "Usage: %v command [args]\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "Commands:\n")
+	fmt.Fprintf(os.Stderr, "    chunk-server [config-file.toml]\n")
+	fmt.Fprintf(os.Stderr, "        run a chunk server serving the directories in the config file\n")
+	fmt.Fprintf(os.Stderr, "    proxy-server [config-file.toml]\n")
+	fmt.Fprintf(os.Stderr, "        run a proxy server\n")
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "    db-reindex [config-file.toml]\n")
+	fmt.Fprintf(os.Stderr, "        reindex a database\n")
 	fmt.Fprintf(os.Stderr, "    fmt-dir dir\n")
 	fmt.Fprintf(os.Stderr, "        initialize a new directory store\n")
-	fmt.Fprintf(os.Stderr, "    chunk-server dir1 dir2 ...\n")
-	fmt.Fprintf(os.Stderr, "        run a chunk server serving the given directories\n")
-	fmt.Fprintf(os.Stderr, "    proxy-server ...\n")
-	fmt.Fprintf(os.Stderr, "        run a proxy server (see -h for details)\n")
-	fmt.Fprintf(os.Stderr, "    db-reindex\n")
-	fmt.Fprintf(os.Stderr, "        reindex a database\n")
+	fmt.Fprintf(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "If config-file.toml is needed but not given, it defaults to:\n")
+	fmt.Fprintf(os.Stderr, "    %s\n", defaultConfigLocation)
 }
 
 func serveOrDie(listen string, h http.Handler) {
@@ -69,33 +162,16 @@ func fmtDir() {
 }
 
 func chunkServer() {
-	listen := flag.String("listen", ":17941",
-		"Address and port to serve on")
+	loadConfigOrDie()
 
-	sleepFile := flag.Duration("sleep-file", 50*time.Millisecond,
-		"Sleep per file checked")
-	sleepByte := flag.Duration("sleep-byte", 1500*time.Nanosecond,
-		"Sleep per byte checked")
-
-	parallel := flag.Int("parallel", 50,
-		"max number of requests to handle in parallel")
-
-	logEnabled := flag.Bool("log", true,
-		"enable access logging")
-
-	flag.Parse()
-
-	dirs := flag.Args()
-
-	if len(dirs) == 0 {
-		log.Fatalf("Must be given a list of directories to serve")
-	}
-
-	stores := make([]store.Store, len(dirs))
-	for i := range dirs {
-		dir := dirs[i]
+	stores := make([]store.Store, len(config.Chunk.Dirs))
+	for i, dir := range config.Chunk.Dirs {
 		construct := func() store.Store {
-			ds, err := storedir.OpenDirectory(dir, *sleepFile, *sleepByte)
+			ds, err := storedir.OpenDirectory(
+				dir,
+				config.Chunk.Scrubber.SleepPerFile.Duration,
+				config.Chunk.Scrubber.SleepPerByte.Duration,
+			)
 			if err != nil {
 				return nil
 			}
@@ -111,50 +187,33 @@ func chunkServer() {
 		log.Fatalf("Couldn't initialize handler: %v", err)
 	}
 
-	if *parallel > 0 {
-		h = httputil.NewLimitParallelism(*parallel, h)
-	}
-
-	if *logEnabled {
-		h = httputil.LogHTTPRequests(h)
-	}
-
-	serveOrDie(*listen, h)
+	h = httputil.NewLimitParallelism(config.Chunk.ParallelRequests, h)
+	h = httputil.LogHTTPRequests(h)
+	serveOrDie(config.Chunk.Listen, h)
 }
 
 func proxyServer() {
-	listen := flag.String("listen", ":17942",
-		"Address and port to serve on (set to \"none\" to not listen)")
-	logEnabled := flag.Bool("log", true,
-		"enable access logging")
-	parallel := flag.Int("parallel", 50,
-		"max number of requests to handle in parallel")
-	scrubbers := flag.Int("scrubbers", 1,
-		"number of concurrent scrubbers (of all types)")
-	debug := flag.Bool("debug", false,
-		"enable /debug/pprof http endpoints")
-	flag.Parse()
+	loadConfigOrDie()
 
-	db, err := psql.Open(os.Getenv("SLIME_PGDSN"))
+	if config.Proxy.Database.Type != "postgresql" {
+		log.Fatalf("\"postgresql\" is the only supported database type")
+	}
+
+	db, err := psql.Open(config.Proxy.Database.DSN)
 	if err != nil {
-		if os.Getenv("SLIME_PGDSN") == "" {
-			log.Printf("Set SLIME_PGDSN for PostgreSQL driver options")
-		}
 		log.Fatalf("Couldn't connect to postgresql database: %v", err)
 	}
 	defer db.Close()
 
 	var h http.Handler
-	h, err = proxyserver.New(db, *scrubbers)
+	h, err = proxyserver.New(db, config.Proxy.Scrubbers)
 	if err != nil {
 		log.Fatalf("Couldn't initialize handler: %v", err)
 	}
 
-	if *parallel > 0 {
-		h = httputil.NewLimitParallelism(*parallel, h)
-	}
+	h = httputil.NewLimitParallelism(config.Proxy.ParallelRequests, h)
 
-	if *debug != false {
+	if config.Proxy.Debug != false {
 		mux := http.NewServeMux()
 		mux.Handle("/", h)
 		mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
@@ -165,25 +224,26 @@ func proxyServer() {
 		h = mux
 	}
 
-	if *logEnabled {
-		h = httputil.LogHTTPRequests(h)
-	}
+	h = httputil.LogHTTPRequests(h)
 
-	if *listen == "none" {
+	if config.Proxy.Listen == "none" {
 		for {
 			time.Sleep(time.Hour)
 		}
 	} else {
-		serveOrDie(*listen, h)
+		serveOrDie(config.Proxy.Listen, h)
 	}
 }
 
 func dbReindex() {
-	db, err := psql.Open(os.Getenv("SLIME_PGDSN"))
+	loadConfigOrDie()
+
+	if config.Proxy.Database.Type != "postgresql" {
+		log.Fatalf("\"postgresql\" is the only supported database type")
+	}
+
+	db, err := psql.Open(config.Proxy.Database.DSN)
 	if err != nil {
-		if os.Getenv("SLIME_PGDSN") == "" {
-			log.Printf("Set SLIME_PGDSN for PostgreSQL driver options")
-		}
 		log.Fatalf("Couldn't connect to postgresql database: %v", err)
 	}
 	defer db.Close()
