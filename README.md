@@ -8,11 +8,10 @@ be prepared to run into bugs that may destroy data in slime.
 Dependencies
 ------------
 
-slime requires Go 1.5.
+slime requires Go 1.5 to build and test.
 
 PostgreSQL MUST be 9.1 or later; true serializability was implemented in that
-version. slime may eat all your data silently if you use an older PostgreSQL
-version; you have been warned.
+version.
 
 Quickstart
 ----------
