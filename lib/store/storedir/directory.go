@@ -155,6 +155,16 @@ func openDirectoryImpl(dir string, perFileWait, perByteWait time.Duration, disab
 	return ds, nil
 }
 
+func readdirnames(path string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	list, err := f.Readdirnames(-1)
+	f.Close()
+	return list, err
+}
+
 func (ds *Directory) loadSplitsAndRecover() error {
 	fis, err := ioutil.ReadDir(filepath.Join(ds.Dir, "data"))
 	if err != nil {
@@ -178,7 +188,7 @@ func (ds *Directory) loadSplitsAndRecover() error {
 
 		thisPath := filepath.Join(ds.Dir, "data", this.Name)
 
-		contents, err := ioutil.ReadDir(thisPath)
+		contents, err := readdirnames(thisPath)
 		if err != nil {
 			return err
 		}
@@ -194,9 +204,7 @@ func (ds *Directory) loadSplitsAndRecover() error {
 		}
 
 		foundOne := false
-		for _, content := range contents {
-			name := content.Name()
-
+		for _, name := range contents {
 			if strings.HasSuffix(name, ".old") || strings.HasSuffix(name, ".new") {
 				// an incomplete write, recover from it
 
