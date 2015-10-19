@@ -370,11 +370,6 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 		url = f.fs.BaseURL + f.key
 	}
 
-	if data, ok := getCached(url); ok {
-		n := copy(p, data[offsetInChunk:])
-		return n, nil
-	}
-
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return 0, err
@@ -398,13 +393,11 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 		return io.ReadFull(resp.Body, p)
 	}
 
-	// full response; write the whole thing to the cache
+	// full response
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return 0, err
 	}
-
-	setCached(url, data)
 
 	n := copy(p, data[offsetInChunk:])
 	return n, nil
