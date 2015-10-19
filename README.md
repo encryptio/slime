@@ -176,6 +176,9 @@ Consistency and Availability Model
 Slime's metadata and data are highly consistent. If an operation cannot be
 guaranteed consistent, then an error is returned instead.
 
+A proxy's cache is kept consistent with the data underneath it; no read will
+return stale data, even if a proxy's in-memory cache is involved.
+
 Slime requires a serializable metadata database, but inherits that database's
 availability model for metadata, meaning it can only support CP distributed
 databases in terms of the CAP theorem. Non-distributed serializable databases

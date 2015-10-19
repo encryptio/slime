@@ -54,6 +54,7 @@ var config struct {
 			Type string
 			DSN  string
 		}
+		CacheSize int `toml:"cache-size"`
 	}
 	Chunk struct {
 		Listen           string
@@ -207,7 +208,7 @@ func proxyServer() {
 	defer db.Close()
 
 	var h http.Handler
-	h, err = proxyserver.New(db, config.Proxy.Scrubbers)
+	h, err = proxyserver.New(db, config.Proxy.Scrubbers, config.Proxy.CacheSize)
 	if err != nil {
 		log.Fatalf("Couldn't initialize handler: %v", err)
 	}

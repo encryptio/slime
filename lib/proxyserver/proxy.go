@@ -9,6 +9,8 @@ import (
 
 	"git.encryptio.com/slime/lib/httputil"
 	"git.encryptio.com/slime/lib/meta"
+	"git.encryptio.com/slime/lib/store"
+	"git.encryptio.com/slime/lib/store/cache"
 	"git.encryptio.com/slime/lib/store/multi"
 	"git.encryptio.com/slime/lib/store/storehttp"
 	"git.encryptio.com/slime/lib/uuid"
@@ -23,7 +25,7 @@ type Handler struct {
 	finder     *multi.Finder
 }
 
-func New(db kvl.DB, scrubbers int) (*Handler, error) {
+func New(db kvl.DB, scrubbers int, cacheSize int) (*Handler, error) {
 	finder, err := multi.NewFinder(db)
 	if err != nil {
 		return nil, err
@@ -35,9 +37,14 @@ func New(db kvl.DB, scrubbers int) (*Handler, error) {
 		return nil, err
 	}
 
+	var dataStore store.Store = multi
+	if cacheSize > 0 {
+		dataStore = cache.New(cacheSize, multi)
+	}
+
 	return &Handler{
 		db:         db,
-		dataServer: storehttp.NewServer(multi),
+		dataServer: storehttp.NewServer(dataStore),
 		multi:      multi,
 		finder:     finder,
 	}, nil

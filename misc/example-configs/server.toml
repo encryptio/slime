@@ -24,6 +24,10 @@ listen = ":17942"
 # Enable /debug HTTP API endpoints
 #debug = false
 
+# Set the number of bytes to use for in-memory caching. If not set, no cache is
+# used.
+cache-size = 268435456
+
 # Database to connect to; currently only postgresql is supported. You might need
 # sslmode=disable in the dsn if you haven't set up SSL.
 [proxy.database]

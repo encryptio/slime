@@ -62,7 +62,7 @@ great option, and ext3/ext4 is acceptable.
 
 Do not use the "nobarrier"/"async" or other safety-destroying options when
 mounting filesystems to be used with slime. The performance benefit is nearly
-nothing, even if you have a battery-backed cache card (which will quickly
+nothing, even if you don't have a battery-backed cache card (which will quickly
 respond to barrier requests internally.)
 
 Each drive you want to manage should NOT be done through RAID, and should be
@@ -106,10 +106,12 @@ being requested in RAM.
 
 Getting data from the proxy servers is relatively expensive, but getting
 metadata (file listings, HEAD requests, and matching If-None-Match GETs) is very
-cheap. If your expected load is cachable, you should run an http cache in front
-of the slime proxy servers (ensure that the cache you choose supports etags.)
-Note that etag based caching can be 100% precise with no incorrect/out-of-date
-results if configured properly.
+cheap.
+
+Enable the largest cache you can fit in memory using the cache-size setting to
+reduce the cost of repeated reads to the same values. Note that the cache is
+highly consistent; it will never return stale data. When choosing a value, keep
+the temporary memory you need for in-flight requests in mind; see above.
 
 Removing Drives in a Running Cluster
 ====================================
