@@ -6,6 +6,14 @@
 # situations, but are probably fine at their defaults.
 
 ################################################################################
+# General options for all environments
+
+# gc-percent is the target amount of unused space, specified as a percentage of
+# used space, in the Go runtime. If you use a large cache, lower this number.
+# Very low values will cause high CPU load.
+#gc-percent = 20
+
+################################################################################
 # Options specific to the proxy server
 [proxy]
 
@@ -25,7 +33,7 @@ listen = ":17942"
 #debug = false
 
 # Set the number of bytes to use for in-memory caching. If not set, no cache is
-# used.
+# used. Also note the gc-percent option.
 cache-size = 268435456
 
 # Database to connect to; currently only postgresql is supported. You might need

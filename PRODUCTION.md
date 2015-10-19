@@ -101,17 +101,20 @@ chunk servers is less important.
 
 All chunk data is held in memory while it is being reconstructed. Limit the
 number of parallel http requests handled with the parallel-requests config
-option. A conservative estimate of RAM usage would be 4x the size of the file
-being requested in RAM.
+option.
 
 Getting data from the proxy servers is relatively expensive, but getting
 metadata (file listings, HEAD requests, and matching If-None-Match GETs) is very
 cheap.
 
-Enable the largest cache you can fit in memory using the cache-size setting to
-reduce the cost of repeated reads to the same values. Note that the cache is
-highly consistent; it will never return stale data. When choosing a value, keep
-the temporary memory you need for in-flight requests in mind; see above.
+Enable the largest cache you can fit in memory to reduce the cost of repeated
+reads to the same values. Note that the cache is highly consistent; it will
+never return stale data.
+
+The memory usage of the proxy server will be roughly equal to the amount of
+in-flight data in requests times three, plus the cache size, plus some memory
+for various structures, all times (100 + gcpercent)/100. gc-percent defaults to
+20 (unlike the Go runtime default.)
 
 Removing Drives in a Running Cluster
 ====================================

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"git.encryptio.com/slime/lib/chunkserver"
@@ -45,6 +46,8 @@ func (d *tomlDuration) UnmarshalTOML(b []byte) error {
 }
 
 var config struct {
+	GCPercent int `toml:"gc-percent"`
+
 	Proxy struct {
 		Listen           string
 		ParallelRequests int `toml:"parallel-requests"`
@@ -89,6 +92,10 @@ func loadConfigOrDie() {
 		os.Exit(1)
 	}
 
+	if config.GCPercent <= 0 {
+		config.GCPercent = 20
+	}
+
 	if config.Proxy.Listen == "" {
 		config.Proxy.Listen = "127.0.0.1:17942"
 	}
@@ -98,6 +105,7 @@ func loadConfigOrDie() {
 	if config.Proxy.Scrubbers == 0 {
 		config.Proxy.Scrubbers = 1
 	}
+
 	if config.Chunk.Listen == "" {
 		config.Chunk.Listen = "127.0.0.1:17941"
 	}
@@ -164,6 +172,7 @@ func fmtDir() {
 
 func chunkServer() {
 	loadConfigOrDie()
+	debug.SetGCPercent(config.GCPercent)
 
 	stores := make([]store.Store, len(config.Chunk.Dirs))
 	for i := range config.Chunk.Dirs {
@@ -196,6 +205,7 @@ func chunkServer() {
 
 func proxyServer() {
 	loadConfigOrDie()
+	debug.SetGCPercent(config.GCPercent)
 
 	if config.Proxy.Database.Type != "postgresql" {
 		log.Fatalf("\"postgresql\" is the only supported database type")
@@ -239,6 +249,7 @@ func proxyServer() {
 
 func dbReindex() {
 	loadConfigOrDie()
+	debug.SetGCPercent(config.GCPercent)
 
 	if config.Proxy.Database.Type != "postgresql" {
 		log.Fatalf("\"postgresql\" is the only supported database type")
