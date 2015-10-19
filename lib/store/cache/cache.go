@@ -59,6 +59,37 @@ func (c *Cache) Name() string {
 }
 
 func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+	d, st, err := c.getUncopied(key, cancel)
+	if err != nil {
+		return nil, store.Stat{}, err
+	}
+	d2 := make([]byte, len(d))
+	copy(d2, d)
+	return d2, st, err
+}
+
+func (c *Cache) GetPartial(key string, start, length int, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+	d, st, err := c.getUncopied(key, cancel)
+	if err != nil {
+		return nil, store.Stat{}, err
+	}
+	if start < 0 {
+		start = 0
+	}
+	if length < 0 || start+length > len(d) {
+		length = len(d) - start
+	}
+	if length <= 0 {
+		return []byte{}, st, nil
+	}
+	d2 := make([]byte, length)
+	if copy(d2, d[start:]) != length {
+		panic("never happens")
+	}
+	return d2, st, nil
+}
+
+func (c *Cache) getUncopied(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	c.mu.Lock()
 	ce, ok := c.entries[key]
 	if !ok {
@@ -131,9 +162,8 @@ func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, err
 	}
 
 	// Get successful and complete.
-	d := make([]byte, len(ce.Data))
-	copy(d, ce.Data)
-	return d, ce.Stat, nil
+
+	return ce.Data, ce.Stat, nil
 }
 
 func (c *Cache) getWorker(ce *cacheEntry) {

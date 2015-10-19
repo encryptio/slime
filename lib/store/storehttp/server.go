@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -43,12 +44,15 @@ const MaxFileSize = 1024 * 1024 * 64 // 64MiB
 // atomically swap if it does. The special ETag "nonexistent" will only match
 // nonexistent values.
 type Server struct {
-	store store.Store
+	store      store.Store
+	rangeStore store.RangeReadStore // nil if unsupported
 }
 
 // NewServer creates a Server out of a Store256.
 func NewServer(s store.Store) *Server {
-	return &Server{s}
+	h := &Server{store: s}
+	h.rangeStore, _ = s.(store.RangeReadStore)
+	return h
 }
 
 func parseIfMatch(ifMatch string) (store.CASV, error) {
@@ -73,6 +77,39 @@ func parseIfMatch(ifMatch string) (store.CASV, error) {
 			SHA256:  cas,
 		}, nil
 	}
+}
+
+func parseRange(rang string) (int, int, bool) {
+	if !strings.HasPrefix(rang, "bytes=") {
+		return 0, 0, false
+	}
+	rang = strings.TrimPrefix(rang, "bytes=")
+
+	// We accept bytes=START- and bytes=START-END, but no other forms.
+
+	parts := strings.SplitN(rang, "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+
+	start64, err := strconv.ParseInt(parts[0], 10, 0)
+	if err != nil {
+		return 0, 0, false
+	}
+	start := int(start64)
+
+	var length int
+	if parts[1] == "" {
+		length = -1
+	} else {
+		length64, err := strconv.ParseInt(parts[1], 10, 0)
+		if err != nil {
+			return 0, 0, false
+		}
+		length = int(length64)
+	}
+
+	return start, length, true
 }
 
 func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -201,11 +238,23 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 		}
 	}
 
-	// The race between this Get and the above Stat is benign; we might
+	// The race between the Get and the above Stat is benign; we might
 	// miss an opportunity to cache, but we'll never return an incorrect
 	// result.
 
-	data, st, err := h.store.Get(obj, nil)
+	var data []byte
+	var st store.Stat
+	var err error
+	usingRange := false
+
+	start, length, ok := parseRange(r.Header.Get("Range"))
+	if ok && h.rangeStore != nil {
+		usingRange = true
+		data, st, err = h.rangeStore.GetPartial(obj, start, length, nil)
+	} else {
+		data, st, err = h.store.Get(obj, nil)
+	}
+
 	if err != nil {
 		if err == store.ErrNotFound {
 			http.Error(w, "not found", http.StatusNotFound)
@@ -216,12 +265,28 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 		return
 	}
 
+	if usingRange && len(data) == 0 {
+		w.Header().Set("Content-Range", fmt.Sprintf("*/%v", st.Size))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length",
 		strconv.FormatInt(int64(len(data)), 10))
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("X-Content-SHA256", hex.EncodeToString(st.SHA256[:]))
+	if usingRange {
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
+			start, start+len(data)-1, st.Size))
+	} else {
+		w.Header().Set("X-Content-SHA256", hex.EncodeToString(st.SHA256[:]))
+	}
 	w.Header().Set("ETag", `"`+hex.EncodeToString(st.SHA256[:])+`"`)
-	w.WriteHeader(http.StatusOK)
+
+	if usingRange {
+		w.WriteHeader(http.StatusPartialContent)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
 
 	w.Write(data)
 }

@@ -120,3 +120,14 @@ type SometimesStore interface {
 	// available/unavailable and this method returning the correct value.
 	Available() bool
 }
+
+// A RangeReadStore supports range reads via GetPartial.
+type RangeReadStore interface {
+	Store
+
+	// GetPartial gets part of a value. start and length specify the subrange of
+	// the value to retrieve. If length is negative, reads until the end of the
+	// value. Note that the Stat returned represents the whole file, not just
+	// the part that was returned.
+	GetPartial(key string, start, length int, cancel <-chan struct{}) ([]byte, Stat, error)
+}

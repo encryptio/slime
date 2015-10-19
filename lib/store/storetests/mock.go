@@ -72,6 +72,27 @@ func (m *MockStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat,
 	}, nil
 }
 
+func (m *MockStore) GetPartial(key string, start, length int, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+	d, st, err := m.Get(key, cancel)
+	if err != nil {
+		return nil, store.Stat{}, err
+	}
+	if start < 0 {
+		start = 0
+	}
+	if length < 0 || start+length > len(d) {
+		length = len(d) - start
+	}
+	if length <= 0 {
+		return []byte{}, st, nil
+	}
+	d2 := make([]byte, length)
+	if copy(d2, d[start:]) != length {
+		panic("never happens")
+	}
+	return d2, st, nil
+}
+
 func (m *MockStore) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
 	m.mu.Lock()
 	m.waitUnblocked()
