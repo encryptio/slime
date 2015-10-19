@@ -3,26 +3,23 @@ package multi
 import (
 	"math/rand"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"testing"
 	"time"
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/store"
-	"git.encryptio.com/slime/lib/store/storedir"
 	"git.encryptio.com/slime/lib/store/storetests"
 
 	"git.encryptio.com/kvl/backend/ram"
 )
 
-func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*storedir.Directory, func()) {
+func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*storetests.MockStore, func()) {
 	var killers []*killHandler
-	var dirstores []*storedir.Directory
+	var mockstores []*storetests.MockStore
 
 	var servers []*httptest.Server
 	var chunkServers []*chunkserver.Handler
-	var tmpPaths []string
 	var finder *Finder
 	var multi *Multi
 
@@ -39,20 +36,16 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		for _, cs := range chunkServers {
 			cs.Close()
 		}
-		for _, ds := range dirstores {
-			ds.Close()
-		}
-		for _, path := range tmpPaths {
-			os.RemoveAll(path)
+		for _, mock := range mockstores {
+			mock.Close()
 		}
 	}
 
 	for i := 0; i < serverCount; i++ {
-		dirstore, tmpPath := storedir.MakeTestingDirectory(t)
-		tmpPaths = append(tmpPaths, tmpPath)
-		dirstores = append(dirstores, dirstore)
+		mock := storetests.NewMockStore(0)
+		mockstores = append(mockstores, mock)
 
-		cs, err := chunkserver.New([]store.Store{dirstore})
+		cs, err := chunkserver.New([]store.Store{mock})
 		if err != nil {
 			done()
 			t.Fatalf("Couldn't create chunkserver: %v", err)
@@ -99,7 +92,7 @@ func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandle
 		t.Fatalf("Couldn't set redundancy levels: %v", err)
 	}
 
-	return killers, multi, dirstores, done
+	return killers, multi, mockstores, done
 }
 
 func TestMultiCommon(t *testing.T) {
@@ -147,30 +140,30 @@ func TestMultiRecovery(t *testing.T) {
 }
 
 func TestMultiScrubRecreatesMissing(t *testing.T) {
-	_, multi, dirstores, done := prepareMultiTest(t, 2, 3, 3)
+	_, multi, mocks, done := prepareMultiTest(t, 2, 3, 3)
 	defer done()
 
 	data := []byte("hello world! this is some test data.")
 
 	storetests.ShouldCAS(t, multi, "key", store.MissingV, store.DataV(data))
 
-	names, err := dirstores[0].List("", 1, nil)
+	names, err := mocks[0].List("", 1, nil)
 	if err != nil {
-		t.Fatalf("Couldn't list first dirstore: %v", err)
+		t.Fatalf("Couldn't list first mock: %v", err)
 	}
 	if len(names) != 1 {
-		t.Fatalf("Didn't get a name from dirstore")
+		t.Fatalf("Didn't get a name from mock")
 	}
 
-	storetests.ShouldCAS(t, dirstores[0], names[0], store.AnyV, store.MissingV)
+	storetests.ShouldCAS(t, mocks[0], names[0], store.AnyV, store.MissingV)
 
 	multi.scrubAll()
 
 	found := 0
-	for _, ds := range dirstores {
-		names, err := ds.List("", 1, nil)
+	for _, mock := range mocks {
+		names, err := mock.List("", 1, nil)
 		if err != nil {
-			t.Fatalf("Couldn't list dirstore: %v", err)
+			t.Fatalf("Couldn't list mock: %v", err)
 		}
 		if len(names) == 1 {
 			found++
@@ -261,16 +254,16 @@ func TestMultiCanReplaceDeadKeys(t *testing.T) {
 }
 
 func TestMultiScrubRemovesWeirdChunks(t *testing.T) {
-	_, multi, dirs, done := prepareMultiTest(t, 1, 1, 1)
+	_, multi, mocks, done := prepareMultiTest(t, 1, 1, 1)
 	defer done()
 
-	storetests.ShouldCAS(t, dirs[0], "a", store.MissingV, store.DataV([]byte("data")))
+	storetests.ShouldCAS(t, mocks[0], "a", store.MissingV, store.DataV([]byte("data")))
 	multi.scrubAll()
-	storetests.ShouldGetMiss(t, dirs[0], "a")
+	storetests.ShouldGetMiss(t, mocks[0], "a")
 }
 
 func TestMultiScrubRemovesUnreferencedChunks(t *testing.T) {
-	killers, multi, dirs, done := prepareMultiTest(t, 1, 2, 2)
+	killers, multi, mocks, done := prepareMultiTest(t, 1, 2, 2)
 	defer done()
 
 	storetests.ShouldCAS(t, multi, "a", store.MissingV, store.DataV([]byte("data")))
@@ -278,10 +271,10 @@ func TestMultiScrubRemovesUnreferencedChunks(t *testing.T) {
 	storetests.ShouldCAS(t, multi, "a", store.DataV([]byte("data")), store.MissingV)
 	killers[0].setKilled(false)
 	storetests.ShouldListCount(t, multi, 0)
-	storetests.ShouldListCount(t, dirs[0], 1)
+	storetests.ShouldListCount(t, mocks[0], 1)
 	multi.finder.Rescan()
 	multi.scrubAll()
-	storetests.ShouldListCount(t, dirs[0], 0)
+	storetests.ShouldListCount(t, mocks[0], 0)
 }
 
 func TestMultiHungStoreDoesntBlock(t *testing.T) {

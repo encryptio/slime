@@ -10,7 +10,7 @@ import (
 )
 
 func TestDirectoryCorruption(t *testing.T) {
-	ds, tmpDir := MakeTestingDirectory(t)
+	ds, tmpDir := makeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 	defer ds.Close()
 

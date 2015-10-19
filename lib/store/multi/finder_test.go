@@ -3,13 +3,12 @@ package multi
 import (
 	"fmt"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"git.encryptio.com/slime/lib/chunkserver"
 	"git.encryptio.com/slime/lib/meta"
 	"git.encryptio.com/slime/lib/store"
-	"git.encryptio.com/slime/lib/store/storedir"
+	"git.encryptio.com/slime/lib/store/storetests"
 
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/backend/ram"
@@ -18,11 +17,9 @@ import (
 func TestFinderScan(t *testing.T) {
 	db := ram.New()
 
-	ds, tmpPath := storedir.MakeTestingDirectory(t)
-	defer os.RemoveAll(tmpPath)
-	defer ds.Close()
+	mock := storetests.NewMockStore(0)
 
-	cs, err := chunkserver.New([]store.Store{ds})
+	cs, err := chunkserver.New([]store.Store{mock})
 	if err != nil {
 		t.Fatalf("Couldn't create chunkserver: %v", err)
 	}
@@ -47,7 +44,7 @@ func TestFinderScan(t *testing.T) {
 
 	// newly scanned store should be in the Finder
 	stores := f.Stores()
-	if _, ok := stores[ds.UUID()]; !ok {
+	if _, ok := stores[mock.UUID()]; !ok {
 		t.Fatalf("Finder did not find uuid of directory store")
 	}
 
@@ -68,7 +65,7 @@ func TestFinderScan(t *testing.T) {
 			return err
 		}
 
-		loc, err := layer.GetLocation(ds.UUID())
+		loc, err := layer.GetLocation(mock.UUID())
 		if err != nil {
 			return err
 		}
@@ -92,7 +89,7 @@ func TestFinderScan(t *testing.T) {
 
 	// it should be there again
 	stores = f.Stores()
-	if _, ok := stores[ds.UUID()]; !ok {
+	if _, ok := stores[mock.UUID()]; !ok {
 		t.Fatalf("Finder did not find uuid of directory store after resurrection")
 	}
 }

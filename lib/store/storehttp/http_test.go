@@ -4,19 +4,16 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
-	"git.encryptio.com/slime/lib/store/storedir"
 	"git.encryptio.com/slime/lib/store/storetests"
 	"git.encryptio.com/slime/lib/uuid"
 )
 
 func TestHTTPCommon(t *testing.T) {
-	ds, tmpDir := storedir.MakeTestingDirectory(t)
-	defer os.RemoveAll(tmpDir)
+	mock := storetests.NewMockStore(0)
 
-	srv := httptest.NewServer(NewServer(ds))
+	srv := httptest.NewServer(NewServer(mock))
 	defer srv.Close()
 
 	client, err := NewClient(srv.URL + "/")
@@ -26,17 +23,16 @@ func TestHTTPCommon(t *testing.T) {
 
 	storetests.TestStore(t, client)
 
-	if client.UUID() != ds.UUID() {
+	if client.UUID() != mock.UUID() {
 		t.Errorf("client UUID %v does not match directory UUID %v",
-			uuid.Fmt(client.UUID()), uuid.Fmt(ds.UUID()))
+			uuid.Fmt(client.UUID()), uuid.Fmt(mock.UUID()))
 	}
 }
 
 func TestHTTPTooBig(t *testing.T) {
-	ds, tmpDir := storedir.MakeTestingDirectory(t)
-	defer os.RemoveAll(tmpDir)
+	mock := storetests.NewMockStore(0)
 
-	handler := NewServer(ds)
+	handler := NewServer(mock)
 
 	data := make([]byte, MaxFileSize+1000)
 

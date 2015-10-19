@@ -48,7 +48,7 @@ func checkSplitCountSizes(t *testing.T, context string, dir string, min, max int
 }
 
 func TestResplit(t *testing.T) {
-	ds, tmpDir := MakeTestingDirectory(t)
+	ds, tmpDir := makeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 	defer ds.Close()
 

@@ -3,19 +3,17 @@ package storehttp
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
 	"git.encryptio.com/slime/lib/store"
-	"git.encryptio.com/slime/lib/store/storedir"
+	"git.encryptio.com/slime/lib/store/storetests"
 )
 
 func TestClientCancel(t *testing.T) {
-	ds, tmpDir := storedir.MakeTestingDirectory(t)
-	defer os.RemoveAll(tmpDir)
+	mock := storetests.NewMockStore(0)
 
-	handler := NewServer(ds)
+	handler := NewServer(mock)
 	var serverSending chan struct{}
 	serverWait := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

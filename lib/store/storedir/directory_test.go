@@ -8,7 +8,7 @@ import (
 )
 
 func TestDirectoryCommon(t *testing.T) {
-	ds, tmpDir := MakeTestingDirectory(t)
+	ds, tmpDir := makeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 	defer ds.Close()
 
@@ -17,7 +17,7 @@ func TestDirectoryCommon(t *testing.T) {
 }
 
 func TestDirectoryCommonSmallSplit(t *testing.T) {
-	ds, tmpDir := MakeTestingDirectory(t)
+	ds, tmpDir := makeTestingDirectory(t)
 	defer os.RemoveAll(tmpDir)
 	defer ds.Close()
 
