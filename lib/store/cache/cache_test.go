@@ -19,12 +19,12 @@ type CountingStore struct {
 	gets, stats int32
 }
 
-func (c *CountingStore) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
+func (c *CountingStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	atomic.AddInt32(&c.gets, 1)
 	return c.MockStore.Get(key, cancel)
 }
 
-func (c *CountingStore) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
+func (c *CountingStore) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
 	atomic.AddInt32(&c.stats, 1)
 	return c.MockStore.Stat(key, cancel)
 }
@@ -34,9 +34,9 @@ type ErrorStore struct {
 	isErroring bool
 }
 
-func (e *ErrorStore) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
+func (e *ErrorStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	if e.isErroring {
-		return nil, [32]byte{}, ErrErrorStore
+		return nil, store.Stat{}, ErrErrorStore
 	}
 	return e.MockStore.Get(key, cancel)
 }

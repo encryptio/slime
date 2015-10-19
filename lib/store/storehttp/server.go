@@ -205,7 +205,7 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	// miss an opportunity to cache, but we'll never return an incorrect
 	// result.
 
-	data, hash, err := h.store.Get(obj, nil)
+	data, st, err := h.store.Get(obj, nil)
 	if err != nil {
 		if err == store.ErrNotFound {
 			http.Error(w, "not found", http.StatusNotFound)
@@ -219,8 +219,8 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	w.Header().Set("Content-Length",
 		strconv.FormatInt(int64(len(data)), 10))
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("X-Content-SHA256", hex.EncodeToString(hash[:]))
-	w.Header().Set("ETag", `"`+hex.EncodeToString(hash[:])+`"`)
+	w.Header().Set("X-Content-SHA256", hex.EncodeToString(st.SHA256[:]))
+	w.Header().Set("ETag", `"`+hex.EncodeToString(st.SHA256[:])+`"`)
 	w.WriteHeader(http.StatusOK)
 
 	w.Write(data)

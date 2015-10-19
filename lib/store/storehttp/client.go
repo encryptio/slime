@@ -69,45 +69,46 @@ func (cc *Client) Name() string {
 	return cc.name
 }
 
-func (cc *Client) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
-	var h [32]byte
-
+func (cc *Client) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, cancel)
 	if err != nil {
-		return nil, h, err
+		return nil, store.Stat{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, h, store.ErrNotFound
+		return nil, store.Stat{}, store.ErrNotFound
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, h, httputil.ReadResponseAsError(resp)
+		return nil, store.Stat{}, httputil.ReadResponseAsError(resp)
 	}
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, h, err
+		return nil, store.Stat{}, err
 	}
 
-	h = sha256.Sum256(data)
+	h := sha256.Sum256(data)
 
 	if should := resp.Header.Get("x-content-sha256"); should != "" {
 		shouldBytes, err := hex.DecodeString(should)
 		if err != nil || len(shouldBytes) != 32 {
-			return nil, h, ErrUnparsableSHAResponse
+			return nil, store.Stat{}, ErrUnparsableSHAResponse
 		}
 
 		var shouldH [32]byte
 		copy(shouldH[:], shouldBytes)
 
 		if h != shouldH {
-			return nil, h, HashMismatchError{Got: h, Want: shouldH}
+			return nil, store.Stat{}, HashMismatchError{Got: h, Want: shouldH}
 		}
 	}
 
-	return data, h, nil
+	return data, store.Stat{
+		SHA256: h,
+		Size:   int64(len(data)),
+	}, nil
 }
 
 func (cc *Client) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {
@@ -222,27 +223,27 @@ func (cc *Client) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	return strconv.ParseInt(string(data), 10, 64)
 }
 
-func (cc *Client) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
+func (cc *Client) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
 	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil, cancel)
 	if err != nil {
-		return nil, err
+		return store.Stat{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, store.ErrNotFound
+		return store.Stat{}, store.ErrNotFound
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, httputil.ReadResponseAsError(resp)
+		return store.Stat{}, httputil.ReadResponseAsError(resp)
 	}
 
-	st := &store.Stat{}
+	st := store.Stat{}
 
 	if sha := resp.Header.Get("x-content-sha256"); sha != "" {
 		shaBytes, err := hex.DecodeString(sha)
 		if err != nil || len(shaBytes) != 32 {
-			return nil, ErrUnparsableSHAResponse
+			return store.Stat{}, ErrUnparsableSHAResponse
 		}
 		copy(st.SHA256[:], shaBytes)
 	}

@@ -55,18 +55,21 @@ func (m *MockStore) Name() string {
 	return fmt.Sprintf("mock<%p>", m)
 }
 
-func (m *MockStore) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
+func (m *MockStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	m.mu.Lock()
 	m.waitUnblocked()
 	defer m.mu.Unlock()
 
 	data, ok := m.contents[key]
 	if !ok {
-		return nil, [32]byte{}, store.ErrNotFound
+		return nil, store.Stat{}, store.ErrNotFound
 	}
 
 	bytes := []byte(data)
-	return bytes, sha256.Sum256(bytes), nil
+	return bytes, store.Stat{
+		SHA256: sha256.Sum256(bytes),
+		Size:   int64(len(bytes)),
+	}, nil
 }
 
 func (m *MockStore) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
@@ -101,15 +104,9 @@ func (m *MockStore) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	}
 }
 
-func (m *MockStore) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
-	data, sha, err := m.Get(key, cancel)
-	if err != nil {
-		return nil, err
-	}
-	return &store.Stat{
-		SHA256: sha,
-		Size:   int64(len(data)),
-	}, nil
+func (m *MockStore) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
+	_, st, err := m.Get(key, cancel)
+	return st, err
 }
 
 func (m *MockStore) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {

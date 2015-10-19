@@ -211,14 +211,14 @@ func (m *Multi) rebalanceFile(f meta.File, finderEntries map[[16]byte]FinderEntr
 	}()
 
 	localKey := localKeyFor(&f, minI)
-	data, hash, err := minS.Get(localKey, nil)
+	data, st, err := minS.Get(localKey, nil)
 	if err != nil {
 		return false, err
 	}
 
 	setCASV := store.CASV{
 		Present: true,
-		SHA256:  hash,
+		SHA256:  st.SHA256,
 		Data:    data,
 	}
 

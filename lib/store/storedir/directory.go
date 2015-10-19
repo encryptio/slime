@@ -377,38 +377,37 @@ func (ds *Directory) findAndOpen(key string) (*os.File, string, error) {
 	return nil, "", nil
 }
 
-func (ds *Directory) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
+func (ds *Directory) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
-	var h [32]byte
-
 	fh, path, err := ds.findAndOpen(key)
 	if err != nil {
-		return nil, h, err
+		return nil, store.Stat{}, err
 	}
 	if fh == nil {
-		return nil, h, store.ErrNotFound
+		return nil, store.Stat{}, store.ErrNotFound
 	}
 	defer fh.Close()
 
 	var expectedFNV [8]byte
 	_, err = io.ReadFull(fh, expectedFNV[:])
 	if err != nil {
-		return nil, h, err
+		return nil, store.Stat{}, err
 	}
 
 	fnver := fnv.New64a()
 	rdr := io.TeeReader(fh, fnver)
 
-	_, err = io.ReadFull(rdr, h[:])
+	var expectedSHA256 [32]byte
+	_, err = io.ReadFull(rdr, expectedSHA256[:])
 	if err != nil {
-		return nil, h, err
+		return nil, store.Stat{}, err
 	}
 
 	data, err := ioutil.ReadAll(rdr)
 	if err != nil {
-		return nil, h, err
+		return nil, store.Stat{}, err
 	}
 
 	actualFNV := fnver.Sum(nil)
@@ -422,13 +421,16 @@ func (ds *Directory) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, 
 		ds.quarantine(key, path)
 		ds.mu.Unlock()
 		ds.mu.RLock()
-		return nil, h, ErrCorruptObject
+		return nil, store.Stat{}, ErrCorruptObject
 	}
 
-	return data, h, nil
+	return data, store.Stat{
+		SHA256: expectedSHA256,
+		Size:   int64(len(data)),
+	}, nil
 }
 
-func (ds *Directory) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
+func (ds *Directory) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
@@ -436,26 +438,26 @@ func (ds *Directory) Stat(key string, cancel <-chan struct{}) (*store.Stat, erro
 	return st, err
 }
 
-func (ds *Directory) statUnlocked(key string) (*store.Stat, string, error) {
+func (ds *Directory) statUnlocked(key string) (store.Stat, string, error) {
 	fh, path, err := ds.findAndOpen(key)
 	if err != nil {
-		return nil, "", err
+		return store.Stat{}, "", err
 	}
 	if fh == nil {
-		return nil, "", store.ErrNotFound
+		return store.Stat{}, "", store.ErrNotFound
 	}
 	defer fh.Close()
 
-	st := &store.Stat{}
+	st := store.Stat{}
 
 	_, err = fh.ReadAt(st.SHA256[:], 8)
 	if err != nil {
-		return nil, "", err
+		return store.Stat{}, "", err
 	}
 
 	fi, err := fh.Stat()
 	if err != nil {
-		return nil, "", err
+		return store.Stat{}, "", err
 	}
 	st.Size = fi.Size() - 40
 
@@ -470,14 +472,15 @@ func (ds *Directory) CAS(key string, from, to store.CASV, cancel <-chan struct{}
 	if err != nil && err != store.ErrNotFound {
 		return err
 	}
+	oldMissing := err == store.ErrNotFound
 
 	if !from.Any {
 		if from.Present {
-			if stat == nil || stat.SHA256 != from.SHA256 {
+			if oldMissing || stat.SHA256 != from.SHA256 {
 				return store.ErrCASFailure
 			}
 		} else {
-			if stat != nil {
+			if !oldMissing {
 				return store.ErrCASFailure
 			}
 		}

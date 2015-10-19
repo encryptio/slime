@@ -27,10 +27,10 @@ type cacheEntry struct {
 
 	// Writes to these happen in getWorker, and all are set to their final value
 	// before Ready is closed.
-	Ready  chan struct{}
-	Error  error
-	SHA256 [32]byte
-	Data   []byte
+	Ready chan struct{}
+	Error error
+	Stat  store.Stat
+	Data  []byte
 
 	// Writes to these are protected by (*Cache).mu and happen in
 	// (*Cache).Get(). When waiters == 0, Cancel may be closed.
@@ -58,7 +58,7 @@ func (c *Cache) Name() string {
 	return c.inner.Name()
 }
 
-func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
+func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	c.mu.Lock()
 	ce, ok := c.entries[key]
 	if !ok {
@@ -94,7 +94,7 @@ func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error
 			delete(c.entries, key)
 		}
 		c.mu.Unlock()
-		return nil, [32]byte{}, store.ErrCancelled
+		return nil, store.Stat{}, store.ErrCancelled
 	}
 
 	c.mu.Lock()
@@ -107,7 +107,7 @@ func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error
 		// In this case, inner.Get returned an error. getWorker has already
 		// removed the entry from the cache; further Gets on the key will start
 		// new getWorkers.
-		return nil, [32]byte{}, ce.Error
+		return nil, store.Stat{}, ce.Error
 	}
 
 	if !didWait {
@@ -116,10 +116,10 @@ func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error
 
 		st, err := c.inner.Stat(key, cancel)
 		if err != nil {
-			return nil, [32]byte{}, err
+			return nil, store.Stat{}, err
 		}
 
-		if st.SHA256 != ce.SHA256 || int(st.Size) != len(ce.Data) {
+		if st != ce.Stat {
 			// Stat did NOT match. Remove it from the cache and try again.
 			c.mu.Lock()
 			if c.entries[key] == ce {
@@ -133,13 +133,13 @@ func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error
 	// Get successful and complete.
 	d := make([]byte, len(ce.Data))
 	copy(d, ce.Data)
-	return d, ce.SHA256, nil
+	return d, ce.Stat, nil
 }
 
 func (c *Cache) getWorker(ce *cacheEntry) {
 	defer close(ce.Ready)
 
-	ce.Data, ce.SHA256, ce.Error = c.inner.Get(ce.Key, ce.Cancel)
+	ce.Data, ce.Stat, ce.Error = c.inner.Get(ce.Key, ce.Cancel)
 
 	c.mu.Lock()
 	if ce.Error != nil {
@@ -188,7 +188,8 @@ func (c *Cache) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	return c.inner.FreeSpace(cancel)
 }
 
-func (c *Cache) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
+func (c *Cache) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
+	// TODO: remove from c.entries based on the results, if needed
 	return c.inner.Stat(key, cancel)
 }
 

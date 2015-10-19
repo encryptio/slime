@@ -114,10 +114,10 @@ func (rs *RetryStore) Name() string {
 	return s.Name()
 }
 
-func (rs *RetryStore) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
+func (rs *RetryStore) Get(key string, cancel <-chan struct{}) ([]byte, Stat, error) {
 	s := rs.getInner()
 	if s == nil {
-		return nil, [32]byte{}, ErrUnavailable
+		return nil, Stat{}, ErrUnavailable
 	}
 	return s.Get(key, cancel)
 }
@@ -138,10 +138,10 @@ func (rs *RetryStore) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	return s.FreeSpace(cancel)
 }
 
-func (rs *RetryStore) Stat(key string, cancel <-chan struct{}) (*Stat, error) {
+func (rs *RetryStore) Stat(key string, cancel <-chan struct{}) (Stat, error) {
 	s := rs.getInner()
 	if s == nil {
-		return nil, ErrUnavailable
+		return Stat{}, ErrUnavailable
 	}
 	return s.Stat(key, cancel)
 }

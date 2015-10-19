@@ -159,14 +159,14 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 }
 
 func (m *Multi) rebuild(path string) error {
-	data, hash, err := m.Get(path, nil)
+	data, st, err := m.Get(path, nil)
 	if err != nil {
 		return err
 	}
 
 	err = m.CAS(path,
-		store.CASV{Present: true, SHA256: hash},
-		store.CASV{Present: true, SHA256: hash, Data: data}, nil)
+		store.CASV{Present: true, SHA256: st.SHA256},
+		store.CASV{Present: true, SHA256: st.SHA256, Data: data}, nil)
 	if err != nil {
 		return err
 	}

@@ -3,7 +3,6 @@ package storetests
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"reflect"
 	"testing"
 
@@ -68,17 +67,20 @@ func ShouldFullList(t *testing.T, s store.Store, expect []string) {
 }
 
 func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
-	got, gothash, err := s.Get(key, nil)
+	got, st, err := s.Get(key, nil)
 	if err != nil {
 		t.Errorf("Get(%#v) returned unexpected error %v", key, err)
 		return
 	}
 
-	wantHash := sha256.Sum256(data)
+	wantStat := store.Stat{
+		SHA256: sha256.Sum256(data),
+		Size:   int64(len(got)),
+	}
 
-	if !bytes.Equal(got, data) || gothash != wantHash {
+	if !bytes.Equal(got, data) || st != wantStat {
 		t.Errorf("Get(%#v) = (%#v, %#v), but wanted (%#v, %#v)",
-			key, got, hex.EncodeToString(gothash[:]), data, hex.EncodeToString(wantHash[:]))
+			key, got, st, data, wantStat)
 	}
 }
 
@@ -105,7 +107,7 @@ func ShouldFreeSpace(t *testing.T, s store.Store) {
 	}
 }
 
-func ShouldStat(t *testing.T, s store.Store, key string, stat *store.Stat) {
+func ShouldStat(t *testing.T, s store.Store, key string, stat store.Stat) {
 	st, err := s.Stat(key, nil)
 	if err != nil {
 		t.Errorf("Stat(%#v) returned unexpected error %v", key, err)

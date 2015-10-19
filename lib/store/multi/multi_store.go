@@ -67,38 +67,39 @@ func (m *Multi) getFile(key string) (*meta.File, error) {
 	return file, nil
 }
 
-func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error) {
-	var zeroes [32]byte
-
+func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
 	r := retry.New(10)
 	for r.Next() {
 		f, err := m.getFile(key)
 		if err != nil {
-			return nil, zeroes, err
+			return nil, store.Stat{}, err
 		}
 
 		if f == nil {
-			return nil, zeroes, store.ErrNotFound
+			return nil, store.Stat{}, store.ErrNotFound
 		}
 
 		data, err := m.reconstruct(f, cancel)
 		if err != nil {
 			f2, err2 := m.getFile(key)
 			if err2 != nil {
-				return nil, zeroes, err2
+				return nil, store.Stat{}, err2
 			}
 			if f2 == nil || f2.PrefixID != f.PrefixID {
 				// someone wrote to this file and removed some pieces as we
 				// were reading it; retry the read.
 				continue
 			}
-			return nil, zeroes, err
+			return nil, store.Stat{}, err
 		}
 
-		return data, f.SHA256, err
+		return data, store.Stat{
+			SHA256: f.SHA256,
+			Size:   int64(f.Size),
+		}, err
 	}
 
-	return nil, zeroes, ErrTooManyRetries
+	return nil, store.Stat{}, ErrTooManyRetries
 }
 
 func (m *Multi) getChunkData(f *meta.File, cancel <-chan struct{}) [][]byte {
@@ -236,17 +237,17 @@ func (m *Multi) reconstruct(f *meta.File, cancel <-chan struct{}) ([]byte, error
 	return data, nil
 }
 
-func (m *Multi) Stat(key string, cancel <-chan struct{}) (*store.Stat, error) {
+func (m *Multi) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
 	file, err := m.getFile(key)
 	if err != nil {
-		return nil, err
+		return store.Stat{}, err
 	}
 
 	if file == nil {
-		return nil, store.ErrNotFound
+		return store.Stat{}, store.ErrNotFound
 	}
 
-	return &store.Stat{
+	return store.Stat{
 		SHA256: file.SHA256,
 		Size:   int64(file.Size),
 	}, nil

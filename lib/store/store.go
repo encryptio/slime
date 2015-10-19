@@ -41,9 +41,9 @@ type Store interface {
 	UUID() [16]byte
 	Name() string
 
-	// Get retrieves the value for the given key and its SHA256 hash, or
-	// ErrNotFound if the key does not exist.
-	Get(key string, cancel <-chan struct{}) ([]byte, [32]byte, error)
+	// Get retrieves the value for the given key and its Stat, or ErrNotFound
+	// if the key does not exist.
+	Get(key string, cancel <-chan struct{}) ([]byte, Stat, error)
 
 	// List returns a list of keys which compare bytewise greater than after,
 	// up to the limit number of keys. If limit is <=0, then the return size is
@@ -55,7 +55,7 @@ type Store interface {
 
 	// Stat returns a bit of info about the key given, or ErrNotFound if the
 	// key-value pair is nonexistent.
-	Stat(key string, cancel <-chan struct{}) (*Stat, error)
+	Stat(key string, cancel <-chan struct{}) (Stat, error)
 
 	// CAS writes to the object store. It returns ErrCASFailure if the value
 	// currently in the store does not match the "from" argument. If it does,
