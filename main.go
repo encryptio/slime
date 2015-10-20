@@ -20,7 +20,9 @@ import (
 	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/storedir"
 
-	"git.encryptio.com/kvl/backend/psql"
+	"git.encryptio.com/kvl"
+	_ "git.encryptio.com/kvl/backend/bolt"
+	_ "git.encryptio.com/kvl/backend/psql"
 	"github.com/naoina/toml"
 )
 
@@ -207,13 +209,10 @@ func proxyServer() {
 	loadConfigOrDie()
 	debug.SetGCPercent(config.GCPercent)
 
-	if config.Proxy.Database.Type != "postgresql" {
-		log.Fatalf("\"postgresql\" is the only supported database type")
-	}
-
-	db, err := psql.Open(config.Proxy.Database.DSN)
+	db, err := kvl.Open(config.Proxy.Database.Type, config.Proxy.Database.DSN)
 	if err != nil {
-		log.Fatalf("Couldn't connect to postgresql database: %v", err)
+		log.Fatalf("Couldn't connect to %v database: %v",
+			config.Proxy.Database.Type, err)
 	}
 	defer db.Close()
 
@@ -251,13 +250,10 @@ func dbReindex() {
 	loadConfigOrDie()
 	debug.SetGCPercent(config.GCPercent)
 
-	if config.Proxy.Database.Type != "postgresql" {
-		log.Fatalf("\"postgresql\" is the only supported database type")
-	}
-
-	db, err := psql.Open(config.Proxy.Database.DSN)
+	db, err := kvl.Open(config.Proxy.Database.Type, config.Proxy.Database.DSN)
 	if err != nil {
-		log.Fatalf("Couldn't connect to postgresql database: %v", err)
+		log.Fatalf("Couldn't connect to %v database: %v",
+			config.Proxy.Database.Type, err)
 	}
 	defer db.Close()
 

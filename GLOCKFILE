@@ -1,4 +1,5 @@
-git.encryptio.com/kvl 0ba0315035ec852648d4e18a686ebdf0d513fab0
+git.encryptio.com/kvl 6ae390bb52370868b45b77c7537d870cb912a543
+github.com/boltdb/bolt 07070579bd4dacb1be8f54903e873b8f70cb4bcd
 github.com/lib/pq b269bd035a727d6c1081f76e7a239a1b00674c40
 github.com/naoina/go-stringutil 360db0db4b01d34e12a2ec042c09e7d37fece761
 github.com/naoina/toml 5811abcabb29d6af0fdf060f96d328962bd3cd5e
