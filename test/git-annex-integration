@@ -2,36 +2,11 @@
 use warnings;
 use strict;
 
-my @pids;
-sub start_process {
-    my ($cmd) = @_;
-    my $pid = fork;
-    die if not defined $pid;
-    if ( !$pid ) {
-        # child
-        @pids = ();
-        exec "sh", "-c", $cmd;
-        die "Couldn't exec: $!";
-    }
-    push @pids, $pid;
-    return $pid;
-}
-
-sub waitfor {
-    my ($pid) = @_;
-    my $waitpid = waitpid $pid, 0;
-    die if $waitpid < 0;
-    @pids = grep { $_ != $pid } @pids;
-    return $?;
-}
-
-END {
-    kill 9, $_ for @pids;
-}
-
 use File::Temp ();
+use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster /;
 
-print STDERR "Integration test. Versions:\n\n";
+status "Starting git-annex integration test. Versions:";
+print STDERR "\n";
 system "go version" and die;
 print STDERR "\n";
 system "git show --oneline -s HEAD" and die;
@@ -43,62 +18,19 @@ print STDERR "\n";
 system "uname -a" and die;
 print STDERR "\n";
 
-print STDERR "Building binaries\n";
-my $binaries = File::Temp->newdir;
-system "go build -o \Q$binaries/slime\E git.encryptio.com/slime" and die;
-system "go build -o \Q$binaries/slimectl\E git.encryptio.com/slime/slimectl" and die;
-system "go build -o \Q$binaries/git-annex-remote-slime\E git.encryptio.com/slime/misc/git-annex-remote-slime" and die;
-system "go build -o \Q$binaries/git-annex-serve-from-slime\E git.encryptio.com/slime/misc/git-annex-serve-from-slime" and die;
-$ENV{PATH} = "$binaries:$ENV{PATH}";
+my $binaries = build_binary_dir;
 
-print STDERR "Setting up slime\n";
-my $slime_chunk = File::Temp->newdir;
-my $slime_proxy = File::Temp->newdir;
-open my $sf, ">", "$slime_proxy/server.toml" or die;
-print $sf <<EOF;
-[proxy]
-listen = ":59000"
+my ($config, $slime_dir) = setup_basic_slime_cluster;
 
-[proxy.database]
-type = "bolt"
-dsn = "$slime_proxy/db.boltdb"
-
-[chunk]
-listen = ":59001"
-
-dirs = [
-    "$slime_chunk",
-]
-EOF
-close $sf or die;
-
-print STDERR "Formatting chunk directory\n";
-system "slime fmt-dir \Q$slime_chunk\E" and die;
-
-print STDERR "Starting slime chunk server\n";
-start_process "slime chunk-server \Q$slime_proxy/server.toml\E";
-
-print STDERR "Starting slime proxy server\n";
-start_process "slime proxy-server \Q$slime_proxy/server.toml\E";
-
-print STDERR "Waiting for servers\n";
-sleep 1;
-
-print STDERR "Scanning for drives\n";
-system "slimectl -base http://127.0.0.1:59000/ store scan http://127.0.0.1:59001" and die;
-
-print STDERR "Setting redundancy\n";
-system "slimectl -base http://127.0.0.1:59000/ redundancy set 1 1" and die;
-
-print STDERR "Initializing git repo\n";
+status "Initializing git repo";
 my $repo = File::Temp->newdir;
 system "git init \Q$repo" and die;
 system "cd \Q$repo\E && git annex init" and die;
 
-print STDERR "Adding slime remote\n";
-system "cd \Q$repo\E && git annex initremote slime type=external externaltype=slime baseurl=http://127.0.0.1:59000/data/ encryption=none chunk=5000" and die;
+status "Adding slime remote";
+system "cd \Q$repo\E && git annex initremote slime type=external externaltype=slime \Qbaseurl=http://$config->{proxy_listen}/data/\E encryption=none chunk=5000" and die;
 
-print STDERR "Adding crappy files to git-annex\n";
+status "Adding crappy files to git-annex";
 for my $i ( 0 .. 3 ) {
     open my $sf, ">", "$repo/data-$i" or die;
     print $sf join "", map chr rand 256, 1..5555 for 1..5;
@@ -108,21 +40,18 @@ for my $i ( 0 .. 3 ) {
 
 system "cd \Q$repo\E && git commit -m 'add crappy files'" and die;
 
-print STDERR "Copying files to slime\n";
+status "Copying files to slime";
 system "cd \Q$repo\E && git annex copy --to slime" and die;
-
-print STDERR "Fsck from slime\n";
 system "cd \Q$repo\E && git annex fsck --from slime" and die;
 
-print STDERR "Starting git-annex-serve-from-slime\n";
-start_process "git-annex-serve-from-slime -addr 127.0.0.1:59002 -repo \Q$repo";
+status "Starting git-annex-serve-from-slime";
+my $serve_addr = "127.0.0.1:59002";
+start_process "git-annex-serve-from-slime -addr \Q$serve_addr\E -repo \Q$repo";
+wait_port_connectable $serve_addr;
 
-print STDERR "Waiting for server\n";
-sleep 1;
-
-print STDERR "Getting data files\n";
+status "Getting data files";
 for my $i ( 0 .. 3 ) {
-    system "curl -s -o \Q$repo/data-from-server-$i\E http://127.0.0.1:59002/data-$i" and die;
+    system "curl -s -o \Q$repo/data-from-server-$i\E http://$serve_addr/data-$i" and die;
     die "bad sizes, ".(-s "$repo/data-$i")." != ".(-s "$repo/data-from-server-$i")
         if (-s "$repo/data-$i") != (-s "$repo/data-from-server-$i");
     chomp(my $orig_sum = `md5sum \Q$repo/data-$i\E | awk '{print \$1}'`);
@@ -131,19 +60,20 @@ for my $i ( 0 .. 3 ) {
     unlink "$repo/data-from-server-$i" or die;
 }
 
-print STDERR "Trying truncated file continuation\n";
+status "Trying truncated file continuation";
 for my $byte ( 0 .. 5555*5 ) {
     next if rand() < 0.999;
-    system "curl -s -C - -o \Q$repo/data-from-server-1\E http://127.0.0.1:59002/data-1" and die;
+    system "curl -s -C - -o \Q$repo/data-from-server-1\E http://$serve_addr/data-1" and die;
     system "truncate -s $byte \Q$repo/data-from-server-1\E" and die;
 }
-system "curl -s -C - -o \Q$repo/data-from-server-1\E http://127.0.0.1:59002/data-1" and die;
+system "curl -s -C - -o \Q$repo/data-from-server-1\E http://$serve_addr/data-1" and die;
 chomp(my $orig_sum = `md5sum \Q$repo/data-1\E | awk '{print \$1}'`);
 chomp(my $new_sum = `md5sum \Q$repo/data-from-server-1\E | awk '{print \$1}'`);
 die "bad sums, $orig_sum != $new_sum" if $orig_sum ne $new_sum;
 unlink "$repo/data-from-server-1" or die;
 
-print STDERR "Dropping from slime\n";
+status "Dropping from slime";
 system "cd \Q$repo\E && git annex drop --from slime" and die;
+system "cd \Q$repo\E && git annex fsck --from slime" and die;
 
-print STDERR "Passed!\n";
+status "Passed!";

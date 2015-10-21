@@ -1,0 +1,50 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+use File::Temp ();
+use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster kill_wait_for /;
+
+status "Starting postgresql integration test. Versions:";
+print STDERR "\n";
+system "go version" and die;
+print STDERR "\n";
+system "git show --oneline -s HEAD" and die;
+print STDERR "\n";
+system "postgres --version" and die;
+print STDERR "\n";
+system "uname -a" and die;
+print STDERR "\n";
+
+my $binaries = build_binary_dir;
+
+status "Creating postgresql server";
+my $pgdir = File::Temp->newdir;
+mkdir "$pgdir/data" or die;
+mkdir "$pgdir/sock" or die;
+system "initdb --encoding=UTF8 --pgdata=\Q$pgdir/data\E --auth=trust" and die;
+start_process "postgres -D \Q$pgdir/data\E -F -h '' -k \Q$pgdir/sock\E";
+sleep 1;
+system "createdb -h \Q$pgdir/sock\E slime" and die;
+
+my ($config, $slime_dir) = setup_basic_slime_cluster {
+    db_type => "postgresql",
+    db_dsn => "sslmode=disable host=$pgdir/sock dbname=slime",
+};
+
+status "Round-tripping a file";
+open my $sf, ">", "$pgdir/datafile" or die;
+print $sf join "", map chr rand 256, 1..55555;
+close $sf;
+system "curl -Lsv -XPUT --data-binary \Q\@$pgdir/datafile\E http://\Q$config->{proxy_listen}/data/file" and die;
+system "curl -Lsv -o \Q$pgdir/datafile-dl\E http://\Q$config->{proxy_listen}/data/file" and die;
+
+status "Checking file sum";
+chomp(my $orig_sum = `md5sum \Q$pgdir/datafile\E | awk '{print \$1}'`);
+chomp(my $new_sum = `md5sum \Q$pgdir/datafile-dl\E | awk '{print \$1}'`);
+die "bad sums, $orig_sum != $new_sum" if $orig_sum ne $new_sum;
+
+kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
+system "pg_ctl stop -m immediate -D \Q$pgdir/data\E" and die;
+
+status "Passed!";

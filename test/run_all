@@ -1,0 +1,28 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+use FindBin;
+
+chdir $FindBin::Bin;
+
+my $failed = 0;
+
+opendir my $dh, "." or die;
+while ( my $ent = readdir $dh ) {
+    next if $ent =~ /^\./;
+    next if $ent eq "run_all";
+    next if not -x $ent;
+    print "===== $ent =====\n";
+    if ( system "\Q./$ent\E" ) {
+        $failed++;
+    }
+}
+closedir $dh;
+
+if ( $failed > 0 ) {
+    print "FAILED $failed TESTS\n";
+} else {
+    print "ALL TESTS PASSED\n";
+}
+exit $failed;
