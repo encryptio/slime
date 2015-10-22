@@ -4,7 +4,7 @@ use strict;
 
 require Exporter;
 our @ISA = qw/ Exporter /;
-our @EXPORT = qw/ start_process wait_for status build_binary_dir wait_port_connectable setup_basic_slime_cluster kill_wait_for /;
+our @EXPORT = qw/ start_process wait_for status build_binary_dir wait_port_connectable setup_basic_slime_cluster kill_wait_for require_files_equal /;
 
 use File::Temp ();
 use Time::HiRes qw/ sleep time /;
@@ -132,6 +132,17 @@ EOF
     system "slimectl -base http://$config->{proxy_listen}/ redundancy set 1 1" and die;
 
     return ($config, $tmp_dir);
+}
+
+sub require_files_equal {
+    my ($fn1, $fn2) = @_;
+    open my $lf1, "<", $fn1 or die;
+    my $contents1 = do { local $/; <$lf1> };
+    close $lf1;
+    open my $lf2, "<", $fn2 or die;
+    my $contents2 = do { local $/; <$lf2> };
+    close $lf2;
+    die "$fn1 is not equal to $fn2" if $contents1 ne $contents2;
 }
 
 1;

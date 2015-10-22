@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 use File::Temp ();
-use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster kill_wait_for /;
+use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster kill_wait_for require_files_equal /;
 
 status "Starting postgresql integration test. Versions:";
 print STDERR "\n";
@@ -38,11 +38,7 @@ print $sf join "", map chr rand 256, 1..55555;
 close $sf;
 system "curl -Lsv -XPUT --data-binary \Q\@$pgdir/datafile\E http://\Q$config->{proxy_listen}/data/file" and die;
 system "curl -Lsv -o \Q$pgdir/datafile-dl\E http://\Q$config->{proxy_listen}/data/file" and die;
-
-status "Checking file sum";
-chomp(my $orig_sum = `md5sum \Q$pgdir/datafile\E | awk '{print \$1}'`);
-chomp(my $new_sum = `md5sum \Q$pgdir/datafile-dl\E | awk '{print \$1}'`);
-die "bad sums, $orig_sum != $new_sum" if $orig_sum ne $new_sum;
+require_files_equal "$pgdir/datafile", "$pgdir/datafile-dl";
 
 status "Reindexing";
 system "slime db-reindex \Q$slime_dir/server.toml\E" and die;

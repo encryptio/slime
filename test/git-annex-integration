@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 use File::Temp ();
-use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster /;
+use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster require_files_equal /;
 
 status "Starting git-annex integration test. Versions:";
 print STDERR "\n";
@@ -54,9 +54,7 @@ for my $i ( 0 .. 3 ) {
     system "curl -s -o \Q$repo/data-from-server-$i\E http://$serve_addr/data-$i" and die;
     die "bad sizes, ".(-s "$repo/data-$i")." != ".(-s "$repo/data-from-server-$i")
         if (-s "$repo/data-$i") != (-s "$repo/data-from-server-$i");
-    chomp(my $orig_sum = `md5sum \Q$repo/data-$i\E | awk '{print \$1}'`);
-    chomp(my $new_sum = `md5sum \Q$repo/data-from-server-$i\E | awk '{print \$1}'`);
-    die "bad sums, $orig_sum != $new_sum" if $orig_sum ne $new_sum;
+    require_files_equal "$repo/data-$i", "$repo/data-from-server-$i";
     unlink "$repo/data-from-server-$i" or die;
 }
 
@@ -67,9 +65,7 @@ for my $byte ( 0 .. 5555*5 ) {
     system "truncate -s $byte \Q$repo/data-from-server-1\E" and die;
 }
 system "curl -s -C - -o \Q$repo/data-from-server-1\E http://$serve_addr/data-1" and die;
-chomp(my $orig_sum = `md5sum \Q$repo/data-1\E | awk '{print \$1}'`);
-chomp(my $new_sum = `md5sum \Q$repo/data-from-server-1\E | awk '{print \$1}'`);
-die "bad sums, $orig_sum != $new_sum" if $orig_sum ne $new_sum;
+require_files_equal "$repo/data-1", "$repo/data-from-server-1";
 unlink "$repo/data-from-server-1" or die;
 
 status "Dropping from slime";

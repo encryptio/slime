@@ -1,0 +1,22 @@
+language: go
+
+go_import_path: git.encryptio.com/slime
+
+addons:
+    postgresql: "9.3"
+
+script:
+    - go get github.com/robfig/glock
+    - glock sync git.encryptio.com/slime
+    - "(cd test && ./postgresql-integration)"
+    - "(cd test && ./go-test)"
+    - git-hooks/pre-commit
+
+go:
+    - 1.5
+    - 1.5.1
+    - tip
+
+os:
+    - linux
+    - osx
