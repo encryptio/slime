@@ -44,6 +44,9 @@ chomp(my $orig_sum = `md5sum \Q$pgdir/datafile\E | awk '{print \$1}'`);
 chomp(my $new_sum = `md5sum \Q$pgdir/datafile-dl\E | awk '{print \$1}'`);
 die "bad sums, $orig_sum != $new_sum" if $orig_sum ne $new_sum;
 
+status "Reindexing";
+system "slime db-reindex \Q$slime_dir/server.toml\E" and die;
+
 kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
 system "pg_ctl stop -m immediate -D \Q$pgdir/data\E" and die;
 
