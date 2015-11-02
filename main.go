@@ -19,6 +19,7 @@ import (
 	"git.encryptio.com/slime/lib/proxyserver"
 	"git.encryptio.com/slime/lib/store"
 	"git.encryptio.com/slime/lib/store/storedir"
+	"git.encryptio.com/slime/lib/uuid"
 
 	"git.encryptio.com/kvl"
 	_ "git.encryptio.com/kvl/backend/bolt"
@@ -180,14 +181,26 @@ func chunkServer() {
 	for i := range config.Chunk.Dirs {
 		dir := config.Chunk.Dirs[i]
 		construct := func() store.Store {
+			log.Printf("Trying to open store at %v", dir)
+
+			start := time.Now()
+
 			ds, err := storedir.OpenDirectory(
 				dir,
 				config.Chunk.Scrubber.SleepPerFile.Duration,
 				config.Chunk.Scrubber.SleepPerByte.Duration,
 			)
+
 			if err != nil {
+				log.Printf("Couldn't open store at %v: %v", dir, err)
 				return nil
 			}
+
+			dur := time.Now().Sub(start)
+
+			log.Printf("Store at %v opened with UUID %v in %v",
+				dir, uuid.Fmt(ds.UUID()), dur)
+
 			return ds
 		}
 		stores[i] = store.NewRetryStore(construct, time.Second*15)
