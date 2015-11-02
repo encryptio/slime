@@ -89,11 +89,13 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 	}
 
 	var thisLoc meta.Location
+	var haveLoc bool
 	var from string
 	var wantFiles []string
 	err := m.db.RunTx(func(ctx kvl.Ctx) error {
 		from = ""
 		wantFiles = nil
+		haveLoc = false
 
 		layer, err := meta.Open(ctx)
 		if err != nil {
@@ -120,7 +122,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 		for {
 			// get the Location with the lowest UUID greater than since
-			haveLoc := false
+			haveLoc = false
 			for _, loc := range allLocations {
 				if uuidCmp(loc.UUID, since) >= 0 && (!haveLoc || uuidCmp(thisLoc.UUID, loc.UUID) > 0) {
 					thisLoc = loc
@@ -187,6 +189,11 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 	})
 	if err != nil {
 		return false, err
+	}
+
+	if !haveLoc {
+		// no chunk servers
+		return true, nil
 	}
 
 	wantFilesMap := make(map[string]struct{}, len(wantFiles))
