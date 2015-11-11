@@ -50,10 +50,11 @@ END {
 sub build_binary_dir {
     status "building binaries";
     my $binaries = File::Temp->newdir;
-    system "go build -o \Q$binaries/slime\E git.encryptio.com/slime" and die;
-    system "go build -o \Q$binaries/slimectl\E git.encryptio.com/slime/slimectl" and die;
-    system "go build -o \Q$binaries/git-annex-remote-slime\E git.encryptio.com/slime/misc/git-annex-remote-slime" and die;
-    system "go build -o \Q$binaries/git-annex-serve-from-slime\E git.encryptio.com/slime/misc/git-annex-serve-from-slime" and die;
+    my $flags = "-race";
+    system "go build $flags -o \Q$binaries/slime\E git.encryptio.com/slime" and die;
+    system "go build $flags -o \Q$binaries/slimectl\E git.encryptio.com/slime/slimectl" and die;
+    system "go build $flags -o \Q$binaries/git-annex-remote-slime\E git.encryptio.com/slime/misc/git-annex-remote-slime" and die;
+    system "go build $flags -o \Q$binaries/git-annex-serve-from-slime\E git.encryptio.com/slime/misc/git-annex-serve-from-slime" and die;
     $ENV{PATH} = "$binaries:$ENV{PATH}";
     return $binaries;
 }
