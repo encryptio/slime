@@ -99,25 +99,32 @@ func store(key, file string) {
 	}
 	defer fh.Close()
 
-	hash := sha256.New()
-	_, err = io.Copy(hash, fh)
-	if err != nil {
-		log.Printf("Couldn't read from %s: %v", file, err)
-		return
-	}
-	sha := hash.Sum(nil)
+	shaChan := make(chan []byte)
+	lengthChan := make(chan int64)
+	go func() {
+		hash := sha256.New()
+		_, err = io.Copy(hash, fh)
+		if err != nil {
+			log.Printf("Couldn't read from %s: %v", file, err)
+			return
+		}
+		sha := hash.Sum(nil)
 
-	length, err := fh.Seek(0, 2)
-	if err != nil {
-		log.Printf("Couldn't seek in %s: %v", file, err)
-		return
-	}
+		length, err := fh.Seek(0, 2)
+		if err != nil {
+			log.Printf("Couldn't seek in %s: %v", file, err)
+			return
+		}
 
-	_, err = fh.Seek(0, 0)
-	if err != nil {
-		log.Printf("Couldn't seek in %s: %v", file, err)
-		return
-	}
+		_, err = fh.Seek(0, 0)
+		if err != nil {
+			log.Printf("Couldn't seek in %s: %v", file, err)
+			return
+		}
+
+		shaChan <- sha
+		lengthChan <- length
+	}()
 
 	req, err := http.NewRequest("HEAD", keyURL(key), nil)
 	if err != nil {
@@ -132,6 +139,9 @@ func store(key, file string) {
 		return
 	}
 	resp.Body.Close()
+
+	sha := <-shaChan
+	length := <-lengthChan
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		if oldSHA := resp.Header.Get("X-Content-SHA256"); oldSHA != "" {
