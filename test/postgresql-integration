@@ -16,7 +16,7 @@ print STDERR "\n";
 system "uname -a" and die;
 print STDERR "\n";
 
-my $binaries = build_binary_dir;
+my $binaries = build_binary_dir { race => 1 };
 
 status "Creating postgresql server";
 my $pgdir = File::Temp->newdir;

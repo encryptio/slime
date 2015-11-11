@@ -48,9 +48,18 @@ END {
 }
 
 sub build_binary_dir {
+    my ($config) = @_;
+    $config = {} unless $config;
+    $config = {(
+        race => 0,
+    ), %$config};
+
     status "building binaries";
     my $binaries = File::Temp->newdir;
-    my $flags = "-race";
+
+    my $flags = "";
+    $flags .= "-race " if $config->{race};
+
     system "go build $flags -o \Q$binaries/slime\E git.encryptio.com/slime" and die;
     system "go build $flags -o \Q$binaries/slimectl\E git.encryptio.com/slime/slimectl" and die;
     system "go build $flags -o \Q$binaries/git-annex-remote-slime\E git.encryptio.com/slime/misc/git-annex-remote-slime" and die;
