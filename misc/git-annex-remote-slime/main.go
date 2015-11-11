@@ -103,7 +103,7 @@ func store(key, file string) {
 	lengthChan := make(chan int64)
 	go func() {
 		hash := sha256.New()
-		_, err = io.Copy(hash, fh)
+		_, err := io.Copy(hash, fh)
 		if err != nil {
 			log.Printf("Couldn't read from %s: %v", file, err)
 			return
