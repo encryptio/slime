@@ -95,6 +95,7 @@ sub setup_basic_slime_cluster {
         db_type => "bolt",
         db_dsn => "$tmp_dir/proxy-db.bolt",
         chunk_dirs => ["$tmp_dir/chunk_data"],
+        log_http => 0,
     ), %$config};
 
     my $dirs_str = "";
@@ -102,10 +103,13 @@ sub setup_basic_slime_cluster {
         $dirs_str .= "    \"$dir\",\n";
     }
 
+    my $disable_http_logging = $config->{log_http} ? "false" : "true";
+
     open my $sf, ">", "$tmp_dir/server.toml" or die;
     print $sf <<EOF;
 [proxy]
 listen = "$config->{proxy_listen}"
+disable-http-logging = $disable_http_logging
 
 [proxy.database]
 type = "$config->{db_type}"
@@ -113,6 +117,7 @@ dsn = "$config->{db_dsn}"
 
 [chunk]
 listen = "$config->{chunk_listen}"
+disable-http-logging = $disable_http_logging
 
 dirs = [
 $dirs_str

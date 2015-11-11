@@ -60,7 +60,8 @@ var config struct {
 			Type string
 			DSN  string
 		}
-		CacheSize int `toml:"cache-size"`
+		CacheSize          int  `toml:"cache-size"`
+		DisableHTTPLogging bool `toml:"disable-http-logging"`
 	}
 	Chunk struct {
 		Listen           string
@@ -70,6 +71,7 @@ var config struct {
 			SleepPerFile tomlDuration `toml:"sleep-per-file"`
 			SleepPerByte tomlDuration `toml:"sleep-per-byte"`
 		}
+		DisableHTTPLogging bool `toml:"disable-http-logging"`
 	}
 }
 
@@ -214,7 +216,9 @@ func chunkServer() {
 	}
 
 	h = httputil.NewLimitParallelism(config.Chunk.ParallelRequests, h)
-	h = httputil.LogHTTPRequests(h)
+	if !config.Chunk.DisableHTTPLogging {
+		h = httputil.LogHTTPRequests(h)
+	}
 	serveOrDie(config.Chunk.Listen, h)
 }
 
@@ -248,7 +252,9 @@ func proxyServer() {
 		h = mux
 	}
 
-	h = httputil.LogHTTPRequests(h)
+	if !config.Proxy.DisableHTTPLogging {
+		h = httputil.LogHTTPRequests(h)
+	}
 
 	if config.Proxy.Listen == "none" {
 		for {
