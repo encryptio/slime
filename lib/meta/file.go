@@ -77,7 +77,7 @@ func (f *File) fromPair(p kvl.Pair) error {
 }
 
 func (f *File) indexPairs() []kvl.Pair {
-	ret := make([]kvl.Pair, 0, len(f.Locations))
+	ret := make([]kvl.Pair, 0, len(f.Locations)*2+1)
 
 	for idx, loc := range f.Locations {
 		localKey := fmt.Sprintf("%v_%x_%v",
