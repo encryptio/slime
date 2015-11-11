@@ -72,4 +72,7 @@ status "Dropping from slime";
 system "cd \Q$repo\E && git annex drop --from slime" and die;
 system "cd \Q$repo\E && git annex fsck --from slime" and die;
 
+status "Running git annex testremote";
+system "cd \Q$repo\E && git annex testremote slime" and die;
+
 status "Passed!";
