@@ -6,6 +6,7 @@ addons:
     postgresql: "9.3"
 
 script:
+    - git config --global user.name "Travis CI Worker"
     - go get github.com/robfig/glock
     - glock sync git.encryptio.com/slime
     - "(cd /tmp && curl -s https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz | tar -xzf -); export PATH=\"$PATH:/tmp/git-annex.linux\""
