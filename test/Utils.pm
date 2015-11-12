@@ -31,7 +31,7 @@ sub start_process {
 
 sub kill_wait_for {
     my ($pid) = @_;
-    kill 'TERM', $pid;
+    kill 15, $pid; # SIGTERM
     wait_for($pid);
 }
 
@@ -47,7 +47,7 @@ END {
     while ( @pids ) {
         my $pid = $pids[0];
         print "Killing leaked process $pid\n";
-        kill 9, $pid;
+        kill 9, $pid; # SIGKILL
         wait_for $pid;
     }
 }
