@@ -3,7 +3,7 @@ use warnings;
 use strict;
 
 use File::Temp ();
-use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster require_files_equal /;
+use Utils qw/ start_process build_binary_dir status wait_port_connectable setup_basic_slime_cluster require_files_equal kill_wait_for /;
 
 status "Starting git-annex integration test. Versions:";
 print STDERR "\n";
@@ -74,5 +74,8 @@ system "cd \Q$repo\E && git annex fsck --from slime" and die;
 
 status "Running git annex testremote";
 system "cd \Q$repo\E && git annex testremote --fast slime" and die;
+
+status "Stopping slime";
+kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
 
 status "Passed!";
