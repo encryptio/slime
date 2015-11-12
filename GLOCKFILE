@@ -1,7 +1,7 @@
 git.encryptio.com/kvl 6ae390bb52370868b45b77c7537d870cb912a543
-github.com/boltdb/bolt 09dda9940cd27de5ad360b33b9273049d5f02e7a
+github.com/boltdb/bolt d359c78f40cc01fa12b65c3d30210dc9c529dd87
 github.com/lib/pq 83c4f410d0aed80a0f44bac6a576a7f2435791f3
 github.com/naoina/go-stringutil 360db0db4b01d34e12a2ec042c09e7d37fece761
 github.com/naoina/toml 751171607256bb66e64c9f0220c00662420c38e9
-golang.org/x/sys 342d6a85aa15bcd2ec54803cdffe90d52b6f35a7
+golang.org/x/sys d9157a9621b69ad1d8d77a1933590c416593f24f
 gopkg.in/tomb.v2 14b3d72120e8d10ea6e6b7f87f7175734b1faab8
