@@ -3,6 +3,3 @@ set -e
 
 echo ">>> go test"
 go test git.encryptio.com/slime/...
-
-echo ">>> go test -race"
-go test -race git.encryptio.com/slime/...

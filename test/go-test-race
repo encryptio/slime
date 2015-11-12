@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+
+echo ">>> go test -race"
+go test -race git.encryptio.com/slime/...

@@ -9,16 +9,20 @@ chdir $FindBin::Bin;
 my $failed = 0;
 
 opendir my $dh, "." or die;
-while ( my $ent = readdir $dh ) {
-    next if $ent =~ /^\./;
-    next if $ent eq "run_all";
-    next if not -x $ent;
-    print "===== $ent =====\n";
-    if ( system "\Q./$ent\E" ) {
+my @tests =
+    sort
+    grep { -x $_ }
+    grep { !/^\./ }
+    grep { $_ ne "run_all" }
+    readdir $dh;
+closedir $dh;
+
+for my $test ( @tests ) {
+    print "===== Running $test =====\n";
+    if ( system "\Q./$test\E" ) {
         $failed++;
     }
 }
-closedir $dh;
 
 if ( $failed > 0 ) {
     print "FAILED $failed TESTS\n";

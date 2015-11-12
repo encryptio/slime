@@ -1,40 +1,8 @@
 #!/bin/sh
+set -e
 
-gofmtidempotent() {
-    gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.go$')
-    [ -z "$gofiles" ] && return 0
-
-    unformatted=$(gofmt -l $gofiles)
-    [ -z "$unformatted" ] && return 0
-
-    echo >&2 "These files are not gofmt'd: $unformatted"
-    return 1
-}
-
-gotestworks() {
-    go test ./...
-    return $?
-}
-
-govetclean() {
-    find . -name \*.go | while read FILE; do
-        go tool vet -composites=false "$FILE" || exit 1
-    done
-    return "$?"
-}
-
-glockfileupdated() {
-    glock save -n git.encryptio.com/slime > .glockfile-tmp
-    diff .glockfile-tmp GLOCKFILE || {
-        rm .glockfile-tmp
-        echo >&2 "GLOCKFILE not up to date"
-        return 1
-    }
-    rm .glockfile-tmp
-    return 0
-}
-
-gofmtidempotent || exit 1
-govetclean || exit 1
-gotestworks || exit 1
-glockfileupdated || exit 1
+cd "test"
+./go-fmt-idempotent
+./go-vet-is-clean
+./glockfile-updated
+./go-test

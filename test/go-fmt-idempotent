@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+cd ..
+
+UNFORMATTED="$(gofmt -l $(find . -name \*.go))"
+[ -z $UNFORMATTED ] && exit 0
+
+echo >&2 "These files are not gofmt'd: $UNFORMATTED"
+exit 1
