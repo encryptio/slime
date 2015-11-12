@@ -8,9 +8,8 @@ addons:
 script:
     - go get github.com/robfig/glock
     - glock sync git.encryptio.com/slime
-    - "(cd test && ./postgresql-integration)"
-    - "(cd test && ./go-test)"
-    - git-hooks/pre-commit
+    - "(cd /tmp && curl -s https://downloads.kitenet.net/git-annex/linux/current/git-annex-standalone-amd64.tar.gz | tar -xzf -); export PATH=\"$PATH:/tmp/git-annex.linux\""
+    - test/run_all
 
 go:
     - 1.5
