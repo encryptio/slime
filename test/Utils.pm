@@ -44,7 +44,12 @@ sub wait_for {
 }
 
 END {
-    kill 9, $_ for @pids;
+    while ( @pids ) {
+        my $pid = $pids[0];
+        print "Killing leaked process $pid\n";
+        kill 9, $pid;
+        wait_for $pid;
+    }
 }
 
 sub build_binary_dir {

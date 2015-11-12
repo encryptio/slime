@@ -23,7 +23,7 @@ my $pgdir = File::Temp->newdir;
 mkdir "$pgdir/data" or die;
 mkdir "$pgdir/sock" or die;
 system "initdb --encoding=UTF8 --pgdata=\Q$pgdir/data\E --auth=trust" and die;
-start_process "postgres -D \Q$pgdir/data\E -F -h '' -k \Q$pgdir/sock\E";
+my $pg_pid = start_process "postgres -D \Q$pgdir/data\E -F -h '' -k \Q$pgdir/sock\E";
 sleep 1;
 system "createdb -h \Q$pgdir/sock\E slime" and die;
 
@@ -45,5 +45,6 @@ system "slime db-reindex \Q$slime_dir/server.toml\E" and die;
 
 kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
 system "pg_ctl stop -m immediate -D \Q$pgdir/data\E" and die;
+kill_wait_for $pg_pid;
 
 status "Passed!";

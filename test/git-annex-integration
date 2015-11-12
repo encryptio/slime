@@ -46,7 +46,7 @@ system "cd \Q$repo\E && git annex fsck --from slime" and die;
 
 status "Starting git-annex-serve-from-slime";
 my $serve_addr = "127.0.0.1:59002";
-start_process "git-annex-serve-from-slime -addr \Q$serve_addr\E -repo \Q$repo";
+my $serve_pid = start_process "git-annex-serve-from-slime -addr \Q$serve_addr\E -repo \Q$repo";
 wait_port_connectable $serve_addr;
 
 status "Getting data files";
@@ -76,6 +76,7 @@ status "Running git annex testremote";
 system "cd \Q$repo\E && git annex testremote --fast slime" and die;
 
 status "Stopping slime";
+kill_wait_for $serve_pid;
 kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
 
 status "Passed!";
