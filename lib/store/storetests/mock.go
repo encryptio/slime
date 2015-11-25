@@ -118,11 +118,11 @@ func (m *MockStore) FreeSpace(cancel <-chan struct{}) (int64, error) {
 	m.waitUnblocked()
 	defer m.mu.Unlock()
 
-	if m.size > 0 {
-		return m.size - m.used, nil
-	} else {
+	if m.size <= 0 {
 		return 1, nil
 	}
+
+	return m.size - m.used, nil
 }
 
 func (m *MockStore) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
