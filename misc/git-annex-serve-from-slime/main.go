@@ -35,7 +35,7 @@ func main() {
 
 	log.Printf("got base url %v", baseurl)
 
-	var handler http.Handler = http.FileServer(&FileSystem{
+	handler := http.FileServer(&FileSystem{
 		BaseURL: baseurl,
 		UUID:    uuid,
 	})
