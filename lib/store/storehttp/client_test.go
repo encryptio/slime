@@ -1,6 +1,8 @@
 package storehttp
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -77,5 +79,50 @@ func TestClientCancel(t *testing.T) {
 	_, _, err = client.Get("key", nil)
 	if err != store.ErrNotFound {
 		t.Errorf("client did not recover from a cancelled request")
+	}
+}
+
+func TestClientBadSHA(t *testing.T) {
+	corrupt := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Query().Get("mode") {
+		case "uuid":
+			w.WriteHeader(200)
+			w.Write([]byte("4c47e705-c248-4bf8-b9a0-50ce7b6fb444"))
+		case "name":
+			w.WriteHeader(200)
+			w.Write([]byte("testing server"))
+		default:
+			data := []byte("this is the data")
+			h := sha256.Sum256(data)
+
+			if corrupt {
+				h[0]++
+			}
+
+			w.Header().Set("X-Content-SHA256", hex.EncodeToString(h[:]))
+			w.WriteHeader(200)
+			w.Write(data)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("Couldn't create client: %v", err)
+	}
+	defer c.Close()
+
+	_, _, err = c.Get("key", nil)
+	if err != nil {
+		t.Fatalf("Couldn't GET key: %v", err)
+	}
+
+	corrupt = true
+
+	_, _, err = c.Get("key", nil)
+	if _, ok := err.(HashMismatchError); !ok {
+		t.Fatalf("Wanted hash mismatch error on corrupt get, got err %v", err)
 	}
 }
