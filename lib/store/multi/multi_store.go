@@ -187,22 +187,30 @@ func (m *Multi) reconstruct(f *meta.File, cancel <-chan struct{}) ([]byte, error
 	default:
 	}
 
-	rawDataAvailable := false
-	for i := 0; i < int(f.DataChunks); i++ {
-		if chunkData[i] == nil {
-			rawDataAvailable = false
-			break
+	rawDataAvailable := f.MappingValue == 0
+	if rawDataAvailable {
+		for i := 0; i < int(f.DataChunks); i++ {
+			if chunkData[i] == nil {
+				rawDataAvailable = false
+				break
+			}
 		}
 	}
 
 	data := make([]byte, 0, int(f.Size)+16)
 	if rawDataAvailable {
-		// fast path: chunkData[0..f.DataChunks-1] are non-nil
+		// fast path:
+		// - chunkData[0..f.DataChunks-1] are non-nil
+		// - f.MappingValue == 0
+
+		// TODO: fast path when f.MappingValue != 0
 		for i := 0; i < int(f.DataChunks); i++ {
 			data = append(data, chunkData[i]...)
 		}
 		data = data[:int(f.Size)]
 	} else {
+		// slow path: full reconstruction
+
 		indicies := make([]int, 0, len(chunkData))
 		chunks := make([][]uint32, 0, len(chunkData))
 		for i, data := range chunkData {
