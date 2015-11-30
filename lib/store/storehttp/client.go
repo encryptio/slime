@@ -84,12 +84,15 @@ func (cc *Client) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, e
 		return nil, store.Stat{}, httputil.ReadResponseAsError(resp)
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
+	hasher := sha256.New()
+
+	data, err := ioutil.ReadAll(io.TeeReader(resp.Body, hasher))
 	if err != nil {
 		return nil, store.Stat{}, err
 	}
 
-	h := sha256.Sum256(data)
+	var h [32]byte
+	copy(h[:], hasher.Sum(nil))
 
 	if should := resp.Header.Get("x-content-sha256"); should != "" {
 		shouldBytes, err := hex.DecodeString(should)
