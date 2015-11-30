@@ -1,0 +1,58 @@
+#!/usr/bin/perl
+use warnings;
+use strict;
+
+use File::Temp ();
+use Utils qw/ build_binary_dir status setup_basic_slime_cluster kill_wait_for /;
+use LWP::UserAgent;
+use Time::HiRes qw/ time /;
+
+if ( not exists $ENV{RUN_BENCHMARKS} ) {
+    print STDERR "Set RUN_BENCHMARKS to run benchmarks\n";
+    exit 0;
+}
+
+my $binaries = build_binary_dir;
+
+my ($config, $slime_dir) = setup_basic_slime_cluster;
+
+my @files = map { "a" x $_ } 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 50_000_000;
+
+my $ua = LWP::UserAgent->new;
+
+sub time_requests {
+    my @requests = @_;
+    my %perf;
+
+    my $overall_start = time;
+    while ( time() - $overall_start < 60 ) {
+        for my $i ( 0 .. $#files ) {
+            my $start = time;
+            my $resp = $ua->request($requests[$i]);
+            die if not $resp->is_success;
+            my $end = time;
+
+            $perf{$i}{time} += $end - $start;
+            $perf{$i}{requests} += 1;
+            $perf{$i}{bytes} += length $files[$i];
+        }
+    }
+
+    for my $i ( 0 .. $#files ) {
+        my $bytes_per_sec = $perf{$i}{bytes} / $perf{$i}{time};
+        my $requests_per_sec = $perf{$i}{requests} / $perf{$i}{time};
+        printf STDERR "% 4s % 10d byte files %.1fMiB/sec %.2f req/sec (%d total requests)\n",
+            $requests[$i]->method, length($files[$i]), $bytes_per_sec/1024/1024, $requests_per_sec, $perf{$i}{requests};
+    }
+}
+
+status "Testing PUT performance";
+time_requests map { HTTP::Request->new("PUT", "http://$config->{proxy_listen}/data/file-".length($_), undef, $_) } @files;
+
+status "Timing GET performance";
+time_requests map { HTTP::Request->new("GET", "http://$config->{proxy_listen}/data/file-".length($_), undef, $_) } @files;
+
+status "Stopping slime";
+kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
+
+status "Passed!";
