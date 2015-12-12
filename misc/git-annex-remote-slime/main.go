@@ -1,352 +1,228 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/encryptio/go-git-annex-external/external"
 )
 
-var (
-	in            = bufio.NewReader(os.Stdin)
-	out           = bufio.NewWriter(os.Stdout)
+type SlimeExt struct {
 	baseURL       string
 	oldPrefixMode bool
-)
-
-func getConfig(name string) string {
-	out.WriteString("GETCONFIG ")
-	out.WriteString(name)
-	out.WriteString("\n")
-	out.Flush()
-
-	line, err := in.ReadString('\n')
-	if err != nil {
-		log.Fatalf("Couldn't get config variable %s: %v", name, err)
-	}
-	line = strings.TrimSuffix(line, "\n")
-
-	if strings.HasPrefix(line, "VALUE ") {
-		return strings.TrimPrefix(line, "VALUE ")
-	}
-
-	return ""
 }
 
-func keyURL(key string) string {
-	if oldPrefixMode {
+func (s *SlimeExt) keyURL(key string) string {
+	if s.oldPrefixMode {
 		sha := sha256.Sum256([]byte(strings.ToLower(key)))
 		hexed := hex.EncodeToString(sha[0:3])
-		return baseURL + hexed[0:3] + "/" + hexed[3:6] + "/" + key
+		return s.baseURL + hexed[0:3] + "/" + hexed[3:6] + "/" + key
 	}
 
-	return baseURL + key
+	return s.baseURL + key
 }
 
-func prepare(mode string) {
-	baseURL = getConfig("baseurl")
-	if baseURL == "" {
-		out.WriteString(mode + "-FAILURE You must set baseurl to the URL (ending in /) that you want to use\n")
-		return
+func (s *SlimeExt) configure(e *external.External) error {
+	var err error
+	s.baseURL, err = e.GetConfig("baseurl")
+	if err != nil {
+		return err
+	}
+	if s.baseURL == "" {
+		return errors.New("You must set baseurl to the URL (ending in /) that you want to use\n")
 	}
 
-	old := getConfig("oldprefixmode")
-	oldPrefixMode = old == "true"
-
-	out.WriteString(mode + "-SUCCESS\n")
-}
-
-type positionPrinter struct {
-	n         int64
-	lastPrint int64
-	rdr       io.Reader
-}
-
-func (p *positionPrinter) Read(buf []byte) (int, error) {
-	n, err := p.rdr.Read(buf)
-	p.n += int64(n)
-	if p.n-p.lastPrint > 131072 {
-		fmt.Fprintf(out, "PROGRESS %d\n", p.n)
-		out.Flush()
-		p.lastPrint = p.n
+	old, err := e.GetConfig("oldprefixmode")
+	if err != nil {
+		return err
 	}
-	return n, err
+	s.oldPrefixMode = old == "true"
+
+	return nil
 }
 
-func store(key, file string) {
-	ok := false
-	defer func() {
-		if ok {
-			out.WriteString("TRANSFER-SUCCESS STORE ")
-		} else {
-			out.WriteString("TRANSFER-FAILURE STORE ")
-		}
-		out.WriteString(key)
-		out.WriteString("\n")
-	}()
+func (s *SlimeExt) InitRemote(e *external.External) error {
+	return s.configure(e)
+}
 
+func (s *SlimeExt) Prepare(e *external.External) error {
+	return s.configure(e)
+}
+
+func (s *SlimeExt) Store(e *external.External, key, file string) error {
 	fh, err := os.Open(file)
 	if err != nil {
-		log.Printf("Couldn't open %v for reading: %v", file, err)
-		return
+		return err
 	}
 	defer fh.Close()
 
-	shaChan := make(chan []byte)
-	lengthChan := make(chan int64)
+	shaDone := make(chan struct{})
+	var sha []byte
+	var length int64
+	var shaError error
 	go func() {
+		defer close(shaDone)
 		hash := sha256.New()
-		_, err := io.Copy(hash, fh)
-		if err != nil {
-			log.Printf("Couldn't read from %s: %v", file, err)
-			return
-		}
-		sha := hash.Sum(nil)
-
-		length, err := fh.Seek(0, 2)
-		if err != nil {
-			log.Printf("Couldn't seek in %s: %v", file, err)
+		length, shaError = io.Copy(hash, fh)
+		if shaError != nil {
 			return
 		}
 
-		_, err = fh.Seek(0, 0)
-		if err != nil {
-			log.Printf("Couldn't seek in %s: %v", file, err)
-			return
-		}
+		sha = hash.Sum(nil)
 
-		shaChan <- sha
-		lengthChan <- length
+		_, shaError = fh.Seek(0, 0)
 	}()
 
-	req, err := http.NewRequest("HEAD", keyURL(key), nil)
+	req, err := http.NewRequest("HEAD", s.keyURL(key), nil)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v",
-			keyURL(key), err)
-		return
+		return fmt.Errorf("Couldn't create request for %s: %v",
+			s.keyURL(key), err)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("Couldn't HEAD %v: %v", req.URL, err)
-		return
+		return fmt.Errorf("Couldn't HEAD %v: %v", req.URL, err)
 	}
 	resp.Body.Close()
 
-	sha := <-shaChan
-	length := <-lengthChan
+	<-shaDone
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		if oldSHA := resp.Header.Get("X-Content-SHA256"); oldSHA != "" {
 			if strings.ToLower(oldSHA) == hex.EncodeToString(sha) {
-				ok = true
-				return
+				// Key already exists with the correct data
+				return nil
 			}
 		}
 	}
 
-	req, err = http.NewRequest("PUT", keyURL(key),
-		&positionPrinter{rdr: fh})
+	req, err = http.NewRequest("PUT", s.keyURL(key),
+		external.NewProgressReader(fh, e))
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v",
-			keyURL(key), err)
-		return
+		return fmt.Errorf("Couldn't create request for %s: %v",
+			s.keyURL(key), err)
 	}
 	req.Header.Set("X-Content-SHA256", hex.EncodeToString(sha))
 	req.Header.Set("Content-Length", strconv.FormatInt(length, 10))
 
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("Couldn't PUT to %v: %v", req.URL, err)
-		return
+		return fmt.Errorf("Couldn't PUT to %v: %v", req.URL, err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("Couldn't PUT to %v: %v", req.URL, resp.Status)
-		return
+		return fmt.Errorf("Couldn't PUT to %v: %v", req.URL, resp.Status)
 	}
 
-	ok = true
+	return nil
 }
 
-func retrieve(key, file string) {
-	ok := false
-	defer func() {
-		if ok {
-			out.WriteString("TRANSFER-SUCCESS RETRIEVE ")
-		} else {
-			out.WriteString("TRANSFER-FAILURE RETRIEVE ")
-		}
-		out.WriteString(key)
-		out.WriteString("\n")
-	}()
-
-	resp, err := http.Get(keyURL(key))
+func (s *SlimeExt) Retrieve(e *external.External, key, file string) error {
+	resp, err := http.Get(s.keyURL(key))
 	if err != nil {
-		log.Printf("Couldn't talk to server: %v", err)
-		return
+		return fmt.Errorf("Couldn't GET %v: %v", s.keyURL(key), err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("Couldn't GET %v: %v", resp.Request.URL, resp.Status)
-		return
+		return fmt.Errorf("Couldn't GET %v: %v", resp.Request.URL, resp.Status)
 	}
 
 	fh, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Printf("Couldn't open %v for writing: %v", file, err)
-		return
+		return err
 	}
 
 	sha := sha256.New()
-	reader := io.TeeReader(resp.Body, sha)
-
-	total := int64(0)
-	for {
-		n, err := io.CopyN(fh, reader, 131072)
-		total += n
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			log.Printf("Couldn't copy data from response: %v", err)
-			fh.Close()
-			return
-		}
-
-		fmt.Fprintf(out, "PROGRESS %d\n", total)
-		out.Flush()
+	reader := io.TeeReader(external.NewProgressReader(resp.Body, e), sha)
+	_, err = io.Copy(fh, reader)
+	if err != nil {
+		fh.Close()
+		return err
 	}
 
 	err = fh.Close()
 	if err != nil {
-		log.Printf("Couldn't close %v after writing: %v", file, err)
-		return
+		return err
 	}
 
 	if resp.Header.Get("X-Content-SHA256") != "" {
 		have := sha.Sum(nil)
 		want, _ := hex.DecodeString(resp.Header.Get("X-Content-SHA256"))
 		if !bytes.Equal(have, want) {
-			log.Printf("Bad checksum of response")
-			return
+			return errors.New("bad checksum of response")
 		}
 	}
 
-	ok = true
+	return nil
 }
 
-func checkPresent(key string) {
-	ret := "UNKNOWN"
-	defer func() {
-		out.WriteString("CHECKPRESENT-" + ret + " " + key + "\n")
-	}()
-
-	req, err := http.NewRequest("HEAD", keyURL(key), nil)
+func (s *SlimeExt) CheckPresent(e *external.External, key string) (bool, error) {
+	req, err := http.NewRequest("HEAD", s.keyURL(key), nil)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v",
-			keyURL(key), err)
-		return
+		return false, err
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("Couldn't talk to server: %v", err)
-		return
+		return false, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		ret = "SUCCESS"
+		return true, nil
 	} else if resp.StatusCode == 404 {
-		ret = "FAILURE"
+		return false, nil
 	}
+
+	return false, fmt.Errorf("unexpected response code %v", resp.StatusCode)
 }
 
-func remove(key string) {
-	ret := "FAILURE"
-	defer func() {
-		out.WriteString("REMOVE-" + ret + " " + key + "\n")
-	}()
-
-	req, err := http.NewRequest("DELETE", keyURL(key), nil)
+func (s *SlimeExt) Remove(e *external.External, key string) error {
+	req, err := http.NewRequest("DELETE", s.keyURL(key), nil)
 	if err != nil {
-		log.Printf("Couldn't create request for %s: %v",
-			keyURL(key), err)
-		return
+		return fmt.Errorf("Couldn't create request for %s: %v",
+			s.keyURL(key), err)
 	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("Couldn't DELETE %v: %v", req.URL, err)
-		return
+		return fmt.Errorf("Couldn't DELETE %v: %v", req.URL, err)
 	}
 	defer resp.Body.Close()
 
 	if (resp.StatusCode >= 200 && resp.StatusCode < 300) || resp.StatusCode == 404 {
-		ret = "SUCCESS"
+		return nil
 	}
+
+	return fmt.Errorf("unexpected response code %v", resp.StatusCode)
+}
+
+func (s *SlimeExt) GetCost(e *external.External) (int, error) {
+	return 0, external.ErrUnsupportedRequest
+}
+
+func (s *SlimeExt) GetAvailability(e *external.External) (external.Availability, error) {
+	return external.AvailabilityGlobal, nil
+}
+
+func (s *SlimeExt) WhereIs(e *external.External, key string) (string, error) {
+	return "", external.ErrUnsupportedRequest
 }
 
 func main() {
-	out.Write([]byte("VERSION 1\n"))
-
-	for {
-		out.Flush()
-
-		line, err := in.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			log.Fatal(err)
-		}
-		line = strings.TrimSuffix(line, "\n")
-
-		switch {
-		case strings.HasPrefix(line, "INITREMOTE"):
-			prepare("INITREMOTE")
-
-		case strings.HasPrefix(line, "PREPARE"):
-			prepare("PREPARE")
-
-		case strings.HasPrefix(line, "TRANSFER "):
-			line = strings.TrimPrefix(line, "TRANSFER ")
-
-			fields := strings.SplitN(line, " ", 3)
-			for len(fields) < 3 {
-				fields = append(fields, "")
-			}
-
-			switch fields[0] {
-			case "STORE":
-				store(fields[1], fields[2])
-			case "RETRIEVE":
-				retrieve(fields[1], fields[2])
-			default:
-				out.WriteString("UNSUPPORTED-REQUEST\n")
-			}
-
-		case strings.HasPrefix(line, "CHECKPRESENT "):
-			key := strings.TrimPrefix(line, "CHECKPRESENT ")
-			checkPresent(key)
-
-		case strings.HasPrefix(line, "REMOVE "):
-			key := strings.TrimPrefix(line, "REMOVE ")
-			remove(key)
-
-		default:
-			out.WriteString("UNSUPPORTED-REQUEST\n")
-		}
+	err := external.RunLoop(os.Stdin, os.Stdout, &SlimeExt{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }
