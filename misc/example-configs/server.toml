@@ -54,6 +54,9 @@ listen = ":17941"
 # this will wait until a slot is available.
 #parallel-requests = 50
 
+# Enable /debug HTTP API endpoints
+#debug = false
+
 # Directories to consider as storage directories. Note that these must already
 # be formatted, and the chunk server will poll to see if they have appeared or
 # disappeared.

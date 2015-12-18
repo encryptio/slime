@@ -8,7 +8,6 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"runtime/debug"
 	"time"
@@ -66,6 +65,7 @@ var config struct {
 	Chunk struct {
 		Listen           string
 		ParallelRequests int `toml:"parallel-requests"`
+		Debug            bool
 		Dirs             []string
 		Scrubber         struct {
 			SleepPerFile tomlDuration `toml:"sleep-per-file"`
@@ -216,6 +216,7 @@ func chunkServer() {
 	}
 
 	h = httputil.NewLimitParallelism(config.Chunk.ParallelRequests, h)
+	h = httputil.AddDebugHandlers(h, config.Chunk.Debug)
 	if !config.Chunk.DisableHTTPLogging {
 		h = httputil.LogHTTPRequests(h)
 	}
@@ -241,16 +242,7 @@ func proxyServer() {
 
 	h = httputil.NewLimitParallelism(config.Proxy.ParallelRequests, h)
 
-	if config.Proxy.Debug != false {
-		mux := http.NewServeMux()
-		mux.Handle("/", h)
-		mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
-		mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-		mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
-		mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-		mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace))
-		h = mux
-	}
+	h = httputil.AddDebugHandlers(h, config.Proxy.Debug)
 
 	if !config.Proxy.DisableHTTPLogging {
 		h = httputil.LogHTTPRequests(h)
