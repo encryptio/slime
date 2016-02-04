@@ -58,7 +58,7 @@ func TestClientCancel(t *testing.T) {
 	clientGet := make(chan error)
 
 	go func() {
-		_, _, err := client.Get("key", cancel)
+		_, _, err := client.Get("key", store.GetOptions{Cancel: cancel})
 		clientGet <- err
 	}()
 
@@ -76,7 +76,7 @@ func TestClientCancel(t *testing.T) {
 
 	close(serverWait)
 
-	_, _, err = client.Get("key", nil)
+	_, _, err = client.Get("key", store.GetOptions{})
 	if err != store.ErrNotFound {
 		t.Errorf("client did not recover from a cancelled request")
 	}
@@ -114,14 +114,14 @@ func TestClientBadSHA(t *testing.T) {
 	}
 	defer c.Close()
 
-	_, _, err = c.Get("key", nil)
+	_, _, err = c.Get("key", store.GetOptions{})
 	if err != nil {
 		t.Fatalf("Couldn't GET key: %v", err)
 	}
 
 	corrupt = true
 
-	_, _, err = c.Get("key", nil)
+	_, _, err = c.Get("key", store.GetOptions{})
 	if _, ok := err.(HashMismatchError); !ok {
 		t.Fatalf("Wanted hash mismatch error on corrupt get, got err %v", err)
 	}

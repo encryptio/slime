@@ -211,7 +211,7 @@ func (m *Multi) rebalanceFile(f meta.File, finderEntries map[[16]byte]FinderEntr
 	}()
 
 	localKey := localKeyFor(&f, minI)
-	data, st, err := minS.Get(localKey, nil)
+	data, st, err := minS.Get(localKey, store.GetOptions{})
 	if err != nil {
 		return false, err
 	}

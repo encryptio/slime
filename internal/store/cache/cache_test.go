@@ -19,9 +19,9 @@ type CountingStore struct {
 	gets, stats int32
 }
 
-func (c *CountingStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+func (c *CountingStore) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
 	atomic.AddInt32(&c.gets, 1)
-	return c.MockStore.Get(key, cancel)
+	return c.MockStore.Get(key, opts)
 }
 
 func (c *CountingStore) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
@@ -34,11 +34,11 @@ type ErrorStore struct {
 	isErroring bool
 }
 
-func (e *ErrorStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+func (e *ErrorStore) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
 	if e.isErroring {
 		return nil, store.Stat{}, ErrErrorStore
 	}
-	return e.MockStore.Get(key, cancel)
+	return e.MockStore.Get(key, opts)
 }
 
 func TestCacheGeneric(t *testing.T) {
@@ -59,7 +59,7 @@ func TestCacheCoalescesGets(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
-			cache.Get("key", nil)
+			cache.Get("key", store.GetOptions{})
 			wg.Done()
 		}()
 	}

@@ -116,7 +116,7 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 		go func(i int) {
 			for j := 0; j < iterations; j++ {
 				for {
-					data, st, err := s.Get("key", nil)
+					data, st, err := s.Get("key", store.GetOptions{})
 					if err != nil {
 						t.Logf("Routine %v: Couldn't get key: %v", i, err)
 						errs <- err

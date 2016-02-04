@@ -55,7 +55,7 @@ func (m *MockStore) Name() string {
 	return fmt.Sprintf("mock<%p>", m)
 }
 
-func (m *MockStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+func (m *MockStore) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
 	m.mu.Lock()
 	m.waitUnblocked()
 	defer m.mu.Unlock()
@@ -72,8 +72,8 @@ func (m *MockStore) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat,
 	}, nil
 }
 
-func (m *MockStore) GetPartial(key string, start, length int, cancel <-chan struct{}) ([]byte, store.Stat, error) {
-	d, st, err := m.Get(key, cancel)
+func (m *MockStore) GetPartial(key string, start, length int, opts store.GetOptions) ([]byte, store.Stat, error) {
+	d, st, err := m.Get(key, opts)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}
@@ -126,7 +126,7 @@ func (m *MockStore) FreeSpace(cancel <-chan struct{}) (int64, error) {
 }
 
 func (m *MockStore) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
-	_, st, err := m.Get(key, cancel)
+	_, st, err := m.Get(key, store.GetOptions{Cancel: cancel})
 	return st, err
 }
 

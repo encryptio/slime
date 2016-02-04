@@ -58,8 +58,8 @@ func (c *Cache) Name() string {
 	return c.inner.Name()
 }
 
-func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
-	d, st, err := c.getUncopied(key, cancel)
+func (c *Cache) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
+	d, st, err := c.getUncopied(key, opts.Cancel)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}
@@ -68,8 +68,8 @@ func (c *Cache) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, err
 	return d2, st, err
 }
 
-func (c *Cache) GetPartial(key string, start, length int, cancel <-chan struct{}) ([]byte, store.Stat, error) {
-	d, st, err := c.getUncopied(key, cancel)
+func (c *Cache) GetPartial(key string, start, length int, opts store.GetOptions) ([]byte, store.Stat, error) {
+	d, st, err := c.getUncopied(key, opts.Cancel)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}
@@ -157,7 +157,7 @@ func (c *Cache) getUncopied(key string, cancel <-chan struct{}) ([]byte, store.S
 				delete(c.entries, key)
 			}
 			c.mu.Unlock()
-			return c.Get(key, cancel)
+			return c.Get(key, store.GetOptions{Cancel: cancel})
 		}
 	}
 
@@ -169,7 +169,7 @@ func (c *Cache) getUncopied(key string, cancel <-chan struct{}) ([]byte, store.S
 func (c *Cache) getWorker(ce *cacheEntry) {
 	defer close(ce.Ready)
 
-	ce.Data, ce.Stat, ce.Error = c.inner.Get(ce.Key, ce.Cancel)
+	ce.Data, ce.Stat, ce.Error = c.inner.Get(ce.Key, store.GetOptions{Cancel: ce.Cancel})
 
 	c.mu.Lock()
 	if ce.Error != nil {

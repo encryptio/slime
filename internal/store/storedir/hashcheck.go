@@ -80,7 +80,7 @@ func (ds *Directory) hashstepInner(afterIn string) (good, bad int64, after strin
 	}
 
 	for _, key := range keys {
-		data, _, err := ds.Get(key, nil)
+		data, _, err := ds.Get(key, store.GetOptions{})
 		if err != nil && err != store.ErrNotFound {
 			bad++
 		} else {

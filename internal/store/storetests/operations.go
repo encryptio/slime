@@ -67,7 +67,7 @@ func ShouldFullList(t *testing.T, s store.Store, expect []string) {
 }
 
 func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
-	got, st, err := s.Get(key, nil)
+	got, st, err := s.Get(key, store.GetOptions{})
 	if err != nil {
 		t.Errorf("Get(%#v) returned unexpected error %v", key, err)
 		return
@@ -85,7 +85,7 @@ func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
 }
 
 func ShouldGetError(t *testing.T, s store.Store, key string, wantErr error) {
-	got, _, err := s.Get(key, nil)
+	got, _, err := s.Get(key, store.GetOptions{})
 	if err != wantErr {
 		t.Errorf("Get(%#v) = (%#v, %v), but wanted err = %v",
 			key, got, err, wantErr)

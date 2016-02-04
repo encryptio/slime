@@ -67,7 +67,7 @@ func (m *Multi) getFile(key string) (*meta.File, error) {
 	return file, nil
 }
 
-func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+func (m *Multi) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
 	r := retry.New(10)
 	for r.Next() {
 		f, err := m.getFile(key)
@@ -79,7 +79,7 @@ func (m *Multi) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, err
 			return nil, store.Stat{}, store.ErrNotFound
 		}
 
-		data, err := m.reconstruct(f, cancel)
+		data, err := m.reconstruct(f, opts.Cancel)
 		if err != nil {
 			f2, err2 := m.getFile(key)
 			if err2 != nil {
@@ -125,7 +125,7 @@ func (m *Multi) getChunkData(f *meta.File, cancel <-chan struct{}) [][]byte {
 		var data []byte
 		if st != nil {
 			localKey := localKeyFor(f, i)
-			data, _, _ = st.Get(localKey, localCancel)
+			data, _, _ = st.Get(localKey, store.GetOptions{Cancel: localCancel})
 			// TODO: log err?
 		}
 		results <- chunkResult{i, data}

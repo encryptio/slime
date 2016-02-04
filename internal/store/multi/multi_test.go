@@ -292,7 +292,7 @@ func TestMultiHungStoreDoesntBlock(t *testing.T) {
 
 		result := make(chan error)
 		go func() {
-			_, _, err := multi.Get("a", nil)
+			_, _, err := multi.Get("a", store.GetOptions{})
 			result <- err
 		}()
 

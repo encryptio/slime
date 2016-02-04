@@ -69,8 +69,8 @@ func (cc *Client) Name() string {
 	return cc.name
 }
 
-func (cc *Client) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
-	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, cancel)
+func (cc *Client) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
+	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, opts.Cancel)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}

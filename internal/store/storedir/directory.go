@@ -34,6 +34,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"hash"
 	"hash/fnv"
 	"io"
 	"io/ioutil"
@@ -377,7 +378,7 @@ func (ds *Directory) findAndOpen(key string) (*os.File, string, error) {
 	return nil, "", nil
 }
 
-func (ds *Directory) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+func (ds *Directory) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
@@ -396,8 +397,14 @@ func (ds *Directory) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat
 		return nil, store.Stat{}, err
 	}
 
-	fnver := fnv.New64a()
-	rdr := io.TeeReader(fh, fnver)
+	var rdr io.Reader
+	var fnver hash.Hash64
+	if opts.NoVerify {
+		rdr = fh
+	} else {
+		fnver = fnv.New64a()
+		rdr = io.TeeReader(fh, fnver)
+	}
 
 	var expectedSHA256 [32]byte
 	_, err = io.ReadFull(rdr, expectedSHA256[:])
@@ -410,18 +417,20 @@ func (ds *Directory) Get(key string, cancel <-chan struct{}) ([]byte, store.Stat
 		return nil, store.Stat{}, err
 	}
 
-	actualFNV := fnver.Sum(nil)
+	if !opts.NoVerify {
+		actualFNV := fnver.Sum(nil)
 
-	if !bytes.Equal(actualFNV, expectedFNV[:]) {
-		fh.Close()
+		if !bytes.Equal(actualFNV, expectedFNV[:]) {
+			fh.Close()
 
-		// TODO: this relocking is fucked and racy
-		ds.mu.RUnlock()
-		ds.mu.Lock()
-		ds.quarantine(key, path)
-		ds.mu.Unlock()
-		ds.mu.RLock()
-		return nil, store.Stat{}, ErrCorruptObject
+			// TODO: this relocking is fucked and racy
+			ds.mu.RUnlock()
+			ds.mu.Lock()
+			ds.quarantine(key, path)
+			ds.mu.Unlock()
+			ds.mu.RLock()
+			return nil, store.Stat{}, ErrCorruptObject
+		}
 	}
 
 	return data, store.Stat{

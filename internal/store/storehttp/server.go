@@ -250,9 +250,9 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	start, length, ok := parseRange(r.Header.Get("Range"))
 	if ok && h.rangeStore != nil {
 		usingRange = true
-		data, st, err = h.rangeStore.GetPartial(obj, start, length, nil)
+		data, st, err = h.rangeStore.GetPartial(obj, start, length, store.GetOptions{})
 	} else {
-		data, st, err = h.store.Get(obj, nil)
+		data, st, err = h.store.Get(obj, store.GetOptions{})
 	}
 
 	if err != nil {

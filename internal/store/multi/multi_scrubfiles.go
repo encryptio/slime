@@ -159,7 +159,7 @@ func (m *Multi) scrubFile(file meta.File, allLocs map[[16]byte]meta.Location) {
 }
 
 func (m *Multi) rebuild(path string) error {
-	data, st, err := m.Get(path, nil)
+	data, st, err := m.Get(path, store.GetOptions{})
 	if err != nil {
 		return err
 	}

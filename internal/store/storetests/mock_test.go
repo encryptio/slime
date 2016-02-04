@@ -3,6 +3,8 @@ package storetests
 import (
 	"testing"
 	"time"
+
+	"github.com/encryptio/slime/internal/store"
 )
 
 func TestMockStoreGeneric(t *testing.T) {
@@ -19,7 +21,7 @@ func TestMockStoreBlocked(t *testing.T) {
 
 	ch := make(chan struct{})
 	go func() {
-		st.Get("asdf", nil)
+		st.Get("asdf", store.GetOptions{})
 		close(ch)
 	}()
 

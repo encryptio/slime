@@ -114,12 +114,12 @@ func (rs *RetryStore) Name() string {
 	return s.Name()
 }
 
-func (rs *RetryStore) Get(key string, cancel <-chan struct{}) ([]byte, Stat, error) {
+func (rs *RetryStore) Get(key string, opts GetOptions) ([]byte, Stat, error) {
 	s := rs.getInner()
 	if s == nil {
 		return nil, Stat{}, ErrUnavailable
 	}
-	return s.Get(key, cancel)
+	return s.Get(key, opts)
 }
 
 func (rs *RetryStore) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {

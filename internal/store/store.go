@@ -43,7 +43,7 @@ type Store interface {
 
 	// Get retrieves the value for the given key and its Stat, or ErrNotFound
 	// if the key does not exist.
-	Get(key string, cancel <-chan struct{}) ([]byte, Stat, error)
+	Get(key string, opts GetOptions) ([]byte, Stat, error)
 
 	// List returns a list of keys which compare bytewise greater than after,
 	// up to the limit number of keys. If limit is <=0, then the return size is
@@ -75,6 +75,17 @@ type Store interface {
 	// methods is undefined as soon as Close has been called, regardless of
 	// its return value.
 	Close() error
+}
+
+// GetOptions contains optional flags to set for a Store's Get method.
+type GetOptions struct {
+	// If NoVerify is true, then the the Store may skip some consistency checks.
+	// It may have better performance, but also may return invalid data.
+	NoVerify bool
+
+	// If the channel given in Cancel is closed, then the Store call may return
+	// early with ErrCanceled.
+	Cancel <-chan struct{}
 }
 
 var (
@@ -129,5 +140,5 @@ type RangeReadStore interface {
 	// the value to retrieve. If length is negative, reads until the end of the
 	// value. Note that the Stat returned represents the whole file, not just
 	// the part that was returned.
-	GetPartial(key string, start, length int, cancel <-chan struct{}) ([]byte, Stat, error)
+	GetPartial(key string, start, length int, opts GetOptions) ([]byte, Stat, error)
 }
