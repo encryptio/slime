@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -90,24 +91,37 @@ func (cc *Client) Get(key string, opts store.GetOptions) ([]byte, store.Stat, er
 		return nil, store.Stat{}, httputil.ReadResponseAsError(resp)
 	}
 
-	hasher := sha256.New()
-
-	data, err := ioutil.ReadAll(io.TeeReader(resp.Body, hasher))
-	if err != nil {
-		return nil, store.Stat{}, err
-	}
-
-	var h [32]byte
-	copy(h[:], hasher.Sum(nil))
-
+	var shouldH [32]byte
+	var shouldHSet bool
 	if should := resp.Header.Get("x-content-sha256"); should != "" {
 		shouldBytes, err := hex.DecodeString(should)
 		if err != nil || len(shouldBytes) != 32 {
 			return nil, store.Stat{}, ErrUnparsableSHAResponse
 		}
 
-		var shouldH [32]byte
 		copy(shouldH[:], shouldBytes)
+		shouldHSet = true
+	}
+
+	var rdr io.Reader
+	var hasher hash.Hash
+	if opts.NoVerify && shouldHSet {
+		rdr = resp.Body
+	} else {
+		hasher = sha256.New()
+		rdr = io.TeeReader(resp.Body, hasher)
+	}
+
+	data, err := ioutil.ReadAll(rdr)
+	if err != nil {
+		return nil, store.Stat{}, err
+	}
+
+	var h [32]byte
+	if opts.NoVerify && shouldHSet {
+		h = shouldH
+	} else {
+		copy(h[:], hasher.Sum(nil))
 
 		if h != shouldH {
 			return nil, store.Stat{}, HashMismatchError{Got: h, Want: shouldH}
