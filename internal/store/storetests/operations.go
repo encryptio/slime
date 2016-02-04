@@ -9,7 +9,7 @@ import (
 	"github.com/encryptio/slime/internal/store"
 )
 
-func ShouldList(t *testing.T, s store.Store, after string, limit int, expect []string) {
+func ShouldList(t testing.TB, s store.Store, after string, limit int, expect []string) {
 	got, err := s.List(after, limit, nil)
 	if err != nil {
 		t.Errorf("Unexpected error from List(%#v, %v): %v", after, limit, err)
@@ -24,7 +24,7 @@ func ShouldList(t *testing.T, s store.Store, after string, limit int, expect []s
 	}
 }
 
-func ShouldListCount(t *testing.T, s store.Store, count int) {
+func ShouldListCount(t testing.TB, s store.Store, count int) {
 	actualCount := 0
 
 	from := ""
@@ -46,7 +46,7 @@ func ShouldListCount(t *testing.T, s store.Store, count int) {
 	}
 }
 
-func ShouldCASError(t *testing.T, s store.Store, key string, from, to store.CASV, wantErr error) {
+func ShouldCASError(t testing.TB, s store.Store, key string, from, to store.CASV, wantErr error) {
 	err := s.CAS(key, from, to, nil)
 	if err != wantErr {
 		t.Errorf("CAS(%#v, %v, %v) returned error %v, but wanted %v",
@@ -54,19 +54,19 @@ func ShouldCASError(t *testing.T, s store.Store, key string, from, to store.CASV
 	}
 }
 
-func ShouldCAS(t *testing.T, s store.Store, key string, from, to store.CASV) {
+func ShouldCAS(t testing.TB, s store.Store, key string, from, to store.CASV) {
 	ShouldCASError(t, s, key, from, to, nil)
 }
 
-func ShouldCASFail(t *testing.T, s store.Store, key string, from, to store.CASV) {
+func ShouldCASFail(t testing.TB, s store.Store, key string, from, to store.CASV) {
 	ShouldCASError(t, s, key, from, to, store.ErrCASFailure)
 }
 
-func ShouldFullList(t *testing.T, s store.Store, expect []string) {
+func ShouldFullList(t testing.TB, s store.Store, expect []string) {
 	ShouldList(t, s, "", 0, expect)
 }
 
-func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
+func ShouldGet(t testing.TB, s store.Store, key string, data []byte) {
 	got, st, err := s.Get(key, store.GetOptions{})
 	if err != nil {
 		t.Errorf("Get(%#v) returned unexpected error %v", key, err)
@@ -84,7 +84,7 @@ func ShouldGet(t *testing.T, s store.Store, key string, data []byte) {
 	}
 }
 
-func ShouldGetError(t *testing.T, s store.Store, key string, wantErr error) {
+func ShouldGetError(t testing.TB, s store.Store, key string, wantErr error) {
 	got, _, err := s.Get(key, store.GetOptions{})
 	if err != wantErr {
 		t.Errorf("Get(%#v) = (%#v, %v), but wanted err = %v",
@@ -92,11 +92,11 @@ func ShouldGetError(t *testing.T, s store.Store, key string, wantErr error) {
 	}
 }
 
-func ShouldGetMiss(t *testing.T, s store.Store, key string) {
+func ShouldGetMiss(t testing.TB, s store.Store, key string) {
 	ShouldGetError(t, s, key, store.ErrNotFound)
 }
 
-func ShouldFreeSpace(t *testing.T, s store.Store) {
+func ShouldFreeSpace(t testing.TB, s store.Store) {
 	free, err := s.FreeSpace(nil)
 	if err != nil {
 		t.Errorf("FreeSpace() returned unexpected error %v", err)
@@ -107,7 +107,7 @@ func ShouldFreeSpace(t *testing.T, s store.Store) {
 	}
 }
 
-func ShouldStat(t *testing.T, s store.Store, key string, stat store.Stat) {
+func ShouldStat(t testing.TB, s store.Store, key string, stat store.Stat) {
 	st, err := s.Stat(key, nil)
 	if err != nil {
 		t.Errorf("Stat(%#v) returned unexpected error %v", key, err)
@@ -118,7 +118,7 @@ func ShouldStat(t *testing.T, s store.Store, key string, stat store.Stat) {
 	}
 }
 
-func ShouldStatMiss(t *testing.T, s store.Store, key string) {
+func ShouldStatMiss(t testing.TB, s store.Store, key string) {
 	st, err := s.Stat(key, nil)
 	if err != store.ErrNotFound {
 		t.Errorf("Stat(%#v) returned (%v, %v), but wanted %v",
