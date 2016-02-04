@@ -353,27 +353,9 @@ func (cc *Client) startReq(
 		}
 	}
 
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-done:
-		case <-cancel:
-			var rt http.RoundTripper
-			if cc.client.Transport == nil {
-				rt = http.DefaultTransport
-			} else {
-				rt = cc.client.Transport
-			}
-			if tr, ok := rt.(interface {
-				CancelRequest(*http.Request)
-			}); ok {
-				tr.CancelRequest(req)
-			}
-		}
-	}()
+	req.Cancel = cancel
 
 	resp, err := cc.client.Do(req)
-	close(done)
 
 	select {
 	case <-cancel:
