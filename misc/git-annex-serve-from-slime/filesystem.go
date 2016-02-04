@@ -379,6 +379,7 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	req.Header.Set("X-Slime-Noverify", "true")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
