@@ -70,7 +70,13 @@ func (cc *Client) Name() string {
 }
 
 func (cc *Client) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
-	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, nil, opts.Cancel)
+	var headers http.Header
+	if opts.NoVerify {
+		headers = make(http.Header, 1)
+		headers.Set("X-Slime-Noverify", "true")
+	}
+
+	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, headers, opts.Cancel)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}

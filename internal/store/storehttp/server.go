@@ -238,6 +238,11 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 		}
 	}
 
+	noverify := false
+	if r.Header.Get("X-Slime-Noverify") == "true" {
+		noverify = true
+	}
+
 	// The race between the Get and the above Stat is benign; we might
 	// miss an opportunity to cache, but we'll never return an incorrect
 	// result.
@@ -247,12 +252,15 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	var err error
 	usingRange := false
 
+	// TODO: pass a cancel channel to these Get calls
 	start, length, ok := parseRange(r.Header.Get("Range"))
 	if ok && h.rangeStore != nil {
 		usingRange = true
-		data, st, err = h.rangeStore.GetPartial(obj, start, length, store.GetOptions{})
+		data, st, err = h.rangeStore.GetPartial(obj, start, length, store.GetOptions{
+			NoVerify: noverify,
+		})
 	} else {
-		data, st, err = h.store.Get(obj, store.GetOptions{})
+		data, st, err = h.store.Get(obj, store.GetOptions{NoVerify: noverify})
 	}
 
 	if err != nil {

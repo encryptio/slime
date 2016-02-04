@@ -91,6 +91,10 @@ slime during this time.)
 Get data for a key. GET may be optionally conditional on the If-None-Match
 header.
 
+If passed a request header `X-Slime-Noverify: true`, slime will skip some
+validation steps on the response, which may improve performance but may also
+return invalid data.
+
 Expected responses:
 
 - 200 OK: Data was found for this key. Contains ETag and X-Content-SHA256

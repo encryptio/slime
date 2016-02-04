@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/encryptio/slime/internal/store"
@@ -99,5 +100,37 @@ func TestHTTPRange(t *testing.T) {
 					w.HeaderMap.Get("Content-Range"))
 			}
 		}
+	}
+}
+
+type noverifyRecorder struct {
+	store.Store
+	noverify []bool
+}
+
+func (n *noverifyRecorder) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
+	n.noverify = append(n.noverify, opts.NoVerify)
+	return n.Store.Get(key, opts)
+}
+
+func TestHTTPNoVerify(t *testing.T) {
+	mock := storetests.NewMockStore(0)
+	recorder := &noverifyRecorder{mock, nil}
+
+	srv := httptest.NewServer(NewServer(recorder))
+	defer srv.Close()
+
+	client, err := NewClient(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("Couldn't initialize client: %v", err)
+	}
+
+	pattern := []bool{false, true, false}
+	for _, nv := range pattern {
+		client.Get("key", store.GetOptions{NoVerify: nv})
+	}
+
+	if !reflect.DeepEqual(recorder.noverify, pattern) {
+		t.Fatalf("Wanted noverify pattern %#v, but got %#v", pattern, recorder.noverify)
 	}
 }
