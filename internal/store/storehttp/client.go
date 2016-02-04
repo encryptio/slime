@@ -70,7 +70,7 @@ func (cc *Client) Name() string {
 }
 
 func (cc *Client) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
-	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, opts.Cancel)
+	resp, err := cc.startReq("GET", cc.url+url.QueryEscape(key), nil, nil, opts.Cancel)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}
@@ -175,7 +175,7 @@ func (cc *Client) List(after string, limit int, cancel <-chan struct{}) ([]strin
 		args.Add("limit", strconv.FormatInt(int64(limit), 10))
 	}
 
-	resp, err := cc.startReq("GET", cc.url+"?"+args.Encode(), nil, cancel)
+	resp, err := cc.startReq("GET", cc.url+"?"+args.Encode(), nil, nil, cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func (cc *Client) List(after string, limit int, cancel <-chan struct{}) ([]strin
 }
 
 func (cc *Client) FreeSpace(cancel <-chan struct{}) (int64, error) {
-	resp, err := cc.startReq("GET", cc.url+"?mode=free", nil, cancel)
+	resp, err := cc.startReq("GET", cc.url+"?mode=free", nil, nil, cancel)
 	if err != nil {
 		return 0, err
 	}
@@ -227,7 +227,7 @@ func (cc *Client) FreeSpace(cancel <-chan struct{}) (int64, error) {
 }
 
 func (cc *Client) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
-	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil, cancel)
+	resp, err := cc.startReq("HEAD", cc.url+url.QueryEscape(key), nil, nil, cancel)
 	if err != nil {
 		return store.Stat{}, err
 	}
@@ -271,7 +271,7 @@ func (cc *Client) loadStatics() error {
 }
 
 func (cc *Client) loadUUID() error {
-	resp, err := cc.startReq("GET", cc.url+"?mode=uuid", nil, nil)
+	resp, err := cc.startReq("GET", cc.url+"?mode=uuid", nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -296,7 +296,7 @@ func (cc *Client) loadUUID() error {
 }
 
 func (cc *Client) loadName() error {
-	resp, err := cc.startReq("GET", cc.url+"?mode=name", nil, nil)
+	resp, err := cc.startReq("GET", cc.url+"?mode=name", nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -316,10 +316,21 @@ func (cc *Client) loadName() error {
 	return nil
 }
 
-func (cc *Client) startReq(method, url string, body io.Reader, cancel <-chan struct{}) (*http.Response, error) {
+func (cc *Client) startReq(
+	method, url string,
+	body io.Reader,
+	headers http.Header,
+	cancel <-chan struct{}) (*http.Response, error) {
+
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
+	}
+
+	if headers != nil {
+		for k, v := range headers {
+			req.Header[k] = v
+		}
 	}
 
 	done := make(chan struct{})
