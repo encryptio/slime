@@ -52,6 +52,9 @@ time_requests map { HTTP::Request->new("PUT", "http://$config->{proxy_listen}/da
 status "Timing GET performance";
 time_requests map { HTTP::Request->new("GET", "http://$config->{proxy_listen}/data/file-".length($_), undef, $_) } @files;
 
+status "Timing GET NoVerify performance";
+time_requests map { HTTP::Request->new("GET", "http://$config->{proxy_listen}/data/file-".length($_), ["X-Slime-Noverify", "true"], $_) } @files;
+
 status "Stopping slime";
 kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
 
