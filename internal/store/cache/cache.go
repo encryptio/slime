@@ -23,7 +23,8 @@ type Cache struct {
 }
 
 type cacheEntry struct {
-	Key string
+	Key      string
+	NoVerify bool
 
 	// Writes to these happen in getWorker, and all are set to their final value
 	// before Ready is closed.
@@ -59,7 +60,7 @@ func (c *Cache) Name() string {
 }
 
 func (c *Cache) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
-	d, st, err := c.getUncopied(key, opts.Cancel)
+	d, st, err := c.getUncopied(key, opts.Cancel, opts.NoVerify)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}
@@ -69,7 +70,7 @@ func (c *Cache) Get(key string, opts store.GetOptions) ([]byte, store.Stat, erro
 }
 
 func (c *Cache) GetPartial(key string, start, length int, opts store.GetOptions) ([]byte, store.Stat, error) {
-	d, st, err := c.getUncopied(key, opts.Cancel)
+	d, st, err := c.getUncopied(key, opts.Cancel, opts.NoVerify)
 	if err != nil {
 		return nil, store.Stat{}, err
 	}
@@ -89,15 +90,30 @@ func (c *Cache) GetPartial(key string, start, length int, opts store.GetOptions)
 	return d2, st, nil
 }
 
-func (c *Cache) getUncopied(key string, cancel <-chan struct{}) ([]byte, store.Stat, error) {
+func (c *Cache) getUncopied(
+	key string,
+	cancel <-chan struct{},
+	noverify bool) ([]byte, store.Stat, error) {
+
 	c.mu.Lock()
 	ce, ok := c.entries[key]
+	if ok && ce.NoVerify && !noverify {
+		// The existing cache entry was called with NoVerify, but this call
+		// wants verification. Delete the entry, we'll replace it below.
+
+		// Note that attaching a NoVerify request to a verified cacheEntry is
+		// okay.
+
+		ok = false
+		delete(c.entries, key)
+	}
 	if !ok {
 		// No cache entry; make one and spawn a getWorker.
 		ce = &cacheEntry{
-			Key:    key,
-			Ready:  make(chan struct{}),
-			Cancel: make(chan struct{}),
+			Key:      key,
+			NoVerify: noverify,
+			Ready:    make(chan struct{}),
+			Cancel:   make(chan struct{}),
 		}
 		c.entries[key] = ce
 		go c.getWorker(ce)
@@ -122,7 +138,9 @@ func (c *Cache) getUncopied(key string, cancel <-chan struct{}) ([]byte, store.S
 		if ce.waiters == 0 {
 			// We're the last; cancel the inner.Get
 			close(ce.Cancel)
-			delete(c.entries, key)
+			if c.entries[key] == ce {
+				delete(c.entries, key)
+			}
 		}
 		c.mu.Unlock()
 		return nil, store.Stat{}, store.ErrCancelled
@@ -157,7 +175,10 @@ func (c *Cache) getUncopied(key string, cancel <-chan struct{}) ([]byte, store.S
 				delete(c.entries, key)
 			}
 			c.mu.Unlock()
-			return c.Get(key, store.GetOptions{Cancel: cancel})
+			return c.Get(key, store.GetOptions{
+				Cancel:   cancel,
+				NoVerify: noverify,
+			})
 		}
 	}
 
@@ -169,45 +190,50 @@ func (c *Cache) getUncopied(key string, cancel <-chan struct{}) ([]byte, store.S
 func (c *Cache) getWorker(ce *cacheEntry) {
 	defer close(ce.Ready)
 
-	ce.Data, ce.Stat, ce.Error = c.inner.Get(ce.Key, store.GetOptions{Cancel: ce.Cancel})
+	ce.Data, ce.Stat, ce.Error = c.inner.Get(ce.Key, store.GetOptions{
+		Cancel:   ce.Cancel,
+		NoVerify: ce.NoVerify,
+	})
 
 	c.mu.Lock()
-	if ce.Error != nil {
-		// Don't cache the error for future gets
-		if c.entries[ce.Key] == ce {
+	if c.entries[ce.Key] == ce {
+		if ce.Error != nil {
+			// Don't cache the error for future gets
 			delete(c.entries, ce.Key)
-		}
-	} else {
-		c.used += len(ce.Data) + perEntryMemoryFudge
-
-		// Garbage collection.
-		for c.used > c.size {
-			// TODO: optimize with auxilary structures, like a container/heap
-
-			var oldestKey string
-			var oldest *cacheEntry
-			for k, v := range c.entries {
-				select {
-				case <-v.Ready:
-					if oldest == nil || v.LastUsed.Before(oldest.LastUsed) {
-						oldestKey = k
-						oldest = v
-					}
-				default:
-					// skip
-				}
-			}
-
-			if oldest == nil {
-				// Nothing to collect; shouldn't be impossible.
-				break
-			}
-
-			delete(c.entries, oldestKey)
-			c.used -= len(oldest.Data) + perEntryMemoryFudge
+		} else {
+			c.used += len(ce.Data) + perEntryMemoryFudge
+			c.garbageCollectLocked()
 		}
 	}
 	c.mu.Unlock()
+}
+
+func (c *Cache) garbageCollectLocked() {
+	for c.used > c.size {
+		// TODO: optimize with auxilary structures, like a container/heap
+
+		var oldestKey string
+		var oldest *cacheEntry
+		for k, v := range c.entries {
+			select {
+			case <-v.Ready:
+				if oldest == nil || v.LastUsed.Before(oldest.LastUsed) {
+					oldestKey = k
+					oldest = v
+				}
+			default:
+				// skip
+			}
+		}
+
+		if oldest == nil {
+			// Nothing to collect. Possible with tiny cache sizes.
+			break
+		}
+
+		delete(c.entries, oldestKey)
+		c.used -= len(oldest.Data) + perEntryMemoryFudge
+	}
 }
 
 func (c *Cache) List(after string, limit int, cancel <-chan struct{}) ([]string, error) {
