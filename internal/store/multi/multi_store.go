@@ -79,7 +79,7 @@ func (m *Multi) Get(key string, opts store.GetOptions) ([]byte, store.Stat, erro
 			return nil, store.Stat{}, store.ErrNotFound
 		}
 
-		data, err := m.reconstruct(f, opts.Cancel)
+		data, err := m.reconstruct(f, opts)
 		if err != nil {
 			f2, err2 := m.getFile(key)
 			if err2 != nil {
@@ -102,7 +102,7 @@ func (m *Multi) Get(key string, opts store.GetOptions) ([]byte, store.Stat, erro
 	return nil, store.Stat{}, ErrTooManyRetries
 }
 
-func (m *Multi) getChunkData(f *meta.File, cancel <-chan struct{}) [][]byte {
+func (m *Multi) getChunkData(f *meta.File, opts store.GetOptions) [][]byte {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
@@ -116,16 +116,19 @@ func (m *Multi) getChunkData(f *meta.File, cancel <-chan struct{}) [][]byte {
 		data  []byte
 	}
 
-	// NB: buffer size is to avoid deadlocks between defer wg.Wait() and extra
-	// parity results
-	results := make(chan chunkResult, len(f.Locations)-int(f.DataChunks))
+	// NB: buffer size is to avoid deadlocks between defer wg.Wait() and results
+	// writes during local and upstream cancellation
+	results := make(chan chunkResult, len(f.Locations))
 
 	work := func(i int) {
 		st := m.finder.StoreFor(f.Locations[i])
 		var data []byte
 		if st != nil {
 			localKey := localKeyFor(f, i)
-			data, _, _ = st.Get(localKey, store.GetOptions{Cancel: localCancel})
+			data, _, _ = st.Get(localKey, store.GetOptions{
+				Cancel:   localCancel,
+				NoVerify: opts.NoVerify,
+			})
 			// TODO: log err?
 		}
 		results <- chunkResult{i, data}
@@ -172,17 +175,17 @@ func (m *Multi) getChunkData(f *meta.File, cancel <-chan struct{}) [][]byte {
 				wg.Add(1)
 				go work(i)
 			}
-		case <-cancel:
+		case <-opts.Cancel:
 			return chunkData
 		}
 	}
 }
 
-func (m *Multi) reconstruct(f *meta.File, cancel <-chan struct{}) ([]byte, error) {
-	chunkData := m.getChunkData(f, cancel)
+func (m *Multi) reconstruct(f *meta.File, opts store.GetOptions) ([]byte, error) {
+	chunkData := m.getChunkData(f, opts)
 
 	select {
-	case <-cancel:
+	case <-opts.Cancel:
 		return nil, store.ErrCancelled
 	default:
 	}
@@ -237,9 +240,11 @@ func (m *Multi) reconstruct(f *meta.File, cancel <-chan struct{}) ([]byte, error
 		data = data[:int(f.Size)]
 	}
 
-	have := sha256.Sum256(data)
-	if have != f.SHA256 {
-		return nil, ErrBadHash
+	if !opts.NoVerify {
+		have := sha256.Sum256(data)
+		if have != f.SHA256 {
+			return nil, ErrBadHash
+		}
 	}
 
 	return data, nil
