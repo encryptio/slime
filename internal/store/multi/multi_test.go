@@ -14,7 +14,7 @@ import (
 	"git.encryptio.com/kvl/backend/ram"
 )
 
-func prepareMultiTest(t *testing.T, need, total, serverCount int) ([]*killHandler, *Multi, []*storetests.MockStore, func()) {
+func prepareMultiTest(t testing.TB, need, total, serverCount int) ([]*killHandler, *Multi, []*storetests.MockStore, func()) {
 	var killers []*killHandler
 	var mockstores []*storetests.MockStore
 
