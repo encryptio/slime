@@ -173,7 +173,10 @@ func (h *Server) serveList(w http.ResponseWriter, r *http.Request) {
 		limit = int(i)
 	}
 
-	names, err := h.store.List(after, limit, nil)
+	canceller := makeCanceller(w)
+	defer canceller.Close()
+
+	names, err := h.store.List(after, limit, canceller.Cancel)
 	if err != nil {
 		log.Printf("Couldn't List(): %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -189,7 +192,10 @@ func (h *Server) serveList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Server) serveFree(w http.ResponseWriter, r *http.Request) {
-	free, err := h.store.FreeSpace(nil)
+	canceller := makeCanceller(w)
+	defer canceller.Close()
+
+	free, err := h.store.FreeSpace(canceller.Cancel)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -210,8 +216,11 @@ func (h *Server) serveName(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj string) {
+	canceller := makeCanceller(w)
+	defer canceller.Close()
+
 	if theirEtags := r.Header.Get("if-none-match"); theirEtags != "" {
-		st, err := h.store.Stat(obj, nil)
+		st, err := h.store.Stat(obj, canceller.Cancel)
 		if err != nil {
 			if err == store.ErrNotFound {
 				http.Error(w, "not found", http.StatusNotFound)
@@ -252,15 +261,18 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	var err error
 	usingRange := false
 
-	// TODO: pass a cancel channel to these Get calls
 	start, length, ok := parseRange(r.Header.Get("Range"))
 	if ok && h.rangeStore != nil {
 		usingRange = true
 		data, st, err = h.rangeStore.GetPartial(obj, start, length, store.GetOptions{
+			Cancel:   canceller.Cancel,
 			NoVerify: noverify,
 		})
 	} else {
-		data, st, err = h.store.Get(obj, store.GetOptions{NoVerify: noverify})
+		data, st, err = h.store.Get(obj, store.GetOptions{
+			Cancel:   canceller.Cancel,
+			NoVerify: noverify,
+		})
 	}
 
 	if err != nil {
@@ -300,7 +312,10 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 }
 
 func (h *Server) serveObjectHead(w http.ResponseWriter, r *http.Request, obj string) {
-	st, err := h.store.Stat(obj, nil)
+	canceller := makeCanceller(w)
+	defer canceller.Close()
+
+	st, err := h.store.Stat(obj, canceller.Cancel)
 	if err != nil {
 		if err == store.ErrNotFound {
 			w.WriteHeader(http.StatusNotFound)
@@ -374,11 +389,14 @@ func (h *Server) serveObjectPut(w http.ResponseWriter, r *http.Request, obj stri
 		return
 	}
 
+	canceller := makeCanceller(w)
+	defer canceller.Close()
+
 	err = h.store.CAS(obj, from, store.CASV{
 		Present: true,
 		SHA256:  haveHash,
 		Data:    data,
-	}, nil)
+	}, canceller.Cancel)
 	if err != nil {
 		if err == store.ErrCASFailure {
 			http.Error(w, err.Error(), http.StatusPreconditionFailed)
@@ -393,6 +411,9 @@ func (h *Server) serveObjectPut(w http.ResponseWriter, r *http.Request, obj stri
 }
 
 func (h *Server) serveObjectDelete(w http.ResponseWriter, r *http.Request, obj string) {
+	canceller := makeCanceller(w)
+	defer canceller.Close()
+
 	doRetry := true
 	retr := retry.New(10)
 	for retr.Next() {
@@ -407,7 +428,7 @@ func (h *Server) serveObjectDelete(w http.ResponseWriter, r *http.Request, obj s
 		if from.Any {
 			// TODO: make the CAS interface rich enough to handle this
 			// without Stat
-			st, err := h.store.Stat(obj, nil)
+			st, err := h.store.Stat(obj, canceller.Cancel)
 			if err != nil {
 				if err == store.ErrNotFound {
 					http.Error(w, "not found", http.StatusNotFound)
@@ -422,7 +443,7 @@ func (h *Server) serveObjectDelete(w http.ResponseWriter, r *http.Request, obj s
 			doRetry = true
 		}
 
-		err = h.store.CAS(obj, from, store.CASV{Present: false}, nil)
+		err = h.store.CAS(obj, from, store.CASV{Present: false}, canceller.Cancel)
 		if err != nil {
 			if err == store.ErrCASFailure {
 				if doRetry {

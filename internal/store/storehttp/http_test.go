@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/encryptio/slime/internal/store"
 	"github.com/encryptio/slime/internal/store/storetests"
@@ -132,5 +134,107 @@ func TestHTTPNoVerify(t *testing.T) {
 
 	if !reflect.DeepEqual(recorder.noverify, pattern) {
 		t.Fatalf("Wanted noverify pattern %#v, but got %#v", pattern, recorder.noverify)
+	}
+}
+
+type cancelRecorder struct {
+	store.Store
+	mu      sync.Mutex
+	cancels []<-chan struct{}
+}
+
+func (c *cancelRecorder) Get(key string, opts store.GetOptions) ([]byte, store.Stat, error) {
+	c.mu.Lock()
+	c.cancels = append(c.cancels, opts.Cancel)
+	c.mu.Unlock()
+	return c.Store.Get(key, opts)
+}
+
+func (c *cancelRecorder) Cancels() []<-chan struct{} {
+	c.mu.Lock()
+	out := make([]<-chan struct{}, len(c.cancels))
+	copy(out, c.cancels)
+	c.mu.Unlock()
+	return out
+}
+
+func (c *cancelRecorder) ClearCancels() {
+	c.mu.Lock()
+	c.cancels = nil
+	c.mu.Unlock()
+}
+
+func TestHTTPCancellation(t *testing.T) {
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+
+	mock := storetests.NewMockStore(0)
+	recorder := &cancelRecorder{Store: mock}
+
+	srv := httptest.NewServer(NewServer(recorder))
+	defer srv.Close()
+
+	client, err := NewClient(srv.URL + "/")
+	if err != nil {
+		t.Fatalf("Couldn't initialize client: %v", err)
+	}
+
+	recorder.ClearCancels()
+
+	mock.SetBlocked(true)
+	defer mock.SetBlocked(false)
+
+	// Start a request
+	clientCancel := make(chan struct{})
+	clientErr := make(chan error, 1)
+	go func() {
+		_, _, err := client.Get("key", store.GetOptions{Cancel: clientCancel})
+		clientErr <- err
+	}()
+
+	// Wait until the request reaches the server
+	var serverCancel <-chan struct{}
+	for {
+		select {
+		case <-timeout.C:
+			t.Fatalf("Timed out while waiting for server to recieve request")
+		case <-time.After(5 * time.Millisecond):
+		}
+
+		cancels := recorder.Cancels()
+		if len(cancels) == 0 {
+			// Request hasn't reached the server yet
+			continue
+		}
+		if len(cancels) == 1 {
+			serverCancel = cancels[0]
+			break
+		}
+		t.Fatalf("Got multiple cancel channels")
+	}
+
+	// Close the client request
+	close(clientCancel)
+
+	// Wait for the client to respond to the cancellation
+	select {
+	case err := <-clientErr:
+		if err != store.ErrCancelled {
+			t.Errorf("Client Get returned err %v after canceling, wanted %v",
+				err, store.ErrCancelled)
+		}
+	case <-timeout.C:
+		t.Fatalf("Client Get did not return after cancellation")
+	}
+
+	// Wait for the server to respond to the cancellation
+LOOP:
+	for {
+		select {
+		case <-serverCancel:
+			break LOOP
+		case <-timeout.C:
+			t.Fatalf("Timed out waiting for server cancel")
+		}
 	}
 }
