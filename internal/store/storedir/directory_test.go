@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"git.encryptio.com/slime/internal/store/storetests"
+	"github.com/encryptio/slime/internal/store/storetests"
 )
 
 func TestDirectoryCommon(t *testing.T) {

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-glock save -n git.encryptio.com/slime > .glockfile-tmp
+glock save -n github.com/encryptio/slime > .glockfile-tmp
 diff .glockfile-tmp ../GLOCKFILE || {
     rm .glockfile-tmp
     echo >&2 "GLOCKFILE not up to date"

@@ -13,10 +13,10 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"git.encryptio.com/kvl"
-	"git.encryptio.com/slime/internal/meta"
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/store/storehttp"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/meta"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/store/storehttp"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 var ScanInterval = time.Minute * 5

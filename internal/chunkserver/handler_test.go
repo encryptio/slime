@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"testing"
 
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/store/storedir"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/store/storedir"
 )
 
 func shouldRespond(t *testing.T, handler http.Handler, method, url string, requestBody string, code int, responseBody string) {

@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"git.encryptio.com/slime/internal/meta"
-	"git.encryptio.com/slime/internal/retry"
-	"git.encryptio.com/slime/internal/rs"
-	"git.encryptio.com/slime/internal/rs/gf"
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/meta"
+	"github.com/encryptio/slime/internal/retry"
+	"github.com/encryptio/slime/internal/rs"
+	"github.com/encryptio/slime/internal/rs/gf"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/uuid"
 
 	"git.encryptio.com/kvl"
 )

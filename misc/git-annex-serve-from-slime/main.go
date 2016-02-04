@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"git.encryptio.com/slime/internal/httputil"
+	"github.com/encryptio/slime/internal/httputil"
 )
 
 var (

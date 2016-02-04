@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"git.encryptio.com/slime/internal/meta"
+	"github.com/encryptio/slime/internal/meta"
 
 	"git.encryptio.com/kvl"
 )

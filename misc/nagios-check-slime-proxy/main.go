@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 func dieUnknown(format string, v ...interface{}) {

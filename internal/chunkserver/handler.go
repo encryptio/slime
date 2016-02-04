@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/store/storehttp"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/store/storehttp"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 type Handler struct {

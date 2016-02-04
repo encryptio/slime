@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 func (ds *Directory) Hashcheck() (good, bad int64) {

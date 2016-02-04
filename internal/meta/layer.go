@@ -10,7 +10,7 @@ import (
 	"git.encryptio.com/kvl/keys"
 	"git.encryptio.com/kvl/tuple"
 
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 var (

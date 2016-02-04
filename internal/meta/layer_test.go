@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/uuid"
 
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/backend/ram"

@@ -65,10 +65,10 @@ sub build_binary_dir {
     my $flags = "";
     $flags .= "-race " if $config->{race};
 
-    system "go build $flags -o \Q$binaries/slime\E git.encryptio.com/slime" and die;
-    system "go build $flags -o \Q$binaries/slimectl\E git.encryptio.com/slime/slimectl" and die;
-    system "go build $flags -o \Q$binaries/git-annex-remote-slime\E git.encryptio.com/slime/misc/git-annex-remote-slime" and die;
-    system "go build $flags -o \Q$binaries/git-annex-serve-from-slime\E git.encryptio.com/slime/misc/git-annex-serve-from-slime" and die;
+    system "go build $flags -o \Q$binaries/slime\E github.com/encryptio/slime" and die;
+    system "go build $flags -o \Q$binaries/slimectl\E github.com/encryptio/slime/slimectl" and die;
+    system "go build $flags -o \Q$binaries/git-annex-remote-slime\E github.com/encryptio/slime/misc/git-annex-remote-slime" and die;
+    system "go build $flags -o \Q$binaries/git-annex-serve-from-slime\E github.com/encryptio/slime/misc/git-annex-serve-from-slime" and die;
     $ENV{PATH} = "$binaries:$ENV{PATH}";
     return $binaries;
 }

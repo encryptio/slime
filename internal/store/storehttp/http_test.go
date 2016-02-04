@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/store/storetests"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/store/storetests"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 func TestHTTPCommon(t *testing.T) {

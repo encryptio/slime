@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"git.encryptio.com/slime/internal/store"
+	"github.com/encryptio/slime/internal/store"
 )
 
 const (

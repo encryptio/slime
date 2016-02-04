@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"git.encryptio.com/slime/internal/meta"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/meta"
+	"github.com/encryptio/slime/internal/uuid"
 
 	"git.encryptio.com/kvl"
 )

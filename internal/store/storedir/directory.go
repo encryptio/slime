@@ -47,8 +47,8 @@ import (
 
 	"gopkg.in/tomb.v2"
 
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 var ErrCorruptObject = errors.New("object is corrupt")

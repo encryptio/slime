@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/store/storetests"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/store/storetests"
 )
 
 var ErrErrorStore = errors.New("ErrorStore error")

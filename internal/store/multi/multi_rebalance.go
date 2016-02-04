@@ -5,9 +5,9 @@ import (
 	"log"
 	"time"
 
-	"git.encryptio.com/slime/internal/meta"
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/meta"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/uuid"
 
 	"git.encryptio.com/kvl"
 )

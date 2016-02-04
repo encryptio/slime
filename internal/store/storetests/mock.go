@@ -7,8 +7,8 @@ import (
 	"sort"
 	"sync"
 
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 var ErrNotEnoughMockSpace = errors.New("no space left in MockStore")

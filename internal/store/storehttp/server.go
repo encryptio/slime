@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	"git.encryptio.com/slime/internal/retry"
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/retry"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 var errBadIfMatchFormat = errors.New("bad format for if-match header value")

@@ -21,7 +21,7 @@ want to do a more production-style deployment, see PRODUCTION.md for details.
 
 Compile the slime daemon and control tool:
 
-    $ go install git.encryptio.com/slime git.encryptio.com/slime/slimectl
+    $ go install github.com/encryptio/slime github.com/encryptio/slime/slimectl
 
 Create a PostgreSQL database and user:
 

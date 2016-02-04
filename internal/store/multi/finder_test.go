@@ -5,10 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"git.encryptio.com/slime/internal/chunkserver"
-	"git.encryptio.com/slime/internal/meta"
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/store/storetests"
+	"github.com/encryptio/slime/internal/chunkserver"
+	"github.com/encryptio/slime/internal/meta"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/store/storetests"
 
 	"git.encryptio.com/kvl"
 	"git.encryptio.com/kvl/backend/ram"

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"git.encryptio.com/slime/internal/rs/gf"
+	"github.com/encryptio/slime/internal/rs/gf"
 )
 
 func genRandomGFVector(l int) []uint32 {

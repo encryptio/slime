@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"git.encryptio.com/slime/internal/store"
+	"github.com/encryptio/slime/internal/store"
 )
 
 func ShouldList(t *testing.T, s store.Store, after string, limit int, expect []string) {

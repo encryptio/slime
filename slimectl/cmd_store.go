@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/uuid"
 )
 
 func handleStore(args []string) error {

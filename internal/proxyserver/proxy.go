@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"git.encryptio.com/slime/internal/httputil"
-	"git.encryptio.com/slime/internal/meta"
-	"git.encryptio.com/slime/internal/store"
-	"git.encryptio.com/slime/internal/store/cache"
-	"git.encryptio.com/slime/internal/store/multi"
-	"git.encryptio.com/slime/internal/store/storehttp"
-	"git.encryptio.com/slime/internal/uuid"
+	"github.com/encryptio/slime/internal/httputil"
+	"github.com/encryptio/slime/internal/meta"
+	"github.com/encryptio/slime/internal/store"
+	"github.com/encryptio/slime/internal/store/cache"
+	"github.com/encryptio/slime/internal/store/multi"
+	"github.com/encryptio/slime/internal/store/storehttp"
+	"github.com/encryptio/slime/internal/uuid"
 
 	"git.encryptio.com/kvl"
 )

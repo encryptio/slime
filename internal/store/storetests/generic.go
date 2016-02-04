@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"git.encryptio.com/slime/internal/store"
+	"github.com/encryptio/slime/internal/store"
 )
 
 func TestStore(t *testing.T, s store.Store) {
