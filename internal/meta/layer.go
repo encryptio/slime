@@ -134,18 +134,7 @@ func (l *Layer) WALCheck(id [16]byte) (bool, error) {
 	_, err := l.inner.Get(tuple.MustAppend(nil, "wal2", id))
 	if err != nil {
 		if err == kvl.ErrNotFound {
-			return l.walCheckVersion1(id)
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (l *Layer) walCheckVersion1(id [16]byte) (bool, error) {
-	_, err := l.inner.Get(tuple.MustAppend(nil, "wal", id))
-	if err != nil {
-		if err == kvl.ErrNotFound {
-			return false, nil
+			err = nil
 		}
 		return false, err
 	}
@@ -205,60 +194,6 @@ func (l *Layer) WALClearOld() error {
 					if err != nil {
 						return err
 					}
-				}
-			}
-		}
-
-		if len(ps) < rang.Limit {
-			break
-		}
-
-		rang.Low = ps[len(ps)-1].Key
-	}
-
-	return l.walClearOldVersion1()
-}
-
-func (l *Layer) walClearOldVersion1() error {
-	var rang kvl.RangeQuery
-	rang.Low, rang.High = keys.PrefixRange(tuple.MustAppend(nil, "wal"))
-	rang.Limit = 100
-
-	for {
-		ps, err := l.inner.Range(rang)
-		if err != nil {
-			return err
-		}
-
-		now := time.Now().Unix()
-
-		for _, p := range ps {
-			var t int64
-			var typ string
-			var id [16]byte
-			err = tuple.UnpackInto(p.Key, &typ, &id)
-			if err != nil {
-				return err
-			}
-			err = tuple.UnpackInto(p.Value, &t)
-			if err != nil {
-				return err
-			}
-
-			age := time.Duration(now-t) * time.Second
-
-			if age < -walUnsafeFutureAge {
-				log.Printf("WARNING: WAL entry %v is %v in the future! Skipping it.",
-					uuid.Fmt(id), age)
-			} else if age > walUnsafeOldAge {
-				log.Printf("WARNING: WAL entry %v is %v in the past! Skipping it.",
-					uuid.Fmt(id), age)
-			} else if age > walExpireAge {
-				log.Printf("Removing expired WAL entry %v (%v old)",
-					uuid.Fmt(id), age)
-				err := l.WALClear(id)
-				if err != nil {
-					return err
 				}
 			}
 		}
