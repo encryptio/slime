@@ -69,6 +69,7 @@ sub build_binary_dir {
     system "go build $flags -o \Q$binaries/slimectl\E github.com/encryptio/slime/slimectl" and die;
     system "go build $flags -o \Q$binaries/git-annex-remote-slime\E github.com/encryptio/slime/misc/git-annex-remote-slime" and die;
     system "go build $flags -o \Q$binaries/git-annex-serve-from-slime\E github.com/encryptio/slime/misc/git-annex-serve-from-slime" and die;
+    system "go build $flags -o \Q$binaries/benchtestutil\E github.com/encryptio/slime/internal/benchtestutil" and die;
     $ENV{PATH} = "$binaries:$ENV{PATH}";
     return $binaries;
 }
