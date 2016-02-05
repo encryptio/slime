@@ -382,6 +382,12 @@ func (ds *Directory) Get(key string, opts store.GetOptions) ([]byte, store.Stat,
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
+	select {
+	case <-opts.Cancel:
+		return nil, store.Stat{}, store.ErrCancelled
+	default:
+	}
+
 	fh, path, err := ds.findAndOpen(key)
 	if err != nil {
 		return nil, store.Stat{}, err
@@ -412,9 +418,43 @@ func (ds *Directory) Get(key string, opts store.GetOptions) ([]byte, store.Stat,
 		return nil, store.Stat{}, err
 	}
 
-	data, err := ioutil.ReadAll(rdr)
+	fi, err := fh.Stat()
 	if err != nil {
 		return nil, store.Stat{}, err
+	}
+
+	size := fi.Size() - 40
+
+	if int64(int(size)) != size {
+		return nil, store.Stat{}, errors.New("file is too big")
+	}
+
+	data := make([]byte, int(size))
+	at := 0
+	for at < len(data) {
+		readInto := data[at:]
+		if len(readInto) > 1024*1024 {
+			readInto = readInto[:1024*1024]
+		}
+
+		n, err := rdr.Read(readInto)
+		at += n
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, store.Stat{}, err
+		}
+
+		select {
+		case <-opts.Cancel:
+			return nil, store.Stat{}, store.ErrCancelled
+		default:
+		}
+	}
+
+	if at != len(data) {
+		return nil, store.Stat{}, errors.New("file was shortened during read")
 	}
 
 	if !opts.NoVerify {
@@ -435,7 +475,7 @@ func (ds *Directory) Get(key string, opts store.GetOptions) ([]byte, store.Stat,
 
 	return data, store.Stat{
 		SHA256: expectedSHA256,
-		Size:   int64(len(data)),
+		Size:   size,
 	}, nil
 }
 
@@ -476,6 +516,12 @@ func (ds *Directory) statUnlocked(key string) (store.Stat, string, error) {
 func (ds *Directory) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
+
+	select {
+	case <-cancel:
+		return store.ErrCancelled
+	default:
+	}
 
 	stat, oldPath, err := ds.statUnlocked(key)
 	if err != nil && err != store.ErrNotFound {
@@ -650,6 +696,12 @@ func (ds *Directory) List(afterKey string, limit int, cancel <-chan struct{}) ([
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
+	select {
+	case <-cancel:
+		return nil, store.ErrCancelled
+	default:
+	}
+
 	ret := make([]string, 0, 100)
 	for _, s := range ds.splits {
 		if s.High < afterKey {
@@ -659,6 +711,12 @@ func (ds *Directory) List(afterKey string, limit int, cancel <-chan struct{}) ([
 		fis, err := ioutil.ReadDir(filepath.Join(ds.Dir, "data", s.Name))
 		if err != nil {
 			return nil, err
+		}
+
+		select {
+		case <-cancel:
+			return nil, store.ErrCancelled
+		default:
 		}
 
 		for _, fi := range fis {
