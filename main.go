@@ -115,7 +115,7 @@ func loadConfigOrDie() {
 		config.Chunk.Listen = "127.0.0.1:17941"
 	}
 	if config.Chunk.ParallelRequests <= 0 {
-		config.Chunk.ParallelRequests = 50
+		config.Chunk.ParallelRequests = 200
 	}
 	if config.Chunk.Scrubber.SleepPerFile.Duration <= 0 {
 		config.Chunk.Scrubber.SleepPerFile.Duration = 50 * time.Millisecond
