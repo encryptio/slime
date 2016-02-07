@@ -46,6 +46,7 @@ func TestCacheGeneric(t *testing.T) {
 		inner := storetests.NewMockStore(0)
 		cache := New(size, inner)
 		storetests.TestStore(t, cache)
+		cache.assertUsedIsCorrect()
 	}
 }
 
@@ -79,14 +80,21 @@ func TestCacheCoalescesGets(t *testing.T) {
 	}
 }
 
+func TestCacheEmptyHasCorrectUsed(t *testing.T) {
+	cache := New(1024, storetests.NewMockStore(0))
+	cache.assertUsedIsCorrect()
+}
+
 func TestCacheCachesGets(t *testing.T) {
 	inner := &CountingStore{MockStore: storetests.NewMockStore(0)}
 	cache := New(1024, inner)
 
 	storetests.ShouldCAS(t, inner, "asdf", store.AnyV, store.DataV([]byte("hello")))
+	cache.assertUsedIsCorrect()
 
 	for i := 0; i < 10; i++ {
 		storetests.ShouldGet(t, cache, "asdf", []byte("hello"))
+		cache.assertUsedIsCorrect()
 	}
 
 	if inner.gets != 1 {
@@ -96,6 +104,8 @@ func TestCacheCachesGets(t *testing.T) {
 	if inner.stats != 9 {
 		t.Errorf("wanted 9 inner Stats, got %v", inner.stats)
 	}
+
+	cache.assertUsedIsCorrect()
 }
 
 func TestCacheDoesntCacheErrors(t *testing.T) {
@@ -103,14 +113,19 @@ func TestCacheDoesntCacheErrors(t *testing.T) {
 	cache := New(1024, inner)
 
 	storetests.ShouldCAS(t, cache, "asdf", store.AnyV, store.DataV([]byte("hello")))
+	cache.Clear()
 
 	inner.isErroring = true
 	for i := 0; i < 10; i++ {
 		storetests.ShouldGetError(t, cache, "asdf", ErrErrorStore)
 	}
 
+	cache.assertUsedIsCorrect()
+
 	inner.isErroring = false
 	storetests.ShouldGet(t, cache, "asdf", []byte("hello"))
+
+	cache.assertUsedIsCorrect()
 }
 
 func TestCacheUpdatesOnKnownChanges(t *testing.T) {
@@ -118,17 +133,20 @@ func TestCacheUpdatesOnKnownChanges(t *testing.T) {
 	cache := New(1024, inner)
 
 	storetests.ShouldCAS(t, cache, "asdf", store.AnyV, store.DataV([]byte("hello")))
+	cache.Clear()
 	storetests.ShouldGet(t, cache, "asdf", []byte("hello"))
 	storetests.ShouldCAS(t, cache, "asdf", store.AnyV, store.DataV([]byte("world")))
 	storetests.ShouldGet(t, cache, "asdf", []byte("world"))
 
-	if inner.gets != 2 {
-		t.Errorf("wanted 2 inner gets, got %v", inner.gets)
+	if inner.gets != 1 {
+		t.Errorf("wanted 1 inner gets, got %v", inner.gets)
 	}
 
-	if inner.stats != 0 {
-		t.Errorf("wanted 0 inner Stats, got %v", inner.stats)
+	if inner.stats != 1 {
+		t.Errorf("wanted 1 inner Stats, got %v", inner.stats)
 	}
+
+	cache.assertUsedIsCorrect()
 }
 
 func TestCacheUpdatesOnUnknownChanges(t *testing.T) {
@@ -136,6 +154,7 @@ func TestCacheUpdatesOnUnknownChanges(t *testing.T) {
 	cache := New(1024, inner)
 
 	storetests.ShouldCAS(t, cache, "asdf", store.AnyV, store.DataV([]byte("hello")))
+	cache.Clear()
 	storetests.ShouldGet(t, cache, "asdf", []byte("hello"))
 	storetests.ShouldCAS(t, inner, "asdf", store.AnyV, store.DataV([]byte("world")))
 	storetests.ShouldGet(t, cache, "asdf", []byte("world"))
@@ -147,6 +166,8 @@ func TestCacheUpdatesOnUnknownChanges(t *testing.T) {
 	if inner.stats != 1 {
 		t.Errorf("wanted 1 inner Stats, got %v", inner.stats)
 	}
+
+	cache.assertUsedIsCorrect()
 }
 
 func TestCacheGCWorks(t *testing.T) {
@@ -158,11 +179,16 @@ func TestCacheGCWorks(t *testing.T) {
 		storetests.ShouldCAS(t, cache, key, store.AnyV, store.DataV([]byte(key)))
 	}
 
+	cache.assertUsedIsCorrect()
+	t.Logf("cache.used after writes is %v", cache.used)
+
 	for i := 0; i < 1024; i++ {
 		key := strconv.FormatInt(int64(i), 10)
 		storetests.ShouldGet(t, cache, key, []byte(key))
 	}
 
+	cache.assertUsedIsCorrect()
+	t.Logf("cache.used after first reads is %v", cache.used)
 	getsBefore := inner.gets
 
 	for i := 0; i < 1024; i++ {
@@ -170,6 +196,8 @@ func TestCacheGCWorks(t *testing.T) {
 		storetests.ShouldGet(t, cache, key, []byte(key))
 	}
 
+	cache.assertUsedIsCorrect()
+	t.Logf("cache.used after second reads is %v", cache.used)
 	getsAfter := inner.gets
 
 	if getsAfter != getsBefore+1024 {

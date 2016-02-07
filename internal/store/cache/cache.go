@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -105,7 +106,7 @@ func (c *Cache) getUncopied(
 		// okay.
 
 		ok = false
-		delete(c.entries, key)
+		c.removeEntryLocked(key)
 	}
 	if !ok {
 		// No cache entry; make one and spawn a getWorker.
@@ -115,7 +116,7 @@ func (c *Cache) getUncopied(
 			Ready:    make(chan struct{}),
 			Cancel:   make(chan struct{}),
 		}
-		c.entries[key] = ce
+		c.setEntryLocked(key, ce)
 		go c.getWorker(ce)
 	}
 	ce.waiters++
@@ -139,7 +140,7 @@ func (c *Cache) getUncopied(
 			// We're the last; cancel the inner.Get
 			close(ce.Cancel)
 			if c.entries[key] == ce {
-				delete(c.entries, key)
+				c.removeEntryLocked(key)
 			}
 		}
 		c.mu.Unlock()
@@ -172,7 +173,7 @@ func (c *Cache) getUncopied(
 			// Stat did NOT match. Remove it from the cache and try again.
 			c.mu.Lock()
 			if c.entries[key] == ce {
-				delete(c.entries, key)
+				c.removeEntryLocked(key)
 			}
 			c.mu.Unlock()
 			return c.Get(key, store.GetOptions{
@@ -190,18 +191,20 @@ func (c *Cache) getUncopied(
 func (c *Cache) getWorker(ce *cacheEntry) {
 	defer close(ce.Ready)
 
-	ce.Data, ce.Stat, ce.Error = c.inner.Get(ce.Key, store.GetOptions{
+	data, stat, err := c.inner.Get(ce.Key, store.GetOptions{
 		Cancel:   ce.Cancel,
 		NoVerify: ce.NoVerify,
 	})
 
 	c.mu.Lock()
+	ce.Data, ce.Stat, ce.Error = data, stat, err
 	if c.entries[ce.Key] == ce {
 		if ce.Error != nil {
 			// Don't cache the error for future gets
-			delete(c.entries, ce.Key)
+			c.removeEntryLocked(ce.Key)
 		} else {
-			c.used += len(ce.Data) + perEntryMemoryFudge
+			// NB: perEntryMemoryFudge already applies
+			c.used += len(ce.Data)
 			c.garbageCollectLocked()
 		}
 	}
@@ -231,8 +234,7 @@ func (c *Cache) garbageCollectLocked() {
 			break
 		}
 
-		delete(c.entries, oldestKey)
-		c.used -= len(oldest.Data) + perEntryMemoryFudge
+		c.removeEntryLocked(oldestKey)
 	}
 }
 
@@ -252,13 +254,78 @@ func (c *Cache) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
 func (c *Cache) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {
 	err := c.inner.CAS(key, from, to, cancel)
 	if err == nil {
-		// We might delete an entry that is actually useful, but that only
-		// happens on highly contended keys (which caching sucks at anyway.)
 		c.mu.Lock()
-		delete(c.entries, key)
+		if to.Present {
+			ready := make(chan struct{})
+			close(ready)
+
+			data := make([]byte, len(to.Data))
+			copy(data, to.Data)
+
+			ce := &cacheEntry{
+				Key:      key,
+				NoVerify: false,
+				Ready:    ready,
+				Stat: store.Stat{
+					SHA256: to.SHA256,
+					Size:   int64(len(data)),
+				},
+				Data:     data,
+				LastUsed: time.Now(),
+			}
+
+			c.setEntryLocked(key, ce)
+		} else {
+			if _, ok := c.entries[key]; ok {
+				c.removeEntryLocked(key)
+			}
+		}
 		c.mu.Unlock()
 	}
 	return err
+}
+
+func (c *Cache) Clear() {
+	c.mu.Lock()
+	for key := range c.entries {
+		c.removeEntryLocked(key)
+	}
+	c.mu.Unlock()
+	c.assertUsedIsCorrect()
+}
+
+func (c *Cache) removeEntryLocked(key string) {
+	if ce, ok := c.entries[key]; ok {
+		delete(c.entries, key)
+		c.used -= len(ce.Data) + perEntryMemoryFudge
+	}
+}
+
+func (c *Cache) setEntryLocked(key string, ce *cacheEntry) {
+	if ce.Key != key {
+		panic("ce.Key != key")
+	}
+
+	if _, ok := c.entries[key]; ok {
+		c.removeEntryLocked(key)
+	}
+
+	c.entries[key] = ce
+	c.used += len(ce.Data) + perEntryMemoryFudge
+
+	c.garbageCollectLocked()
+}
+
+func (c *Cache) assertUsedIsCorrect() {
+	c.mu.Lock()
+	used := 0
+	for _, ce := range c.entries {
+		used += len(ce.Data) + perEntryMemoryFudge
+	}
+	if used != c.used {
+		panic(fmt.Sprintf("c.used = %v but wanted %v", c.used, used))
+	}
+	c.mu.Unlock()
 }
 
 func (c *Cache) Close() error {
