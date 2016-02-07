@@ -247,8 +247,24 @@ func (c *Cache) FreeSpace(cancel <-chan struct{}) (int64, error) {
 }
 
 func (c *Cache) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
-	// TODO: remove from c.entries based on the results, if needed
-	return c.inner.Stat(key, cancel)
+	st, err := c.inner.Stat(key, cancel)
+	if err != nil {
+		return st, err
+	}
+
+	c.mu.Lock()
+	if ce, ok := c.entries[key]; ok {
+		select {
+		case <-ce.Ready:
+			if st != ce.Stat {
+				c.removeEntryLocked(key)
+			}
+		default:
+		}
+	}
+	c.mu.Unlock()
+
+	return st, err
 }
 
 func (c *Cache) CAS(key string, from, to store.CASV, cancel <-chan struct{}) error {

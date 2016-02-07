@@ -170,6 +170,28 @@ func TestCacheUpdatesOnUnknownChanges(t *testing.T) {
 	cache.assertUsedIsCorrect()
 }
 
+func TestCacheUpdatesOnStats(t *testing.T) {
+	inner := &CountingStore{MockStore: storetests.NewMockStore(0)}
+	cache := New(1024, inner)
+
+	storetests.ShouldCAS(t, cache, "asdf", store.AnyV, store.DataV([]byte("hello")))
+	storetests.ShouldGet(t, cache, "asdf", []byte("hello"))
+	newData := store.DataV([]byte("world"))
+	storetests.ShouldCAS(t, inner, "asdf", store.AnyV, newData)
+	storetests.ShouldStat(t, cache, "asdf", store.Stat{Size: 5, SHA256: newData.SHA256})
+	storetests.ShouldGet(t, cache, "asdf", []byte("world"))
+
+	if inner.gets != 1 {
+		t.Errorf("wanted 1 inner gets, got %v", inner.gets)
+	}
+
+	if inner.stats != 2 {
+		t.Errorf("wanted 2 inner Stats, got %v", inner.stats)
+	}
+
+	cache.assertUsedIsCorrect()
+}
+
 func TestCacheGCWorks(t *testing.T) {
 	inner := &CountingStore{MockStore: storetests.NewMockStore(0)}
 	cache := New(1024, inner)
