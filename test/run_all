@@ -11,7 +11,7 @@ my $failed = 0;
 opendir my $dh, "." or die;
 my @tests =
     sort
-    grep { -x $_ }
+    grep { -x $_ and -f $_ }
     grep { !/^\./ }
     grep { $_ ne "run_all" }
     readdir $dh;
