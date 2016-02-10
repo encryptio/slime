@@ -137,8 +137,12 @@ type RangeReadStore interface {
 	Store
 
 	// GetPartial gets part of a value. start and length specify the subrange of
-	// the value to retrieve. If length is negative, reads until the end of the
-	// value. Note that the Stat returned represents the whole file, not just
-	// the part that was returned.
+	// the value to retrieve. Note that the Stat returned represents the whole
+	// file, not just the part that was returned.
+	//
+	// If length is negative, reads until the end of the value. If start is
+	// negative, behavior is undefined. If start is after the full length of the
+	// data or if length is zero, then GetPartial will successfully return an
+	// empty byte slice.
 	GetPartial(key string, start, length int, opts GetOptions) ([]byte, Stat, error)
 }
