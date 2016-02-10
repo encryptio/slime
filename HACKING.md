@@ -82,5 +82,4 @@ Committing
 Ensure that your code is `go fmt`ed, that all tests pass, and that new tests are
 written as applicable.
 
-Send in a patch to the maintainer at `encryptio@gmail.com` using
-`git format-patch`.
+Open a pull request with your changes on github.
