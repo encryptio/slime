@@ -13,6 +13,8 @@ import (
 
 var ErrNotEnoughMockSpace = errors.New("no space left in MockStore")
 
+var _ store.RangeReadStore = &MockStore{}
+
 type MockStore struct {
 	mu         sync.Mutex
 	cond       *sync.Cond

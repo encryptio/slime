@@ -14,6 +14,8 @@ const (
 	perEntryMemoryFudge = 128
 )
 
+var _ store.RangeReadStore = &Cache{}
+
 type Cache struct {
 	size  int
 	inner store.Store
