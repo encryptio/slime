@@ -2,6 +2,7 @@ package storetests
 
 import (
 	"crypto/sha256"
+	"math/rand"
 	"runtime"
 	"strconv"
 	"sync/atomic"
@@ -15,6 +16,9 @@ func TestStore(t *testing.T, s store.Store) {
 	TestStoreList(t, s)
 	TestStoreCASCountRace(t, s)
 	//TestStoreGoroutineLeaks(t, s) // TODO: unreliable
+	if rangeStore, ok := s.(store.RangeReadStore); ok {
+		TestStoreRangeRead(t, rangeStore)
+	}
 }
 
 func TestStoreBasics(t *testing.T, s store.Store) {
@@ -164,5 +168,35 @@ func TestStoreCASCountRace(t *testing.T, s store.Store) {
 	t.Logf("%v cas failures", casFailures)
 
 	ShouldGet(t, s, "key", []byte(strconv.FormatInt(goroutines*iterations, 10)))
+	ShouldCAS(t, s, "key", store.AnyV, store.MissingV)
+}
+
+func TestStoreRangeRead(t *testing.T, s store.RangeReadStore) {
+	t.Logf("TestStoreRangeRead()")
+
+	data := make([]byte, 1024)
+	for i := range data {
+		data[i] = byte(rand.Int31())
+	}
+
+	ShouldFullList(t, s, nil)
+	ShouldCAS(t, s, "key", store.AnyV, store.DataV(data))
+	ShouldGet(t, s, "key", data)
+	ShouldGetPartial(t, s, "key", 0, len(data), data)
+	ShouldGetPartial(t, s, "key", 1, len(data), data[1:])
+	ShouldGetPartial(t, s, "key", 0, -1, data)
+	ShouldGetPartial(t, s, "key", 1, -1, data[1:])
+	ShouldGetPartial(t, s, "key", 128, -1, data[128:])
+	ShouldGetPartial(t, s, "key", 128, 128, data[128:256])
+	ShouldGetPartial(t, s, "key", 555, 1, data[555:556])
+	ShouldGetPartial(t, s, "key", 1020, -1, data[1020:])
+	ShouldGetPartial(t, s, "key", 1023, -1, data[1023:])
+	ShouldGetPartial(t, s, "key", 1024, -1, nil)
+	ShouldGetPartial(t, s, "key", 1023, 1, data[1023:])
+	ShouldGetPartial(t, s, "key", 1024, 1, nil)
+	ShouldGetPartial(t, s, "key", 1023, 0, nil)
+	ShouldGetPartial(t, s, "key", 1024, 0, nil)
+	ShouldGetPartial(t, s, "key", 5555, -1, nil)
+	ShouldGetPartial(t, s, "key", 1000, 60, data[1000:])
 	ShouldCAS(t, s, "key", store.AnyV, store.MissingV)
 }
