@@ -94,8 +94,9 @@ func (m *Multi) Get(key string, opts store.GetOptions) ([]byte, store.Stat, erro
 		}
 
 		return data, store.Stat{
-			SHA256: f.SHA256,
-			Size:   int64(f.Size),
+			SHA256:    f.SHA256,
+			Size:      int64(f.Size),
+			WriteTime: f.WriteTime,
 		}, err
 	}
 
@@ -261,8 +262,9 @@ func (m *Multi) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
 	}
 
 	return store.Stat{
-		SHA256: file.SHA256,
-		Size:   int64(file.Size),
+		SHA256:    file.SHA256,
+		Size:      int64(file.Size),
+		WriteTime: file.WriteTime,
 	}, nil
 }
 

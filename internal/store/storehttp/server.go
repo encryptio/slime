@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/encryptio/slime/internal/retry"
 	"github.com/encryptio/slime/internal/store"
@@ -219,7 +220,12 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	canceller := makeCanceller(w)
 	defer canceller.Close()
 
-	if theirEtags := r.Header.Get("if-none-match"); theirEtags != "" {
+	theirEtags := r.Header.Get("If-None-Match")
+	theirLastModified := r.Header.Get("If-Modified-Since")
+
+	if theirEtags != "" || theirLastModified != "" {
+		// Conditional GET; should stat and see if we can skip the GET.
+
 		st, err := h.store.Stat(obj, canceller.Cancel)
 		if err != nil {
 			if err == store.ErrNotFound {
@@ -234,9 +240,16 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 		etag := `"` + hex.EncodeToString(st.SHA256[:]) + `"`
 
 		matched := false
-		for _, s := range strings.Split(theirEtags, ",") {
-			s = strings.TrimSpace(s)
-			if s == "*" || s == etag {
+		if theirEtags != "" {
+			for _, s := range strings.Split(theirEtags, ",") {
+				s = strings.TrimSpace(s)
+				if s == "*" || s == etag {
+					matched = true
+				}
+			}
+		} else if theirLastModified != "" && st.WriteTime != 0 {
+			t, err := time.Parse(http.TimeFormat, theirLastModified)
+			if err == nil && !time.Unix(st.WriteTime, 0).After(t) {
 				matched = true
 			}
 		}
@@ -302,6 +315,10 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	}
 	w.Header().Set("ETag", `"`+hex.EncodeToString(st.SHA256[:])+`"`)
 
+	if st.WriteTime != 0 {
+		w.Header().Set("Last-Modified", time.Unix(st.WriteTime, 0).UTC().Format(http.TimeFormat))
+	}
+
 	if usingRange {
 		w.WriteHeader(http.StatusPartialContent)
 	} else {
@@ -337,6 +354,10 @@ func (h *Server) serveObjectHead(w http.ResponseWriter, r *http.Request, obj str
 			hex.EncodeToString(st.SHA256[:]))
 		w.Header().Set("ETag",
 			`"`+hex.EncodeToString(st.SHA256[:])+`"`)
+	}
+
+	if st.WriteTime != 0 {
+		w.Header().Set("Last-Modified", time.Unix(st.WriteTime, 0).UTC().Format(http.TimeFormat))
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")

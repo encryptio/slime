@@ -238,3 +238,66 @@ LOOP:
 		}
 	}
 }
+
+func TestHTTPConditionalGetLastModified(t *testing.T) {
+	mock := storetests.NewMockStore(0)
+	srv := NewServer(mock)
+
+	storetests.ShouldCAS(t, mock, "key", store.AnyV, store.DataV([]byte("some data")))
+
+	mkReq := func(ims string) *http.Request {
+		req, err := http.NewRequest("GET", "/key", nil)
+		if err != nil {
+			t.Fatalf("Couldn't create request: %v", err)
+		}
+		if ims != "" {
+			req.Header.Set("If-Modified-Since", ims)
+		}
+		return req
+	}
+
+	// First request: no special headers
+	resp := httptest.NewRecorder()
+	req := mkReq("")
+	srv.ServeHTTP(resp, req)
+	if resp.Code != 200 {
+		t.Fatalf("Couldn't GET /key, status code %v", resp.Code)
+	}
+
+	lmStr := resp.HeaderMap.Get("Last-Modified")
+	if lmStr == "" {
+		t.Fatalf("Last-Modified header was not returned from GET")
+	}
+
+	lm, err := time.Parse(http.TimeFormat, lmStr)
+	if err != nil {
+		t.Fatalf("Couldn't parse Last-Modified %#v: %v", lmStr, err)
+	}
+
+	// Second request: matching If-Modified-Since time
+	resp = httptest.NewRecorder()
+	req = mkReq(lm.Format(http.TimeFormat))
+	srv.ServeHTTP(resp, req)
+	if resp.Code != 304 {
+		t.Fatalf("Equal If-Modified-Since response did not return partial, got status %v",
+			resp.Code)
+	}
+
+	// Third request: If-Modified-Since time in the past
+	resp = httptest.NewRecorder()
+	req = mkReq(lm.Add(-time.Second).Format(http.TimeFormat))
+	srv.ServeHTTP(resp, req)
+	if resp.Code != 200 {
+		t.Fatalf("Past If-Modified-Since response did not return full, got status %v",
+			resp.Code)
+	}
+
+	// Fourth request: If-Modified-Since time in the future
+	resp = httptest.NewRecorder()
+	req = mkReq(lm.Add(time.Second).Format(http.TimeFormat))
+	srv.ServeHTTP(resp, req)
+	if resp.Code != 304 {
+		t.Fatalf("Equal If-Modified-Since response did not return partial, got status %v",
+			resp.Code)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/encryptio/slime/internal/store"
 	"github.com/encryptio/slime/internal/uuid"
@@ -18,16 +19,21 @@ var _ store.RangeReadStore = &MockStore{}
 type MockStore struct {
 	mu         sync.Mutex
 	cond       *sync.Cond
-	contents   map[string]string
+	contents   map[string]storeEntry
 	size, used int64
 	blocked    bool
 
 	uuid [16]byte
 }
 
+type storeEntry struct {
+	data      []byte
+	writeTime int64
+}
+
 func NewMockStore(size int64) *MockStore {
 	m := &MockStore{
-		contents: make(map[string]string, 128),
+		contents: make(map[string]storeEntry, 128),
 		uuid:     uuid.Gen4(),
 		size:     size,
 	}
@@ -62,15 +68,18 @@ func (m *MockStore) Get(key string, opts store.GetOptions) ([]byte, store.Stat, 
 	m.waitUnblocked()
 	defer m.mu.Unlock()
 
-	data, ok := m.contents[key]
+	entry, ok := m.contents[key]
 	if !ok {
 		return nil, store.Stat{}, store.ErrNotFound
 	}
 
-	bytes := []byte(data)
+	bytes := make([]byte, len(entry.data))
+	copy(bytes, entry.data)
+
 	return bytes, store.Stat{
-		SHA256: sha256.Sum256(bytes),
-		Size:   int64(len(bytes)),
+		SHA256:    sha256.Sum256(bytes),
+		Size:      int64(len(bytes)),
+		WriteTime: entry.writeTime,
 	}, nil
 }
 
@@ -137,8 +146,8 @@ func (m *MockStore) CAS(key string, from, to store.CASV, cancel <-chan struct{})
 	m.waitUnblocked()
 	defer m.mu.Unlock()
 
-	haveData, have := m.contents[key]
-	haveSHA := sha256.Sum256([]byte(haveData))
+	haveEntry, have := m.contents[key]
+	haveSHA := sha256.Sum256(haveEntry.data)
 
 	if !from.Any {
 		if from.Present != have {
@@ -149,7 +158,7 @@ func (m *MockStore) CAS(key string, from, to store.CASV, cancel <-chan struct{})
 		}
 	}
 
-	newUsed := m.used - int64(len(m.contents[key]))
+	newUsed := m.used - int64(len(haveEntry.data))
 	if to.Present {
 		newUsed += int64(len(to.Data))
 	}
@@ -160,7 +169,13 @@ func (m *MockStore) CAS(key string, from, to store.CASV, cancel <-chan struct{})
 	if !to.Present {
 		delete(m.contents, key)
 	} else {
-		m.contents[key] = string(to.Data)
+		storedData := make([]byte, len(to.Data))
+		copy(storedData, to.Data)
+
+		m.contents[key] = storeEntry{
+			data:      storedData,
+			writeTime: time.Now().Unix(),
+		}
 	}
 
 	m.used = newUsed

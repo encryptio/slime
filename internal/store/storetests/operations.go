@@ -74,8 +74,9 @@ func ShouldGet(t testing.TB, s store.Store, key string, data []byte) {
 	}
 
 	wantStat := store.Stat{
-		SHA256: sha256.Sum256(data),
-		Size:   int64(len(got)),
+		SHA256:    sha256.Sum256(data),
+		Size:      int64(len(got)),
+		WriteTime: st.WriteTime,
 	}
 
 	if !bytes.Equal(got, data) || st != wantStat {
@@ -107,13 +108,14 @@ func ShouldFreeSpace(t testing.TB, s store.Store) {
 	}
 }
 
-func ShouldStat(t testing.TB, s store.Store, key string, stat store.Stat) {
+func ShouldStatNoTime(t testing.TB, s store.Store, key string, stat store.Stat) {
 	st, err := s.Stat(key, nil)
 	if err != nil {
 		t.Errorf("Stat(%#v) returned unexpected error %v", key, err)
 		return
 	}
-	if !reflect.DeepEqual(st, stat) {
+	stat.WriteTime = st.WriteTime
+	if st != stat {
 		t.Errorf("Stat(%#v) = %#v, but wanted %#v", key, st, stat)
 	}
 }

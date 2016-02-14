@@ -91,9 +91,17 @@ func (cc *Client) Get(key string, opts store.GetOptions) ([]byte, store.Stat, er
 		return nil, store.Stat{}, httputil.ReadResponseAsError(resp)
 	}
 
+	var writeTime int64
+	if timeStr := resp.Header.Get("Last-Modified"); timeStr != "" {
+		t, err := time.Parse(http.TimeFormat, timeStr)
+		if err == nil {
+			writeTime = t.Unix()
+		}
+	}
+
 	var shouldH [32]byte
 	var shouldHSet bool
-	if should := resp.Header.Get("x-content-sha256"); should != "" {
+	if should := resp.Header.Get("X-Content-Sha256"); should != "" {
 		shouldBytes, err := hex.DecodeString(should)
 		if err != nil || len(shouldBytes) != 32 {
 			return nil, store.Stat{}, ErrUnparsableSHAResponse
@@ -129,8 +137,9 @@ func (cc *Client) Get(key string, opts store.GetOptions) ([]byte, store.Stat, er
 	}
 
 	return data, store.Stat{
-		SHA256: h,
-		Size:   int64(len(data)),
+		SHA256:    h,
+		Size:      int64(len(data)),
+		WriteTime: writeTime,
 	}, nil
 }
 
@@ -263,12 +272,19 @@ func (cc *Client) Stat(key string, cancel <-chan struct{}) (store.Stat, error) {
 
 	st := store.Stat{}
 
-	if sha := resp.Header.Get("x-content-sha256"); sha != "" {
+	if sha := resp.Header.Get("X-Content-Sha256"); sha != "" {
 		shaBytes, err := hex.DecodeString(sha)
 		if err != nil || len(shaBytes) != 32 {
 			return store.Stat{}, ErrUnparsableSHAResponse
 		}
 		copy(st.SHA256[:], shaBytes)
+	}
+
+	if timeStr := resp.Header.Get("Last-Modified"); timeStr != "" {
+		t, err := time.Parse(http.TimeFormat, timeStr)
+		if err == nil {
+			st.WriteTime = t.Unix()
+		}
 	}
 
 	st.Size = resp.ContentLength

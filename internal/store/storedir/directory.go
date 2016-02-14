@@ -429,6 +429,8 @@ func (ds *Directory) Get(key string, opts store.GetOptions) ([]byte, store.Stat,
 		return nil, store.Stat{}, errors.New("file is too big")
 	}
 
+	writeTime := fi.ModTime().Unix()
+
 	data := make([]byte, int(size))
 	at := 0
 	for at < len(data) {
@@ -474,8 +476,9 @@ func (ds *Directory) Get(key string, opts store.GetOptions) ([]byte, store.Stat,
 	}
 
 	return data, store.Stat{
-		SHA256: expectedSHA256,
-		Size:   size,
+		SHA256:    expectedSHA256,
+		Size:      size,
+		WriteTime: writeTime,
 	}, nil
 }
 
@@ -509,6 +512,7 @@ func (ds *Directory) statUnlocked(key string) (store.Stat, string, error) {
 		return store.Stat{}, "", err
 	}
 	st.Size = fi.Size() - 40
+	st.WriteTime = fi.ModTime().Unix()
 
 	return st, path, nil
 }

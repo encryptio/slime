@@ -26,8 +26,16 @@ var (
 )
 
 type Stat struct {
+	// Length in bytes in the data.
+	Size int64
+
+	// SHA256 of the contents of the data. If unknown or unsupported, this field
+	// will be [32]byte{} (all zeroes).
 	SHA256 [32]byte
-	Size   int64
+
+	// Epoch timestamp of last write to this entry. If unknown or unsupported,
+	// this field will be 0.
+	WriteTime int64
 }
 
 // A Store is a object store. Keys are strings of non-zero length, subject to

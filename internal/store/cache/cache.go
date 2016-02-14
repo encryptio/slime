@@ -287,6 +287,11 @@ func (c *Cache) CAS(key string, from, to store.CASV, cancel <-chan struct{}) err
 				Stat: store.Stat{
 					SHA256: to.SHA256,
 					Size:   int64(len(data)),
+
+					// WriteTime might be wrong if clocks aren't synced or if
+					// the operation took longer than a second, but this is a
+					// optimistic cache entry anyway.
+					WriteTime: time.Now().Unix(),
 				},
 				Data:     data,
 				LastUsed: time.Now(),

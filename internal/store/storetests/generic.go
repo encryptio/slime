@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/encryptio/slime/internal/store"
 )
@@ -19,6 +20,7 @@ func TestStore(t *testing.T, s store.Store) {
 	if rangeStore, ok := s.(store.RangeReadStore); ok {
 		TestStoreRangeRead(t, rangeStore)
 	}
+	TestStoreWriteTime(t, s)
 }
 
 func TestStoreBasics(t *testing.T, s store.Store) {
@@ -30,7 +32,7 @@ func TestStoreBasics(t *testing.T, s store.Store) {
 	ShouldGetMiss(t, s, "hello")
 	ShouldCAS(t, s, "hello", store.MissingV, store.DataV([]byte("world")))
 	ShouldGet(t, s, "hello", []byte("world"))
-	ShouldStat(t, s, "hello", store.Stat{SHA256: sha256.Sum256([]byte("world")), Size: 5})
+	ShouldStatNoTime(t, s, "hello", store.Stat{SHA256: sha256.Sum256([]byte("world")), Size: 5})
 	ShouldCAS(t, s, "a", store.AnyV, store.MissingV)
 	ShouldFullList(t, s, []string{"hello"})
 	ShouldCAS(t, s, "b", store.AnyV, store.DataV([]byte("beta")))
@@ -198,5 +200,26 @@ func TestStoreRangeRead(t *testing.T, s store.RangeReadStore) {
 	ShouldGetPartial(t, s, "key", 1024, 0, nil)
 	ShouldGetPartial(t, s, "key", 5555, -1, nil)
 	ShouldGetPartial(t, s, "key", 1000, 60, data[1000:])
+	ShouldCAS(t, s, "key", store.AnyV, store.MissingV)
+}
+
+func TestStoreWriteTime(t *testing.T, s store.Store) {
+	t.Logf("TestStoreWriteTime()")
+
+	ShouldCAS(t, s, "key", store.AnyV, store.DataV([]byte("one")))
+	now := time.Now().Unix()
+
+	st, err := s.Stat("key", nil)
+	if err != nil {
+		t.Fatalf("Couldn't stat key: %v", err)
+	}
+	diff := st.WriteTime - now
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 2 {
+		t.Fatalf("Store returned timestamp %v, but wanted %v", st.WriteTime, now)
+	}
+
 	ShouldCAS(t, s, "key", store.AnyV, store.MissingV)
 }

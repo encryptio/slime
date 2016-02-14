@@ -178,7 +178,7 @@ func TestCacheUpdatesOnStats(t *testing.T) {
 	storetests.ShouldGet(t, cache, "asdf", []byte("hello"))
 	newData := store.DataV([]byte("world"))
 	storetests.ShouldCAS(t, inner, "asdf", store.AnyV, newData)
-	storetests.ShouldStat(t, cache, "asdf", store.Stat{Size: 5, SHA256: newData.SHA256})
+	storetests.ShouldStatNoTime(t, cache, "asdf", store.Stat{Size: 5, SHA256: newData.SHA256})
 	storetests.ShouldGet(t, cache, "asdf", []byte("world"))
 
 	if inner.gets != 1 {
