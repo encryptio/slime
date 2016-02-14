@@ -23,7 +23,7 @@ listen = ":17942"
 
 # Maximum number of parallel requests to handle at once. Any requests on top of
 # this will wait until a slot is available.
-#parallel-requests = 50
+#parallel-requests = 25
 
 # Number of background scrubber threads to run. Set to -1 to disable scrubbing
 # on this proxy.
@@ -52,7 +52,7 @@ listen = ":17941"
 
 # Maximum number of parallel requests to handle at once. Any requests on top of
 # this will wait until a slot is available.
-#parallel-requests = 200
+#parallel-requests = 25
 
 # Enable /debug HTTP API endpoints
 #debug = false

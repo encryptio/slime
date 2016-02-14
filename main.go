@@ -105,7 +105,7 @@ func loadConfigOrDie() {
 		config.Proxy.Listen = "127.0.0.1:17942"
 	}
 	if config.Proxy.ParallelRequests <= 0 {
-		config.Proxy.ParallelRequests = 50
+		config.Proxy.ParallelRequests = 25
 	}
 	if config.Proxy.Scrubbers == 0 {
 		config.Proxy.Scrubbers = 1
@@ -115,7 +115,7 @@ func loadConfigOrDie() {
 		config.Chunk.Listen = "127.0.0.1:17941"
 	}
 	if config.Chunk.ParallelRequests <= 0 {
-		config.Chunk.ParallelRequests = 200
+		config.Chunk.ParallelRequests = 25
 	}
 	if config.Chunk.Scrubber.SleepPerFile.Duration <= 0 {
 		config.Chunk.Scrubber.SleepPerFile.Duration = 50 * time.Millisecond
