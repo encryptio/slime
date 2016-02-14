@@ -528,7 +528,7 @@ func (m *Multi) writeChunks(key string, data []byte, sha [32]byte, prefixid [16]
 	file := &meta.File{
 		Path:         key,
 		Size:         uint64(len(data)),
-		WriteTime:    uint64(time.Now().Unix()),
+		WriteTime:    time.Now().Unix(),
 		PrefixID:     prefixid,
 		DataChunks:   uint16(conf.Need),
 		MappingValue: mapping,

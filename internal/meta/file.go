@@ -20,7 +20,7 @@ type File struct {
 	Path         string
 	Size         uint64
 	SHA256       [32]byte
-	WriteTime    uint64
+	WriteTime    int64
 	PrefixID     [16]byte
 	DataChunks   uint16
 	MappingValue uint32
