@@ -5,10 +5,10 @@ import (
 	"log"
 	"time"
 
-	"git.encryptio.com/kvl"
-	"git.encryptio.com/kvl/index"
-	"git.encryptio.com/kvl/keys"
-	"git.encryptio.com/kvl/tuple"
+	"github.com/encryptio/kvl"
+	"github.com/encryptio/kvl/index"
+	"github.com/encryptio/kvl/keys"
+	"github.com/encryptio/kvl/tuple"
 
 	"github.com/encryptio/slime/internal/uuid"
 )

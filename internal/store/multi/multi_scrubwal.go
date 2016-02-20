@@ -6,7 +6,7 @@ import (
 
 	"github.com/encryptio/slime/internal/meta"
 
-	"git.encryptio.com/kvl"
+	"github.com/encryptio/kvl"
 )
 
 var (

@@ -6,8 +6,8 @@ import (
 
 	"github.com/encryptio/slime/internal/uuid"
 
-	"git.encryptio.com/kvl"
-	"git.encryptio.com/kvl/tuple"
+	"github.com/encryptio/kvl"
+	"github.com/encryptio/kvl/tuple"
 )
 
 var (

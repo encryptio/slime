@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/tomb.v2"
 
-	"git.encryptio.com/kvl"
+	"github.com/encryptio/kvl"
 )
 
 type Multi struct {

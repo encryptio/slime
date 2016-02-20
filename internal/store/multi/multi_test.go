@@ -11,7 +11,7 @@ import (
 	"github.com/encryptio/slime/internal/store"
 	"github.com/encryptio/slime/internal/store/storetests"
 
-	"git.encryptio.com/kvl/backend/ram"
+	"github.com/encryptio/kvl/backend/ram"
 )
 
 func prepareMultiTest(t testing.TB, need, total, serverCount int) ([]*killHandler, *Multi, []*storetests.MockStore, func()) {

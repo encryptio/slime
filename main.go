@@ -20,9 +20,9 @@ import (
 	"github.com/encryptio/slime/internal/store/storedir"
 	"github.com/encryptio/slime/internal/uuid"
 
-	"git.encryptio.com/kvl"
-	_ "git.encryptio.com/kvl/backend/bolt"
-	_ "git.encryptio.com/kvl/backend/psql"
+	"github.com/encryptio/kvl"
+	_ "github.com/encryptio/kvl/backend/bolt"
+	_ "github.com/encryptio/kvl/backend/psql"
 	"github.com/naoina/toml"
 )
 

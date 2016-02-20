@@ -10,8 +10,8 @@ import (
 
 	"github.com/encryptio/slime/internal/uuid"
 
-	"git.encryptio.com/kvl"
-	"git.encryptio.com/kvl/backend/ram"
+	"github.com/encryptio/kvl"
+	"github.com/encryptio/kvl/backend/ram"
 )
 
 func TestLayerConfig(t *testing.T) {

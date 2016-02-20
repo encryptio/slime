@@ -15,7 +15,7 @@ import (
 	"github.com/encryptio/slime/internal/store/storehttp"
 	"github.com/encryptio/slime/internal/uuid"
 
-	"git.encryptio.com/kvl"
+	"github.com/encryptio/kvl"
 )
 
 type Handler struct {

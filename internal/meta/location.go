@@ -1,8 +1,8 @@
 package meta
 
 import (
-	"git.encryptio.com/kvl"
-	"git.encryptio.com/kvl/tuple"
+	"github.com/encryptio/kvl"
+	"github.com/encryptio/kvl/tuple"
 )
 
 type Location struct {

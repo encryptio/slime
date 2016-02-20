@@ -8,7 +8,7 @@ import (
 	"github.com/encryptio/slime/internal/store"
 	"github.com/encryptio/slime/internal/uuid"
 
-	"git.encryptio.com/kvl"
+	"github.com/encryptio/kvl"
 )
 
 var (

@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/tomb.v2"
 
-	"git.encryptio.com/kvl"
+	"github.com/encryptio/kvl"
 	"github.com/encryptio/slime/internal/meta"
 	"github.com/encryptio/slime/internal/store"
 	"github.com/encryptio/slime/internal/store/storehttp"

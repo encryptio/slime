@@ -3,9 +3,10 @@
 package main
 
 import (
-	"golang.org/x/sys/unix"
 	"os"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 func getTTYWidth() int {
