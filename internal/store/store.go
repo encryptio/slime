@@ -152,5 +152,5 @@ type RangeReadStore interface {
 	// negative, behavior is undefined. If start is after the full length of the
 	// data or if length is zero, then GetPartial will successfully return an
 	// empty byte slice.
-	GetPartial(key string, start, length int, opts GetOptions) ([]byte, Stat, error)
+	GetPartial(key string, start, length int64, opts GetOptions) ([]byte, Stat, error)
 }

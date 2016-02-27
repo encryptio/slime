@@ -128,7 +128,7 @@ func ShouldStatMiss(t testing.TB, s store.Store, key string) {
 	}
 }
 
-func ShouldGetPartial(t testing.TB, s store.RangeReadStore, key string, start, length int, result []byte) {
+func ShouldGetPartial(t testing.TB, s store.RangeReadStore, key string, start, length int64, result []byte) {
 	data, _, err := s.GetPartial(key, start, length, store.GetOptions{})
 	if err != nil {
 		t.Errorf("GetPartial(%#v, %v, %v) returned unexpected error %v",
@@ -141,7 +141,7 @@ func ShouldGetPartial(t testing.TB, s store.RangeReadStore, key string, start, l
 	}
 }
 
-func ShouldGetPartialMiss(t testing.TB, s store.RangeReadStore, key string, start, length int) {
+func ShouldGetPartialMiss(t testing.TB, s store.RangeReadStore, key string, start, length int64) {
 	_, _, err := s.GetPartial(key, start, length, store.GetOptions{})
 	if err != store.ErrNotFound {
 		t.Errorf("GetPartial(%#v, %v, %v) returned err %v, but wanted %v",

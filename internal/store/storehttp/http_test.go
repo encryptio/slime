@@ -72,6 +72,7 @@ func TestHTTPRange(t *testing.T) {
 		{"bytes=11-", "!", "bytes 11-11/12", false},
 		{"bytes=0-", "hello world!", "bytes 0-11/12", false},
 		{"bytes=1-1", "e", "bytes 1-1/12", false},
+		{"bytes=4-4", "o", "bytes 4-4/12", false},
 		{"bytes=12-", "", "", true},
 		{"bytes=12341234-44", "", "", true},
 	}

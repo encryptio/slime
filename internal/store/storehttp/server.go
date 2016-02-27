@@ -80,7 +80,7 @@ func parseIfMatch(ifMatch string) (store.CASV, error) {
 	}
 }
 
-func parseRange(rang string) (int, int, bool) {
+func parseRange(rang string) (int64, int64, bool) {
 	if !strings.HasPrefix(rang, "bytes=") {
 		return 0, 0, false
 	}
@@ -93,24 +93,22 @@ func parseRange(rang string) (int, int, bool) {
 		return 0, 0, false
 	}
 
-	start64, err := strconv.ParseInt(parts[0], 10, 0)
+	start, err := strconv.ParseInt(parts[0], 10, 0)
 	if err != nil {
 		return 0, 0, false
 	}
-	start := int(start64)
 
-	var length int
+	var end int64
 	if parts[1] == "" {
-		length = -1
+		end = -1
 	} else {
-		length64, err := strconv.ParseInt(parts[1], 10, 0)
+		end, err = strconv.ParseInt(parts[1], 10, 0)
 		if err != nil {
 			return 0, 0, false
 		}
-		length = int(length64)
 	}
 
-	return start, length, true
+	return start, end, true
 }
 
 func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -274,9 +272,15 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 	var err error
 	usingRange := false
 
-	start, length, ok := parseRange(r.Header.Get("Range"))
+	start, end, ok := parseRange(r.Header.Get("Range"))
 	if ok && h.rangeStore != nil {
 		usingRange = true
+
+		length := int64(-1)
+		if end >= 0 {
+			length = end - start + 1
+		}
+
 		data, st, err = h.rangeStore.GetPartial(obj, start, length, store.GetOptions{
 			Cancel:   canceller.Cancel,
 			NoVerify: noverify,
@@ -309,7 +313,7 @@ func (h *Server) serveObjectGet(w http.ResponseWriter, r *http.Request, obj stri
 		strconv.FormatInt(int64(len(data)), 10))
 	if usingRange {
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
-			start, start+len(data)-1, st.Size))
+			start, start+int64(len(data))-1, st.Size))
 	} else {
 		w.Header().Set("X-Content-SHA256", hex.EncodeToString(st.SHA256[:]))
 	}

@@ -72,7 +72,7 @@ func (c *Cache) Get(key string, opts store.GetOptions) ([]byte, store.Stat, erro
 	return d2, st, err
 }
 
-func (c *Cache) GetPartial(key string, start, length int, opts store.GetOptions) ([]byte, store.Stat, error) {
+func (c *Cache) GetPartial(key string, start, length int64, opts store.GetOptions) ([]byte, store.Stat, error) {
 	d, st, err := c.getUncopied(key, opts.Cancel, opts.NoVerify)
 	if err != nil {
 		return nil, store.Stat{}, err
@@ -80,14 +80,14 @@ func (c *Cache) GetPartial(key string, start, length int, opts store.GetOptions)
 	if start < 0 {
 		start = 0
 	}
-	if length < 0 || start+length > len(d) {
-		length = len(d) - start
+	if length < 0 || start+length > int64(len(d)) {
+		length = int64(len(d)) - start
 	}
 	if length <= 0 {
 		return []byte{}, st, nil
 	}
-	d2 := make([]byte, length)
-	if copy(d2, d[start:]) != length {
+	d2 := make([]byte, int(length))
+	if copy(d2, d[int(start):]) != int(length) {
 		panic("never happens")
 	}
 	return d2, st, nil
