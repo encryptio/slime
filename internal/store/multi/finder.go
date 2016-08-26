@@ -261,6 +261,8 @@ func (f *Finder) testLoop() error {
 }
 
 func (f *Finder) test(wait time.Duration) {
+	time.Sleep(jitterDuration(wait))
+
 	for id, fe := range f.Stores() {
 		dead, err := f.checkDead(id)
 		if err != nil {
