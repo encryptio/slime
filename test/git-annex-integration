@@ -44,30 +44,6 @@ status "Copying files to slime";
 system "cd \Q$repo\E && git annex copy --to slime" and die;
 system "cd \Q$repo\E && git annex fsck --from slime" and die;
 
-status "Starting git-annex-serve-from-slime";
-my $serve_addr = "127.0.0.1:59002";
-my $serve_pid = start_process "git-annex-serve-from-slime -addr \Q$serve_addr\E -repo \Q$repo";
-wait_port_connectable $serve_addr;
-
-status "Getting data files";
-for my $i ( 0 .. 3 ) {
-    system "curl -s -o \Q$repo/data-from-server-$i\E http://$serve_addr/data-$i" and die;
-    die "bad sizes, ".(-s "$repo/data-$i")." != ".(-s "$repo/data-from-server-$i")
-        if (-s "$repo/data-$i") != (-s "$repo/data-from-server-$i");
-    require_files_equal "$repo/data-$i", "$repo/data-from-server-$i";
-    unlink "$repo/data-from-server-$i" or die;
-}
-
-status "Trying truncated file continuation";
-for my $byte ( 0 .. 5555*5 ) {
-    next if rand() < 0.999;
-    system "curl -s -C - -o \Q$repo/data-from-server-1\E http://$serve_addr/data-1" and die;
-    system "truncate -s $byte \Q$repo/data-from-server-1\E" and die;
-}
-system "curl -s -C - -o \Q$repo/data-from-server-1\E http://$serve_addr/data-1" and die;
-require_files_equal "$repo/data-1", "$repo/data-from-server-1";
-unlink "$repo/data-from-server-1" or die;
-
 status "Dropping from slime";
 system "cd \Q$repo\E && git annex drop --from slime" and die;
 system "cd \Q$repo\E && git annex fsck --from slime" and die;
@@ -76,7 +52,6 @@ status "Running git annex testremote";
 system "cd \Q$repo\E && git annex testremote --fast slime" and die;
 
 status "Stopping slime";
-kill_wait_for $serve_pid;
 kill_wait_for $_ for @{$config}{"proxy_pid", "chunk_pid"};
 
 status "Passed!";
