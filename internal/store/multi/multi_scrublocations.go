@@ -251,7 +251,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 			}
 
 			var inWAL bool
-			err = m.db.RunReadTx(func(ctx kvl.Ctx) error {
+			err = m.db.RunTx(func(ctx kvl.Ctx) error {
 				layer, err := meta.Open(ctx)
 				if err != nil {
 					return err
@@ -308,7 +308,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 			var inWAL bool
 			var path string
-			err = m.db.RunReadTx(func(ctx kvl.Ctx) error {
+			err = m.db.RunTx(func(ctx kvl.Ctx) error {
 				path = ""
 
 				layer, err := meta.Open(ctx)
@@ -363,7 +363,7 @@ func (m *Multi) scrubLocationsStep() (bool, error) {
 
 			var inWAL bool
 			var path string
-			err = m.db.RunReadTx(func(ctx kvl.Ctx) error {
+			err = m.db.RunTx(func(ctx kvl.Ctx) error {
 				path = ""
 
 				layer, err := meta.Open(ctx)

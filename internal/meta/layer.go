@@ -1,7 +1,11 @@
 package meta
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -83,6 +87,11 @@ func walDump(timestamps []int64) []byte {
 }
 
 func (l *Layer) WALMark(id [16]byte) error {
+	err := l.LinearizeOn(uuid.Fmt(id))
+	if err != nil {
+		return err
+	}
+
 	key := tuple.MustAppend(nil, "wal2", id)
 	p, err := l.inner.Get(key)
 	if err != nil && err != kvl.ErrNotFound {
@@ -100,6 +109,11 @@ func (l *Layer) WALMark(id [16]byte) error {
 }
 
 func (l *Layer) WALClear(id [16]byte) error {
+	err := l.LinearizeOn(uuid.Fmt(id))
+	if err != nil {
+		return err
+	}
+
 	key := tuple.MustAppend(nil, "wal2", id)
 	p, err := l.inner.Get(key)
 	if err != nil && err != kvl.ErrNotFound {
@@ -131,7 +145,12 @@ func (l *Layer) WALClear(id [16]byte) error {
 }
 
 func (l *Layer) WALCheck(id [16]byte) (bool, error) {
-	_, err := l.inner.Get(tuple.MustAppend(nil, "wal2", id))
+	err := l.LinearizeOn(uuid.Fmt(id))
+	if err != nil {
+		return false, err
+	}
+
+	_, err = l.inner.Get(tuple.MustAppend(nil, "wal2", id))
 	if err != nil {
 		if err == kvl.ErrNotFound {
 			err = nil
@@ -402,6 +421,51 @@ func (l *Layer) DeleteLocation(loc Location) error {
 func (l *Layer) SetLocation(loc Location) error {
 	pair := loc.toPair()
 	return l.inner.Set(pair)
+}
+
+func compressLinearizabilityKey(key string) string {
+	// This adds some arbitrary padding so that users are highly unlikely to
+	// iterate over keys in the same order as the linearizability keys.
+
+	h := sha256.New()
+	fmt.Fprintf(h, "%s%s%s", "3sV9QyDoZGnm", key, "GOfAeb1TgY9M")
+	data := h.Sum(nil)
+	return hex.EncodeToString(data[:2])
+}
+
+func (l *Layer) LinearizeOn(name string) error {
+	// We map names to smaller keys to bound the size of the linearizing data set.
+	// When this mapping causes extra collisions, that's only more restrictive,
+	// so it affects performance (slightly) but not correctness.
+	name = compressLinearizabilityKey(name)
+
+	key, _ := tuple.Append(nil, "linearizability", name)
+	pair, err := l.inner.Get(key)
+	if err != nil {
+		if err != kvl.ErrNotFound {
+			return err
+		}
+		pair.Key = key
+		pair.Value = make([]byte, 8)
+
+		// A random value is highly likely to conflict with another random value
+		// if we race on the initial linearizability key writes, which will cause
+		// the transaction to restart.
+		rand.Read(pair.Value)
+	}
+
+	newValue := make([]byte, 8)
+	copy(newValue, pair.Value)
+
+	// Big-endian integer increment
+	for i := 7; i >= 0; i-- {
+		newValue[i]++
+		if newValue[i] != 0 {
+			break
+		}
+	}
+
+	return l.inner.Set(kvl.Pair{pair.Key, newValue})
 }
 
 func Reindex(db kvl.DB) error {
