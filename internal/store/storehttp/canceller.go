@@ -21,10 +21,11 @@ func makeCanceller(w http.ResponseWriter) *canceller {
 
 	closeNotifier, ok := w.(http.CloseNotifier)
 	if ok {
+		ch := closeNotifier.CloseNotify()
 		go func() {
 			select {
 			case <-c.closed:
-			case <-closeNotifier.CloseNotify():
+			case <-ch:
 				close(cancel)
 			}
 		}()
