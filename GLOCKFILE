@@ -1,8 +1,8 @@
-github.com/boltdb/bolt ee4a0888a9abe7eefe5a0992ca4cb06864839873
-github.com/encryptio/go-git-annex-external d91122feceaa22aaaa9c90cd4a4a0582c80f0bdb
-github.com/encryptio/kvl 86433e0cede28878fd5c1fa099c58efcf289f5ba
-github.com/lib/pq f59175c2986495ff94109dee3835c504a96c3e81
+github.com/boltdb/bolt 583e8937c61f1af6513608ccc75c97b6abdf4ff9
+github.com/encryptio/go-git-annex-external 32100b295cf1d595595d2833071a596dbf6facb0
+github.com/encryptio/kvl 17d559fcc1906f97b4102304b5d0f56cecdcfa04
+github.com/lib/pq 80f8150043c80fb52dee6bc863a709cdac7ec8f8
 github.com/naoina/go-stringutil 6b638e95a32d0c1131db0e7fe83775cbea4a0d0b
 github.com/naoina/toml 751171607256bb66e64c9f0220c00662420c38e9
-golang.org/x/sys 50c6bc5e4292a1d4e65c6e9be5f53be28bcbe28e
+golang.org/x/sys a646d33e2ee3172a661fc09bca23bb4889a41bc8
 gopkg.in/tomb.v2 14b3d72120e8d10ea6e6b7f87f7175734b1faab8
