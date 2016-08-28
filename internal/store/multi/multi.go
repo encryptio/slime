@@ -10,6 +10,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/encryptio/kvl"
+	"github.com/encryptio/slime/internal/meta"
 )
 
 type Multi struct {
@@ -18,6 +19,10 @@ type Multi struct {
 	uuid   [16]byte
 
 	freeMapChannel chan map[[16]byte]int64
+	asyncDeletions chan *meta.File
+
+	// used for test suite only
+	asyncDeletionsReading chan struct{}
 
 	tomb tomb.Tomb
 
@@ -30,6 +35,7 @@ func NewMulti(db kvl.DB, finder *Finder, scrubbers int) (*Multi, error) {
 		db:             db,
 		finder:         finder,
 		freeMapChannel: make(chan map[[16]byte]int64),
+		asyncDeletions: make(chan *meta.File, 1000),
 	}
 
 	err := m.loadUUID()
@@ -54,6 +60,8 @@ func NewMulti(db kvl.DB, finder *Finder, scrubbers int) (*Multi, error) {
 		if scrubbers > 0 {
 			m.tomb.Go(m.scrubWALLoop)
 		}
+
+		m.tomb.Go(m.asyncDeletionLoop)
 
 		return nil
 	})

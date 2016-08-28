@@ -401,11 +401,15 @@ func (m *Multi) CAS(key string, from, to store.CASV, cancel <-chan struct{}) err
 		return nil
 	})
 	if err != nil {
-		m.deleteChunks(file)
+		if file != nil {
+			m.asyncDeletions <- file
+		}
 		return err
 	}
 
-	m.deleteChunks(oldFile)
+	if oldFile != nil {
+		m.asyncDeletions <- oldFile
+	}
 
 	return nil
 }
